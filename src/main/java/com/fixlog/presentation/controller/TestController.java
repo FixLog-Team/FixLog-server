@@ -1,4 +1,4 @@
-package com.fixlog.controller;
+package com.fixlog.presentation.controller;
 
 import com.fixlog.common.response.Response;
 import org.springframework.web.bind.annotation.GetMapping;
