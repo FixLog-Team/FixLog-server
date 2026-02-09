@@ -17,16 +17,6 @@ public abstract class TypedResponse<T> extends Response {
         this.result = result;
     }
 
-    public static <T> TypedResponse<T> loginSuccess(T result) {
-        return new TypedResponse<T>(Code.SUCCESS, "성공", result) {
-        };
-    }
-
-    public static <T> TypedResponse<T> loginFailure(Code code, String message) {
-        return new TypedResponse<T>(code, message, null) {
-        };
-    }
-
     public T getResult() {
         return result;
     }
