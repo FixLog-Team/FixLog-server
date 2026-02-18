@@ -2,26 +2,23 @@ spring:
   application:
     name: fixlog
 
-  # Google OAuth2 Client 설정
   security:
     oauth2:
       client:
         registration:
           google:
-            client-id: { client id }
-            client-secret: { client key }
+            client-id: ${GOOGLE_CLIENT_ID}      # 환경 변수로 대체
+            client-secret: ${GOOGLE_CLIENT_SECRET} # 환경 변수로 대체
             scope:
               - profile
               - email
 
-  # PostgreSQL 17 설정
   datasource:
     url: jdbc:postgresql://192.168.56.102:5432/apj_db
-    username: kth
-    password: taehokwon48
+    username: ${DB_USERNAME} # 환경 변수로 대체
+    password: ${DB_PASSWORD} # 환경 변수로 대체 (PGPASSWORD 대신 DB_PASSWORD 선호)
     driver-class-name: org.postgresql.Driver
 
-  # JPA/Hibernate 설정
   jpa:
     hibernate:
       ddl-auto: update

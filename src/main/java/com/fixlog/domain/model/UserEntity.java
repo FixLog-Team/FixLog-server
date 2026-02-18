@@ -1,11 +1,8 @@
 package com.fixlog.domain.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "apj_user", schema = "public")
@@ -21,17 +18,18 @@ public class UserEntity {
     @Column(name = "email", length = 100, nullable = false)
     private String email;
 
-    @Column(name = "user_status", length = 10)
-    private String userStatus;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "user_status", length = 20)
+    private UserStatus userStatus;
 
     @Column(name = "last_login_time")
-    private LocalDateTime lastLoginTime;
+    private Instant lastLoginTime;
 
     @Column(name = "create_time", updatable = false)
-    private LocalDateTime createTime;
+    private Instant createTime;
 
     @Column(name = "update_time")
-    private LocalDateTime updateTime;
+    private Instant updateTime;
 
     protected UserEntity() {
     }
@@ -40,19 +38,19 @@ public class UserEntity {
         this.userId = userId;
         this.userName = userName;
         this.email = email;
-        this.userStatus = "ACTIVE";
-        this.createTime = LocalDateTime.now();
-        this.updateTime = LocalDateTime.now();
-        this.lastLoginTime = LocalDateTime.now();
+        this.userStatus = UserStatus.ACTIVE;
+        this.createTime = Instant.now();
+        this.updateTime = Instant.now();
+        this.lastLoginTime = Instant.now();
     }
 
     public void updateLoginInfo(String userName) {
         this.userName = userName;
-        this.lastLoginTime = LocalDateTime.now();
-        this.updateTime = LocalDateTime.now();
+        this.lastLoginTime = Instant.now();
+        this.updateTime = Instant.now();
 
-        if (!"ACTIVE".equals(this.userStatus)) {
-            this.userStatus = "ACTIVE";
+        if (this.userStatus != UserStatus.ACTIVE) {
+            this.userStatus = UserStatus.ACTIVE;
         }
     }
 
@@ -68,11 +66,11 @@ public class UserEntity {
         return email;
     }
 
-    public String getUserStatus() {
+    public UserStatus getUserStatus() {
         return userStatus;
     }
 
-    public LocalDateTime getLastLoginTime() {
+    public Instant getLastLoginTime() {
         return lastLoginTime;
     }
 }
