@@ -28,6 +28,22 @@ spring:
         format_sql: true
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        model: gpt-4o
+        temperature: 0.7
+      embedding:
+        model: text-embedding-3-small
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        model: llama3
+        temperature: 0.7
+      embedding:
+        model: nomic-embed-text
+
 server:
   servlet:
     context-path: /fixlog
