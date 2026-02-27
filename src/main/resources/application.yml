@@ -14,7 +14,7 @@ spring:
               - email
 
   datasource:
-    url: jdbc:postgresql://192.168.56.102:5432/apj_db
+    url: jdbc:postgresql://138.2.98.160:5432/fixlog
     username: ${DB_USERNAME} # 환경 변수로 대체
     password: ${DB_PASSWORD} # 환경 변수로 대체 (PGPASSWORD 대신 DB_PASSWORD 선호)
     driver-class-name: org.postgresql.Driver
