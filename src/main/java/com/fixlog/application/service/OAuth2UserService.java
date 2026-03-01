@@ -47,3 +47,4 @@ public class OAuth2UserService implements org.springframework.security.oauth2.cl
                 userRequest.getClientRegistration().getProviderDetails().getUserInfoEndpoint().getUserNameAttributeName());
     }
 }
+
