@@ -30,7 +30,7 @@ public class OllamaController {
     public TypedResponse<DocumentSummaryResponse> analyzeDocument(@RequestBody DocumentRequest request) {
         try {
             // 1. 문서 요약 및 태그 생성
-            Map<String, Object> result = ollamaAIService.summarizeAndTag(request.getContent());
+            Map<String, Object> result = ollamaAIService.summarizeAndTag(request.content());
             String summary = (String) result.get("summary");
             List<String> tags = (List<String>) result.get("tags");
 
@@ -64,7 +64,7 @@ public class OllamaController {
     @PostMapping("/summarize")
     public TypedResponse<String> summarizeDocument(@RequestBody DocumentRequest request) {
         try {
-            String summary = ollamaAIService.summarizeDocument(request.getContent());
+            String summary = ollamaAIService.summarizeDocument(request.content());
 
             return new TypedResponse<String>() {
                 {
@@ -90,7 +90,7 @@ public class OllamaController {
     @PostMapping("/tags")
     public TypedResponse<List<String>> generateTags(@RequestBody DocumentRequest request) {
         try {
-            List<String> tags = ollamaAIService.generateTags(request.getContent());
+            List<String> tags = ollamaAIService.generateTags(request.content());
 
             return new TypedResponse<List<String>>() {
                 {
@@ -116,7 +116,7 @@ public class OllamaController {
     @PostMapping("/embedding")
     public TypedResponse<List<Double>> generateEmbedding(@RequestBody DocumentRequest request) {
         try {
-            List<Double> embedding = ollamaEmbeddingService.generateEmbedding(request.getContent());
+            List<Double> embedding = ollamaEmbeddingService.generateEmbedding(request.content());
 
             return new TypedResponse<List<Double>>() {
                 {

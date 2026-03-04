@@ -31,7 +31,7 @@ public class AIController {
     public TypedResponse<DocumentSummaryResponse> analyzeDocument(@RequestBody DocumentRequest request) {
         try {
             // 1. 문서 요약 및 태그 생성
-            Map<String, Object> result = documentAIService.summarizeAndTag(request.getContent());
+            Map<String, Object> result = documentAIService.summarizeAndTag(request.content());
             String summary = (String) result.get("summary");
             List<String> tags = (List<String>) result.get("tags");
 
@@ -65,7 +65,7 @@ public class AIController {
     @PostMapping("/summarize")
     public TypedResponse<String> summarizeDocument(@RequestBody DocumentRequest request) {
         try {
-            String summary = documentAIService.summarizeDocument(request.getContent());
+            String summary = documentAIService.summarizeDocument(request.content());
 
             return new TypedResponse<String>() {
                 {
@@ -91,7 +91,7 @@ public class AIController {
     @PostMapping("/tags")
     public TypedResponse<List<String>> generateTags(@RequestBody DocumentRequest request) {
         try {
-            List<String> tags = documentAIService.generateTags(request.getContent());
+            List<String> tags = documentAIService.generateTags(request.content());
 
             return new TypedResponse<List<String>>() {
                 {
@@ -117,7 +117,7 @@ public class AIController {
     @PostMapping("/embedding")
     public TypedResponse<List<Double>> generateEmbedding(@RequestBody DocumentRequest request) {
         try {
-            List<Double> embedding = embeddingService.generateEmbedding(request.getContent());
+            List<Double> embedding = embeddingService.generateEmbedding(request.content());
 
             return new TypedResponse<List<Double>>() {
                 {
