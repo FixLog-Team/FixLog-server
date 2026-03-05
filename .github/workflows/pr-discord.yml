@@ -1,0 +1,28 @@
+name: PR Opened -> Discord (Server)
+
+on:
+  pull_request:
+    types: [ opened ]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send PR message to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SERVER_ROLE_ID: ${{ secrets.SERVER_ROLE_ID }}
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+
+          cat > payload.json <<EOF
+          {
+            "content": "<@&${SERVER_ROLE_ID}>\n[Server] PR #${PR_NUM}: ${PR_TITLE}\n${PR_URL}\nRepo: ${REPO} | Author: ${AUTHOR}"
+          }
+          EOF
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @payload.json "$DISCORD_WEBHOOK_URL"
