@@ -1,12 +1,11 @@
 package com.fixlog.domain.model;
 
-import com.fixlog.presentation.dto.request.FolderRequest;
 import jakarta.persistence.*;
 
 import java.time.Instant;
 
 @Entity
-@Table(name = "apj_folder", schema = "public")
+@Table(name = "apj_folder")
 @IdClass(FolderId.class)
 public class FolderEntity {
 
@@ -57,11 +56,10 @@ public class FolderEntity {
         this.updateTime = Instant.now();
     }
 
-    public void updateFolder(FolderRequest request, String updateUser) {
-        this.workspaceId = request.workspaceId() == null ? workspaceId : request.workspaceId();
-        this.parentId = request.parentId() == null ? parentId : request.parentId();
-        this.folderName = request.folderName() == null ? folderName : request.folderName();
-        this.ordinal = request.ordinal() == null ? ordinal : request.ordinal();
+    public void updateFolder(String parentId, String folderName, Integer ordinal, String updateUser) {
+        this.parentId = parentId == null ? this.parentId : parentId;
+        this.folderName = folderName == null ? this.folderName : folderName;
+        this.ordinal = ordinal == null ? this.ordinal : ordinal;
         this.updateUser = updateUser;
         this.updateTime = Instant.now();
     }

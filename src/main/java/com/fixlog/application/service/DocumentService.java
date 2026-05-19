@@ -115,10 +115,18 @@ public class DocumentService {
         return pdfGenerator.generate(doc);
     }
 
+    public record PdfResult(String title, byte[] bytes) {}
+
+    @Transactional(readOnly = true)
+    public PdfResult downloadPdfResult(String documentId) {
+        DocumentEntity doc = loadOwned(documentId);
+        return new PdfResult(doc.getTitle(), pdfGenerator.generate(doc));
+    }
+
     private DocumentEntity loadOwned(String documentId) {
         String userId = requireUserId();
         return documentRepository
-                .findByDocumentIdAndCreateUserAndUsable(documentId, userId, 1)
+                .findByDocumentIdAndCreateUserAndUsable(documentId, userId, Integer.valueOf(1))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
     }
 

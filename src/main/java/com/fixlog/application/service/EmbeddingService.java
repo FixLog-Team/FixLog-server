@@ -1,5 +1,7 @@
 package com.fixlog.application.service;
 
+import com.fixlog.common.code.Code;
+import com.fixlog.common.exception.BusinessException;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
@@ -19,18 +21,36 @@ public class EmbeddingService {
     }
 
     public List<Double> generateEmbedding(String text) {
-        EmbeddingRequest embeddingRequest = new EmbeddingRequest(List.of(text), null);
-        EmbeddingResponse embeddingResponse = embeddingModel.call(embeddingRequest);
-        float[] floatArray = embeddingResponse.getResults().get(0).getOutput();
-        return toDoubleList(floatArray);
+        try {
+            EmbeddingRequest embeddingRequest = new EmbeddingRequest(List.of(text), null);
+            EmbeddingResponse embeddingResponse = embeddingModel.call(embeddingRequest);
+            if (embeddingResponse.getResults() == null || embeddingResponse.getResults().isEmpty()) {
+                throw new BusinessException(Code.UNKNOWN, "임베딩 결과가 비어 있습니다.");
+            }
+            float[] floatArray = embeddingResponse.getResults().get(0).getOutput();
+            return toDoubleList(floatArray);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(Code.UNKNOWN, "임베딩 생성 중 오류가 발생했습니다.");
+        }
     }
 
     public List<List<Double>> generateEmbeddings(List<String> texts) {
-        EmbeddingRequest embeddingRequest = new EmbeddingRequest(texts, null);
-        EmbeddingResponse embeddingResponse = embeddingModel.call(embeddingRequest);
-        return embeddingResponse.getResults().stream()
-                .map(result -> toDoubleList(result.getOutput()))
-                .toList();
+        try {
+            EmbeddingRequest embeddingRequest = new EmbeddingRequest(texts, null);
+            EmbeddingResponse embeddingResponse = embeddingModel.call(embeddingRequest);
+            if (embeddingResponse.getResults() == null || embeddingResponse.getResults().isEmpty()) {
+                throw new BusinessException(Code.UNKNOWN, "임베딩 결과가 비어 있습니다.");
+            }
+            return embeddingResponse.getResults().stream()
+                    .map(result -> toDoubleList(result.getOutput()))
+                    .toList();
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(Code.UNKNOWN, "임베딩 생성 중 오류가 발생했습니다.");
+        }
     }
 
     private List<Double> toDoubleList(float[] array) {

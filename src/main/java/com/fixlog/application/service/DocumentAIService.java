@@ -1,65 +1,34 @@
 package com.fixlog.application.service;
 
+import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.common.code.Code;
+import com.fixlog.common.exception.BusinessException;
+import com.fixlog.common.security.SecurityUtil;
+import com.fixlog.domain.model.DocumentEntity;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 @Service
-public class DocumentAIService {
+public class DocumentAIService extends AbstractAIService {
 
-    private final ChatClient chatClient;
+    private final DocumentRepository documentRepository;
 
-    public DocumentAIService(@Qualifier("openAiChatModel") ChatModel chatModel) {
-        this.chatClient = ChatClient.builder(chatModel).build();
+    public DocumentAIService(@Qualifier("openAiChatModel") ChatModel chatModel,
+                             DocumentRepository documentRepository) {
+        super(ChatClient.builder(chatModel).build());
+        this.documentRepository = documentRepository;
     }
 
-    public String summarizeDocument(String content) {
-        String promptText = """
-                다음 문서를 간결하게 요약해주세요. 핵심 내용만 3-5문장으로 요약하세요.
-
-                문서 내용:
-                {content}
-
-                요약:
-                """;
-
-        PromptTemplate promptTemplate = new PromptTemplate(promptText);
-        Prompt prompt = promptTemplate.create(Map.of("content", content));
-        return chatClient.prompt(prompt).call().content();
-    }
-
-    public List<String> generateTags(String content) {
-        String promptText = """
-                다음 문서에서 가장 관련성이 높은 태그를 5개 생성해주세요.
-                태그는 쉼표로 구분하여 반환해주세요.
-
-                문서 내용:
-                {content}
-
-                태그 (쉼표로 구분):
-                """;
-
-        PromptTemplate promptTemplate = new PromptTemplate(promptText);
-        Prompt prompt = promptTemplate.create(Map.of("content", content));
-        String response = chatClient.prompt(prompt).call().content();
-
-        return Arrays.stream(response.split(","))
-                .map(String::trim)
-                .filter(tag -> !tag.isEmpty())
-                .collect(Collectors.toList());
-    }
-
-    public Map<String, Object> summarizeAndTag(String content) {
-        String summary = summarizeDocument(content);
-        List<String> tags = generateTags(content);
-        return Map.of("summary", summary, "tags", tags);
+    public String summarizeDocument(String documentId) {
+        String userId = SecurityUtil.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
+        }
+        DocumentEntity doc = documentRepository
+                .findByDocumentIdAndCreateUserAndUsable(documentId, userId, Integer.valueOf(1))
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
+        return summarizeDocument(doc.getPlainText());
     }
 }

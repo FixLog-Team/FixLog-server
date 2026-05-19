@@ -50,11 +50,15 @@ public class FolderService {
 
     @Transactional(readOnly = true)
     public List<FolderEntity> getFoldersByWorkspace(String workspaceId) {
-        return folderRepository.findByWorkspaceIdAndUsable(workspaceId, 1);
+        // TODO: WorkspaceEntity 도입 시 workspaceId에 대한 소유권 검증 추가 필요
+        validateWorkspaceAccess(workspaceId);
+        return folderRepository.findByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1));
     }
 
     @Transactional(readOnly = true)
     public FolderEntity getFolder(String folderId, String workspaceId) {
+        // TODO: WorkspaceEntity 도입 시 workspaceId에 대한 소유권 검증 추가 필요
+        validateWorkspaceAccess(workspaceId);
         return folderRepository.findByFolderIdAndWorkspaceId(folderId, workspaceId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
     }
@@ -69,7 +73,7 @@ public class FolderService {
         FolderEntity folder = folderRepository.findByFolderIdAndWorkspaceId(folderId, request.workspaceId())
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
 
-        folder.updateFolder(request, userId);
+        folder.updateFolder(request.parentId(), request.folderName(), request.ordinal(), userId);
         return folderRepository.save(folder);
     }
 
@@ -89,8 +93,10 @@ public class FolderService {
 
     @Transactional(readOnly = true)
     public FolderContentsDto getRootContents(String workspaceId) {
+        // TODO: WorkspaceEntity 도입 시 workspaceId에 대한 소유권 검증 추가 필요
+        validateWorkspaceAccess(workspaceId);
         List<FolderDto> folders = folderRepository
-                .findByParentIdIsNullAndWorkspaceIdAndUsable(workspaceId, 1)
+                .findByParentIdIsNullAndWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1))
                 .stream().map(FolderDto::from).toList();
 
         return new FolderContentsDto(folders, List.of());
@@ -98,12 +104,14 @@ public class FolderService {
 
     @Transactional(readOnly = true)
     public FolderContentsDto getFolderContents(String folderId, String workspaceId) {
+        // TODO: WorkspaceEntity 도입 시 workspaceId에 대한 소유권 검증 추가 필요
+        validateWorkspaceAccess(workspaceId);
         folderRepository.findByFolderIdAndWorkspaceId(folderId, workspaceId)
-                .filter(f -> f.getUsable() == 1)
+                .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
 
         List<FolderDto> folders = folderRepository
-                .findByParentIdAndWorkspaceIdAndUsable(folderId, workspaceId, 1)
+                .findByParentIdAndWorkspaceIdAndUsable(folderId, workspaceId, Integer.valueOf(1))
                 .stream().map(FolderDto::from).toList();
 
         List<DocumentDto> documents = documentRepository
@@ -111,5 +119,14 @@ public class FolderService {
                 .stream().map(DocumentDto::from).toList();
 
         return new FolderContentsDto(folders, documents);
+    }
+
+    private void validateWorkspaceAccess(String workspaceId) {
+        String userId = SecurityUtil.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
+        }
+        // TODO: WorkspaceEntity 도입 시 workspace.createUser == userId 검증으로 교체 필요
+        // 현재는 workspaceId가 userId 기반임을 가정하여 기본 인증 여부만 확인
     }
 }

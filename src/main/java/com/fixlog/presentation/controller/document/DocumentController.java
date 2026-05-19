@@ -1,22 +1,15 @@
 package com.fixlog.presentation.controller.document;
 
 import com.fixlog.application.service.DocumentService;
-import com.fixlog.common.code.Code;
-import com.fixlog.common.exception.BusinessException;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
-import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import com.fixlog.presentation.dto.request.DocumentTitleRequest;
 import com.fixlog.presentation.dto.response.DocumentDuplicateDto;
 import com.fixlog.presentation.dto.response.DocumentDto;
 import jakarta.validation.Valid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,12 +21,9 @@ import java.nio.charset.StandardCharsets;
 @RequestMapping("/api/documents")
 public class DocumentController {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(DocumentController.class);
+    private final DocumentService documentService;
 
-    private DocumentService documentService;
-
-    @Autowired
-    public void setDocumentService(DocumentService documentService) {
+    public DocumentController(DocumentService documentService) {
         this.documentService = documentService;
     }
 
@@ -77,20 +67,12 @@ public class DocumentController {
     }
 
     @GetMapping("/{documentId}/download")
-    public ResponseEntity<?> download(@PathVariable String documentId) {
-        try {
-            DocumentEntity doc = documentService.getDocument(documentId);
-            byte[] pdf = documentService.downloadPdf(documentId);
-            String filename = URLEncoder.encode(doc.getTitle() + ".pdf", StandardCharsets.UTF_8);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_PDF)
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
-                    .body(pdf);
-        } catch (BusinessException e) {
-            HttpStatus status = e.getCode() == Code.NOT_FOUND ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
-            return ResponseEntity.status(status)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Response.failure(e.getCode(), e.getMessage()));
-        }
+    public ResponseEntity<byte[]> download(@PathVariable String documentId) {
+        DocumentService.PdfResult result = documentService.downloadPdfResult(documentId);
+        String filename = URLEncoder.encode(result.title() + ".pdf", StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
+                .body(result.bytes());
     }
 }

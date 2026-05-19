@@ -7,9 +7,6 @@ import com.fixlog.domain.model.FolderEntity;
 import com.fixlog.presentation.dto.request.FolderRequest;
 import com.fixlog.presentation.dto.response.FolderContentsDto;
 import com.fixlog.presentation.dto.response.FolderDto;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,12 +14,10 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/folders")
 public class FolderController {
-    private static final Logger LOGGER = LoggerFactory.getLogger(FolderController.class);
 
-    private FolderService folderService;
+    private final FolderService folderService;
 
-    @Autowired
-    public void setFolderService(FolderService folderService) {
+    public FolderController(FolderService folderService) {
         this.folderService = folderService;
     }
 

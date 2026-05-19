@@ -5,6 +5,7 @@ import com.fixlog.application.service.EmbeddingService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.presentation.dto.request.DocumentRequest;
 import com.fixlog.presentation.dto.response.DocumentSummaryResponse;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,7 +24,7 @@ public class AIController {
     }
 
     @PostMapping("/analyze")
-    public DataResponse<DocumentSummaryResponse> analyzeDocument(@RequestBody DocumentRequest request) {
+    public DataResponse<DocumentSummaryResponse> analyzeDocument(@Valid @RequestBody DocumentRequest request) {
         Map<String, Object> result = documentAIService.summarizeAndTag(request.content());
         String summary = (String) result.get("summary");
         List<String> tags = (List<String>) result.get("tags");
@@ -32,17 +33,17 @@ public class AIController {
     }
 
     @PostMapping("/summarize")
-    public DataResponse<String> summarizeDocument(@RequestBody DocumentRequest request) {
+    public DataResponse<String> summarizeDocument(@Valid @RequestBody DocumentRequest request) {
         return DataResponse.success("요약이 완료되었습니다.", documentAIService.summarizeDocument(request.content()));
     }
 
     @PostMapping("/tags")
-    public DataResponse<List<String>> generateTags(@RequestBody DocumentRequest request) {
+    public DataResponse<List<String>> generateTags(@Valid @RequestBody DocumentRequest request) {
         return DataResponse.success("태그 생성이 완료되었습니다.", documentAIService.generateTags(request.content()));
     }
 
     @PostMapping("/embedding")
-    public DataResponse<List<Double>> generateEmbedding(@RequestBody DocumentRequest request) {
+    public DataResponse<List<Double>> generateEmbedding(@Valid @RequestBody DocumentRequest request) {
         return DataResponse.success("임베딩 생성이 완료되었습니다.", embeddingService.generateEmbedding(request.content()));
     }
 }

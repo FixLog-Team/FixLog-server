@@ -39,11 +39,11 @@ public class SecurityConfig {
 		http.csrf(csrf -> csrf.disable())
 			.cors(cors -> cors.configurationSource(corsConfigurationSource()))
 			.sessionManagement(session -> session
-				.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
+				.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.STATELESS)
 			)
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/oauth2/**", "/login/**", "/auth/token/refresh",
-					"/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/api/**").permitAll()
+					"/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				.anyRequest().authenticated()
 			)
 			.oauth2Login(oauth2 -> oauth2
