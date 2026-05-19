@@ -8,7 +8,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 @Entity
-@Table(name = "apj_document", schema = "public")
+@Table(name = "apj_document")
 public class DocumentEntity {
 
     @Id

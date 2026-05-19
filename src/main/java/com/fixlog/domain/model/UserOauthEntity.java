@@ -8,7 +8,6 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "`fixLog_user_oauth`",
-        schema = "public",
         uniqueConstraints = @UniqueConstraint(name = "uq_oauth_provider", columnNames = {"provider", "provider_id"})
 )
 public class UserOauthEntity {

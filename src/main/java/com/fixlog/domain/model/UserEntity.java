@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "`fixLog_user`", schema = "public")
+@Table(name = "`fixLog_user`")
 public class UserEntity {
 
 	@Id
