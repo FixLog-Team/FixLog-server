@@ -44,3 +44,4 @@ out/
 
 ### docker ###
 /docker/data/**
+/docker/.env
