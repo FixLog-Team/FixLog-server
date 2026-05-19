@@ -36,7 +36,7 @@ public class AuthController {
         return DataResponse.success(Map.of("accessToken", newAccessToken));
     }
 
-    @GetMapping("/session")
+    @GetMapping("/token")
     public Response session() {
         UserEntity user = SecurityUtil.getCurrentUser();
         if (user == null) {
