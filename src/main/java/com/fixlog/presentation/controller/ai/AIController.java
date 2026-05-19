@@ -24,7 +24,7 @@ public class AIController {
 
     @PostMapping("/analyze")
     public DataResponse<DocumentSummaryResponse> analyzeDocument(@RequestBody DocumentRequest request) {
-        Map<String, Object> result = documentAIService.summarizeAndTag(request.getContent());
+        Map<String, Object> result = documentAIService.summarizeAndTag(request.content());
         String summary = (String) result.get("summary");
         List<String> tags = (List<String>) result.get("tags");
         List<Double> embedding = embeddingService.generateEmbedding(summary);
@@ -33,16 +33,16 @@ public class AIController {
 
     @PostMapping("/summarize")
     public DataResponse<String> summarizeDocument(@RequestBody DocumentRequest request) {
-        return DataResponse.success("요약이 완료되었습니다.", documentAIService.summarizeDocument(request.getContent()));
+        return DataResponse.success("요약이 완료되었습니다.", documentAIService.summarizeDocument(request.content()));
     }
 
     @PostMapping("/tags")
     public DataResponse<List<String>> generateTags(@RequestBody DocumentRequest request) {
-        return DataResponse.success("태그 생성이 완료되었습니다.", documentAIService.generateTags(request.getContent()));
+        return DataResponse.success("태그 생성이 완료되었습니다.", documentAIService.generateTags(request.content()));
     }
 
     @PostMapping("/embedding")
     public DataResponse<List<Double>> generateEmbedding(@RequestBody DocumentRequest request) {
-        return DataResponse.success("임베딩 생성이 완료되었습니다.", embeddingService.generateEmbedding(request.getContent()));
+        return DataResponse.success("임베딩 생성이 완료되었습니다.", embeddingService.generateEmbedding(request.content()));
     }
 }

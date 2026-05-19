@@ -24,7 +24,7 @@ public class OllamaController {
 
     @PostMapping("/analyze")
     public DataResponse<DocumentSummaryResponse> analyzeDocument(@RequestBody DocumentRequest request) {
-        Map<String, Object> result = ollamaAIService.summarizeAndTag(request.getContent());
+        Map<String, Object> result = ollamaAIService.summarizeAndTag(request.content());
         String summary = (String) result.get("summary");
         List<String> tags = (List<String>) result.get("tags");
         List<Double> embedding = ollamaEmbeddingService.generateEmbedding(summary);
@@ -33,16 +33,16 @@ public class OllamaController {
 
     @PostMapping("/summarize")
     public DataResponse<String> summarizeDocument(@RequestBody DocumentRequest request) {
-        return DataResponse.success("Ollama로 요약이 완료되었습니다.", ollamaAIService.summarizeDocument(request.getContent()));
+        return DataResponse.success("Ollama로 요약이 완료되었습니다.", ollamaAIService.summarizeDocument(request.content()));
     }
 
     @PostMapping("/tags")
     public DataResponse<List<String>> generateTags(@RequestBody DocumentRequest request) {
-        return DataResponse.success("Ollama로 태그 생성이 완료되었습니다.", ollamaAIService.generateTags(request.getContent()));
+        return DataResponse.success("Ollama로 태그 생성이 완료되었습니다.", ollamaAIService.generateTags(request.content()));
     }
 
     @PostMapping("/embedding")
     public DataResponse<List<Double>> generateEmbedding(@RequestBody DocumentRequest request) {
-        return DataResponse.success("Ollama로 임베딩 생성이 완료되었습니다.", ollamaEmbeddingService.generateEmbedding(request.getContent()));
+        return DataResponse.success("Ollama로 임베딩 생성이 완료되었습니다.", ollamaEmbeddingService.generateEmbedding(request.content()));
     }
 }
