@@ -7,7 +7,7 @@ import java.util.UUID;
 
 @Entity
 @Table(
-        name = "`fixLog_user_oauth`",
+        name = "fixlog_user_oauth",
         schema = "public",
         uniqueConstraints = @UniqueConstraint(name = "uq_oauth_provider", columnNames = {"provider", "provider_id"})
 )
@@ -18,7 +18,7 @@ public class UserOauthEntity {
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
