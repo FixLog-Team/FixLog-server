@@ -22,7 +22,7 @@ public class FolderService {
 
     @Transactional
     public FolderEntity createFolder(FolderRequest request) {
-        if (request.getWorkspaceId() == null || request.getFolderName() == null) {
+        if (request.workspaceId() == null || request.folderName() == null) {
             throw new BusinessException(Code.INVALID_REQUEST, "워크스페이스 ID와 폴더명은 필수입니다.");
         }
 
@@ -31,13 +31,13 @@ public class FolderService {
             throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
         }
 
-        if (request.getParentId() != null) {
-            folderRepository.findByFolderIdAndWorkspaceId(request.getParentId(), request.getWorkspaceId())
+        if (request.parentId() != null) {
+            folderRepository.findByFolderIdAndWorkspaceId(request.parentId(), request.workspaceId())
                     .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "상위 폴더를 찾을 수 없습니다."));
         }
 
         String folderId = UUID.randomUUID().toString();
-        FolderEntity folder = new FolderEntity(folderId, request.getWorkspaceId(), request.getParentId(), request.getFolderName(), userId);
+        FolderEntity folder = new FolderEntity(folderId, request.workspaceId(), request.parentId(), request.folderName(), userId);
         return folderRepository.save(folder);
     }
 
@@ -59,7 +59,7 @@ public class FolderService {
             throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
         }
 
-        FolderEntity folder = folderRepository.findByFolderIdAndWorkspaceId(folderId, request.getWorkspaceId())
+        FolderEntity folder = folderRepository.findByFolderIdAndWorkspaceId(folderId, request.workspaceId())
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
 
         folder.updateFolder(request, userId);

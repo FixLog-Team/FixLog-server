@@ -58,10 +58,10 @@ public class FolderEntity {
     }
 
     public void updateFolder(FolderRequest request, String updateUser) {
-        this.workspaceId = request.getWorkspaceId() == null ? workspaceId : request.getWorkspaceId();
-        this.parentId = request.getParentId() == null ? parentId : request.getParentId();
-        this.folderName = request.getFolderName() == null ? folderName : request.getFolderName();
-        this.ordinal = request.getOrdinal() == null ? ordinal : request.getOrdinal();
+        this.workspaceId = request.workspaceId() == null ? workspaceId : request.workspaceId();
+        this.parentId = request.parentId() == null ? parentId : request.parentId();
+        this.folderName = request.folderName() == null ? folderName : request.folderName();
+        this.ordinal = request.ordinal() == null ? ordinal : request.ordinal();
         this.updateUser = updateUser;
         this.updateTime = Instant.now();
     }
