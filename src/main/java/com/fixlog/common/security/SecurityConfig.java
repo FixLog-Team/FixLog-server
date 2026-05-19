@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -18,31 +19,39 @@ import java.util.List;
 public class SecurityConfig {
 
 	private final OAuth2UserService oAuth2UserService;
+	private final OAuth2SuccessHandler oAuth2SuccessHandler;
+	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
 	@Value("#{'${cors.allowed-origins}'.split(',')}")
 	private List<String> allowedOrigins;
 
-	@Value("${oauth2.success-redirect-url}")
-	private String successRedirectUrl;
-
-	public SecurityConfig(OAuth2UserService oAuth2UserService) {
+	public SecurityConfig(OAuth2UserService oAuth2UserService,
+						  OAuth2SuccessHandler oAuth2SuccessHandler,
+						  JwtAuthenticationFilter jwtAuthenticationFilter) {
 		this.oAuth2UserService = oAuth2UserService;
+		this.oAuth2SuccessHandler = oAuth2SuccessHandler;
+		this.jwtAuthenticationFilter = jwtAuthenticationFilter;
 	}
 
 	@Bean
 	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 		http.csrf(csrf -> csrf.disable())
 			.cors(cors -> cors.configurationSource(corsConfigurationSource()))
+			.sessionManagement(session -> session
+				.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.STATELESS)
+			)
 			.authorizeHttpRequests(auth -> auth
-				.requestMatchers("/", "/login/**", "/css/**", "/js/**", "/images/**",
+				.requestMatchers("/oauth2/**", "/login/**", "/auth/token/refresh",
 					"/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/api/**").permitAll()
 				.anyRequest().authenticated()
-			).oauth2Login(oauth2 -> oauth2
-				.defaultSuccessUrl(successRedirectUrl, true)
+			)
+			.oauth2Login(oauth2 -> oauth2
+				.successHandler(oAuth2SuccessHandler)
 				.userInfoEndpoint(userInfo -> userInfo
 					.userService(oAuth2UserService)
 				)
-			);
+			)
+			.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 		return http.build();
 	}
 
