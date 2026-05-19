@@ -22,6 +22,9 @@ public class SecurityConfig {
 	@Value("#{'${cors.allowed-origins}'.split(',')}")
 	private List<String> allowedOrigins;
 
+	@Value("${oauth2.success-redirect-url}")
+	private String successRedirectUrl;
+
 	public SecurityConfig(OAuth2UserService oAuth2UserService) {
 		this.oAuth2UserService = oAuth2UserService;
 	}
@@ -35,7 +38,7 @@ public class SecurityConfig {
 					"/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/api/**").permitAll()
 				.anyRequest().authenticated()
 			).oauth2Login(oauth2 -> oauth2
-				.defaultSuccessUrl("/main", true)
+				.defaultSuccessUrl(successRedirectUrl, true)
 				.userInfoEndpoint(userInfo -> userInfo
 					.userService(oAuth2UserService)
 				)
