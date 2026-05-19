@@ -26,10 +26,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.4'
 	implementation 'org.apache.commons:commons-lang3:3.18.0'
-	// Spring AI OpenAI
-	implementation 'org.springframework.ai:spring-ai-openai-spring-boot-starter:1.0.0-M4'
-	// Spring AI Ollama
-	implementation 'org.springframework.ai:spring-ai-ollama-spring-boot-starter:1.0.0-M4'
+	// Spring AI OpenAI (Spring Boot 4.x compatible)
+	implementation 'org.springframework.ai:spring-ai-starter-model-openai:2.0.0-M6'
+	// Spring AI Ollama (Spring Boot 4.x compatible)
+	implementation 'org.springframework.ai:spring-ai-starter-model-ollama:2.0.0-M6'
 	// JWT
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
