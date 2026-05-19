@@ -1,0 +1,99 @@
+name: PR Events -> Discord (Server)
+
+on:
+  pull_request:
+    types: [ opened ]
+  pull_request_review:
+    types: [ submitted ]
+  pull_request_review_comment:
+    types: [ created ]
+  issue_comment:
+    types: [ created ]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send PR Opened message to Discord
+        if: github.event_name == 'pull_request'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SERVER_ROLE_ID: ${{ secrets.SERVER_ROLE_ID }}
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+
+          cat > payload.json <<EOF
+          {
+            "content": "<@&${SERVER_ROLE_ID}>\n[Server] PR #${PR_NUM}: ${PR_TITLE}\n${PR_URL}\nRepo: ${REPO} | Author: ${AUTHOR}"
+          }
+          EOF
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @payload.json "$DISCORD_WEBHOOK_URL"
+
+      - name: Send PR Approved message to Discord
+        if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SERVER_ROLE_ID: ${{ secrets.SERVER_ROLE_ID }}
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          REVIEWER="${{ github.event.review.user.login }}"
+
+          cat > payload.json <<EOF
+          {
+            "content": "<@&${SERVER_ROLE_ID}>\n[Server] PR #${PR_NUM} Approved!\n${PR_TITLE}\n${PR_URL}\nRepo: ${REPO} | Reviewer: ${REVIEWER}"
+          }
+          EOF
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @payload.json "$DISCORD_WEBHOOK_URL"
+
+      - name: Send PR Review Comment message to Discord
+        if: github.event_name == 'pull_request_review_comment'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SERVER_ROLE_ID: ${{ secrets.SERVER_ROLE_ID }}
+        run: |
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          COMMENTER="${{ github.event.comment.user.login }}"
+          COMMENT_URL="${{ github.event.comment.html_url }}"
+          COMMENT_BODY=$(echo "${{ github.event.comment.body }}" | head -c 100)
+
+          cat > payload.json <<EOF
+          {
+            "content": "<@&${SERVER_ROLE_ID}>\n[Server] PR #${PR_NUM}에 리뷰 코멘트\n${PR_TITLE}\n${COMMENT_URL}\nRepo: ${REPO} | ${COMMENTER}: ${COMMENT_BODY}"
+          }
+          EOF
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @payload.json "$DISCORD_WEBHOOK_URL"
+
+      - name: Send PR Issue Comment message to Discord
+        if: github.event_name == 'issue_comment' && github.event.issue.pull_request != null
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SERVER_ROLE_ID: ${{ secrets.SERVER_ROLE_ID }}
+        run: |
+          PR_URL="${{ github.event.issue.pull_request.html_url }}"
+          PR_TITLE="${{ github.event.issue.title }}"
+          PR_NUM="${{ github.event.issue.number }}"
+          REPO="${{ github.repository }}"
+          COMMENTER="${{ github.event.comment.user.login }}"
+          COMMENT_URL="${{ github.event.comment.html_url }}"
+          COMMENT_BODY=$(echo "${{ github.event.comment.body }}" | head -c 100)
+
+          cat > payload.json <<EOF
+          {
+            "content": "<@&${SERVER_ROLE_ID}>\n[Server] PR #${PR_NUM}에 코멘트\n${PR_TITLE}\n${COMMENT_URL}\nRepo: ${REPO} | ${COMMENTER}: ${COMMENT_BODY}"
+          }
+          EOF
+
+          curl -sS -X POST -H "Content-Type: application/json" -d @payload.json "$DISCORD_WEBHOOK_URL"
