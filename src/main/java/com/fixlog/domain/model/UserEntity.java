@@ -3,58 +3,63 @@ package com.fixlog.domain.model;
 import jakarta.persistence.*;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
-@Table(name = "apj_user", schema = "public")
+@Table(name = "`fixLog_user`", schema = "public")
 public class UserEntity {
 
 	@Id
-	@Column(name = "user_id", length = 100)
-	private String userId;
+	@GeneratedValue(strategy = GenerationType.UUID)
+	@Column(name = "user_id", columnDefinition = "uuid", updatable = false, nullable = false)
+	private UUID userId;
 
-	@Column(name = "user_name", length = 50)
+	@Column(name = "user_name", length = 50, nullable = false)
 	private String userName;
 
-	@Column(name = "email", length = 100, nullable = false)
+	@Column(name = "email", length = 100, nullable = false, unique = true)
 	private String email;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "user_status", length = 20)
 	private UserStatus userStatus;
 
-	@Column(name = "last_login_time")
-	private Instant lastLoginTime;
+	@Column(name = "last_login_at")
+	private Instant lastLoginAt;
 
-	@Column(name = "create_time", updatable = false)
-	private Instant createTime;
+	@Column(name = "is_deleted")
+	private Boolean isDeleted;
 
-	@Column(name = "update_time")
-	private Instant updateTime;
+	@Column(name = "create_at", updatable = false)
+	private Instant createAt;
+
+	@Column(name = "update_at")
+	private Instant updateAt;
 
 	protected UserEntity() {
 	}
 
-	public UserEntity(String userId, String userName, String email) {
-		this.userId = userId;
+	public UserEntity(String userName, String email) {
 		this.userName = userName;
 		this.email = email;
 		this.userStatus = UserStatus.ACTIVE;
-		this.createTime = Instant.now();
-		this.updateTime = Instant.now();
-		this.lastLoginTime = Instant.now();
+		this.isDeleted = false;
+		this.lastLoginAt = Instant.now();
+		this.createAt = Instant.now();
+		this.updateAt = Instant.now();
 	}
 
 	public void updateLoginInfo(String userName) {
 		this.userName = userName;
-		this.lastLoginTime = Instant.now();
-		this.updateTime = Instant.now();
+		this.lastLoginAt = Instant.now();
+		this.updateAt = Instant.now();
 
 		if (this.userStatus != UserStatus.ACTIVE) {
 			this.userStatus = UserStatus.ACTIVE;
 		}
 	}
 
-	public String getUserId() {
+	public UUID getUserId() {
 		return userId;
 	}
 
@@ -70,7 +75,11 @@ public class UserEntity {
 		return userStatus;
 	}
 
-	public Instant getLastLoginTime() {
-		return lastLoginTime;
+	public Instant getLastLoginAt() {
+		return lastLoginAt;
+	}
+
+	public Boolean getIsDeleted() {
+		return isDeleted;
 	}
 }
