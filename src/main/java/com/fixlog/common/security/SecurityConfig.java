@@ -1,6 +1,7 @@
 package com.fixlog.common.security;
 
 import com.fixlog.application.service.OAuth2UserService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,7 +39,7 @@ public class SecurityConfig {
 		http.csrf(csrf -> csrf.disable())
 			.cors(cors -> cors.configurationSource(corsConfigurationSource()))
 			.sessionManagement(session -> session
-				.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.STATELESS)
+				.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
 			)
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/oauth2/**", "/login/**", "/auth/token/refresh",
@@ -50,6 +51,13 @@ public class SecurityConfig {
 				.userInfoEndpoint(userInfo -> userInfo
 					.userService(oAuth2UserService)
 				)
+			)
+			.exceptionHandling(ex -> ex
+				.authenticationEntryPoint((request, response, authException) -> {
+					response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+					response.setContentType("application/json;charset=UTF-8");
+					response.getWriter().write("{\"code\":\"UNAUTHORIZED\",\"message\":\"인증이 필요합니다.\"}");
+				})
 			)
 			.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 		return http.build();

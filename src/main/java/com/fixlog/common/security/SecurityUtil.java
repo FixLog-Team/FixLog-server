@@ -1,23 +1,24 @@
 package com.fixlog.common.security;
 
+import com.fixlog.domain.model.UserEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 
 public class SecurityUtil {
+
     private SecurityUtil() {
     }
 
-    public static String getCurrentUserId() {
-        OAuth2User user = getCurrentUser();
-        return user != null ? user.getAttribute("sub") : null;
-    }
-
-    public static OAuth2User getCurrentUser() {
+    public static UserEntity getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof OAuth2User) {
-            return (OAuth2User) authentication.getPrincipal();
+        if (authentication != null && authentication.getPrincipal() instanceof UserEntity user) {
+            return user;
         }
         return null;
+    }
+
+    public static String getCurrentUserId() {
+        UserEntity user = getCurrentUser();
+        return user != null ? user.getUserId().toString() : null;
     }
 }
