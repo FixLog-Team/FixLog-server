@@ -6,10 +6,12 @@ import java.time.Instant;
 
 public record DocumentDto(
         String documentId,
-        String folderId,
         String workspaceId,
+        String folderId,
         String title,
-        Integer ordinal,
+        String blocks,
+        String plainText,
+        String contentHash,
         String createUser,
         Instant createTime,
         String updateUser,
@@ -18,10 +20,12 @@ public record DocumentDto(
     public static DocumentDto from(DocumentEntity entity) {
         return new DocumentDto(
                 entity.getDocumentId(),
-                entity.getFolderId(),
                 entity.getWorkspaceId(),
+                entity.getFolderId(),
                 entity.getTitle(),
-                entity.getOrdinal(),
+                entity.getBlocks(),
+                entity.getPlainText(),
+                entity.getContentHash(),
                 entity.getCreateUser(),
                 entity.getCreateTime(),
                 entity.getUpdateUser(),
