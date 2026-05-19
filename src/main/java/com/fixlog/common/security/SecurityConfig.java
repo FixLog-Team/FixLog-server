@@ -19,7 +19,7 @@ public class SecurityConfig {
 
 	private final OAuth2UserService oAuth2UserService;
 
-	@Value("${cors.allowed-origins}")
+	@Value("#{'${cors.allowed-origins}'.split(',')}")
 	private List<String> allowedOrigins;
 
 	public SecurityConfig(OAuth2UserService oAuth2UserService) {
