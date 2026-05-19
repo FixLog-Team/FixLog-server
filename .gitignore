@@ -41,3 +41,6 @@ out/
 
 ### claude ###
 .claude/settings.local.json
+
+### docker ###
+/docker/data/**
