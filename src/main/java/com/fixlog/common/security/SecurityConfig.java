@@ -14,7 +14,7 @@ public class SecurityConfig {
 		http.csrf(csrf -> csrf.disable())
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/", "/login/**", "/css/**", "/js/**", "/images/**",
-					"/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+					"/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/api/**").permitAll()
 				.anyRequest().authenticated()
 			).oauth2Login(oauth2 -> oauth2
 				.defaultSuccessUrl("/main", true)

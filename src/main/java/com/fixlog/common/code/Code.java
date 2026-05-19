@@ -3,5 +3,7 @@ package com.fixlog.common.code;
 public enum Code {
 	SUCCESS,
 	UNKNOWN,
-	UNAUTHORIZED
+	UNAUTHORIZED,
+	NOT_FOUND,
+	INVALID_REQUEST
 }
