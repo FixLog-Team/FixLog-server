@@ -36,15 +36,6 @@ public class AuthController {
         return DataResponse.success(Map.of("accessToken", newAccessToken));
     }
 
-    // TODO: 테스트용 임시 엔드포인트 - 확인 후 제거
-    @GetMapping("/token/test")
-    public Response tokenTest(@RequestParam String accessToken, @RequestParam String refreshToken) {
-        return DataResponse.success(Map.of(
-                "accessToken", accessToken,
-                "refreshToken", refreshToken
-        ));
-    }
-
     @GetMapping("/session")
     public Response session() {
         UserEntity user = SecurityUtil.getCurrentUser();
