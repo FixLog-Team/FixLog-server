@@ -11,4 +11,8 @@ public interface FolderRepository extends JpaRepository<FolderEntity, FolderId> 
     List<FolderEntity> findByWorkspaceIdAndUsable(String workspaceId, Integer usable);
 
     Optional<FolderEntity> findByFolderIdAndWorkspaceId(String folderId, String workspaceId);
+
+    List<FolderEntity> findByParentIdAndWorkspaceIdAndUsable(String parentId, String workspaceId, Integer usable);
+
+    List<FolderEntity> findByParentIdIsNullAndWorkspaceIdAndUsable(String workspaceId, Integer usable);
 }

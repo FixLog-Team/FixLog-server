@@ -5,6 +5,7 @@ import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
 import com.fixlog.domain.model.FolderEntity;
 import com.fixlog.presentation.dto.request.FolderRequest;
+import com.fixlog.presentation.dto.response.FolderContentsDto;
 import com.fixlog.presentation.dto.response.FolderDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,5 +56,18 @@ public class FolderController {
     public Response deleteFolder(@PathVariable String folderId, @PathVariable String workspaceId) {
         folderService.deleteFolder(folderId, workspaceId);
         return Response.success("폴더가 삭제되었습니다.");
+    }
+
+    @GetMapping
+    public Response getRootContents(@RequestParam String workspaceId) {
+        FolderContentsDto contents = folderService.getRootContents(workspaceId);
+        return DataResponse.success(contents);
+    }
+
+    @GetMapping("/{folderId}/contents")
+    public Response getFolderContents(@PathVariable String folderId,
+                                      @RequestParam String workspaceId) {
+        FolderContentsDto contents = folderService.getFolderContents(folderId, workspaceId);
+        return DataResponse.success(contents);
     }
 }
