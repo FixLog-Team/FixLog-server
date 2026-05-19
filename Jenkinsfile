@@ -45,5 +45,16 @@ pipeline {
         }
       }
     }
+
+    stage('Restart fixlog (script)') {
+      steps {
+        sshagent(credentials: [env.DEPLOY_CRED]) {
+          sh '''
+            set -euo pipefail
+            ssh -o StrictHostKeyChecking=no deploy@${DEPLOY_HOST} "/home/deploy/release/run_fixlog.sh"
+          '''
+        }
+      }
+    }
   }
 }
