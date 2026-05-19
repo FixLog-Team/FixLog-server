@@ -1,0 +1,548 @@
+# FixLog API 가이드 (프론트엔드용)
+
+> 최종 업데이트: 2026-05-19
+> Base URL (개발): `http://localhost:8080/fixlog`
+
+---
+
+## 목차
+
+1. [공통 규칙](#1-공통-규칙)
+2. [인증 플로우](#2-인증-플로우)
+3. [인증 API](#3-인증-api)
+4. [문서 API](#4-문서-api)
+5. [폴더 API](#5-폴더-api)
+6. [AI API](#6-ai-api)
+7. [에러 처리](#7-에러-처리)
+
+---
+
+## 1. 공통 규칙
+
+### Base URL
+
+| 환경 | URL |
+|------|-----|
+| 개발 | `http://localhost:8080/fixlog` |
+
+### 인증 헤더
+
+로그인 후 발급받은 `accessToken`을 모든 인증 필요 요청에 포함합니다.
+
+```
+Authorization: Bearer {accessToken}
+```
+
+### 공통 응답 형식
+
+**성공 (데이터 있음)**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": { ... }
+}
+```
+
+**성공 (데이터 없음 / 메시지만)**
+```json
+{
+  "code": "SUCCESS",
+  "message": "문서가 삭제되었습니다."
+}
+```
+
+**실패**
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "문서를 찾을 수 없습니다."
+}
+```
+
+### 응답 코드 및 HTTP 상태
+
+| code | HTTP 상태 | 설명 |
+|------|-----------|------|
+| `SUCCESS` | 200 | 성공 |
+| `UNAUTHORIZED` | 401 | 인증 필요 또는 토큰 만료 |
+| `NOT_FOUND` | 404 | 리소스 없음 |
+| `INVALID_REQUEST` | 400 | 잘못된 요청 (유효성 오류 등) |
+| `UNKNOWN` | 500 | 서버 내부 오류 |
+
+### 인증 불필요 경로 (Public)
+
+아래 경로는 `Authorization` 헤더 없이 접근 가능합니다.
+
+```
+GET  /login
+GET  /oauth2/**
+POST /auth/token/refresh
+GET  /v3/api-docs/**
+GET  /swagger-ui/**
+GET  /swagger-ui.html
+```
+
+---
+
+## 2. 인증 플로우
+
+### Google OAuth 로그인
+
+```
+1. 사용자가 로그인 요청
+   → 프론트: window.location.href = "http://localhost:8080/fixlog/login"
+
+2. 서버가 Google 로그인 페이지로 리디렉션
+
+3. Google 인증 완료 후 서버가 프론트로 리디렉션
+   → {oauth2.success-redirect-url}?accessToken=...&refreshToken=...
+   → 개발 기본값: http://localhost:5173/login/callback?accessToken=...&refreshToken=...
+
+4. 프론트에서 토큰을 저장 (localStorage 또는 메모리)
+```
+
+### 토큰 만료 처리
+
+- `accessToken` 유효시간: **1시간** (3,600,000ms)
+- `refreshToken` 유효시간: **14일** (1,209,600,000ms)
+- API 응답이 `401 UNAUTHORIZED`이면 `refreshToken`으로 재발급 후 재시도
+
+---
+
+## 3. 인증 API
+
+### GET /login
+Google OAuth 로그인 시작 (페이지 이동)
+
+**인증 불필요**
+
+```
+응답: 302 Redirect → Google 로그인 페이지
+```
+
+---
+
+### POST /auth/token/refresh
+액세스 토큰 재발급
+
+**인증 불필요**
+
+**Request Body**
+```json
+{
+  "refreshToken": "eyJhbGci..."
+}
+```
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "accessToken": "eyJhbGci..."
+  }
+}
+```
+
+---
+
+### GET /auth/token
+현재 로그인 사용자 정보 조회
+
+**인증 필요**
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "userName": "홍길동",
+    "email": "user@gmail.com"
+  }
+}
+```
+
+---
+
+## 4. 문서 API
+
+> 모든 엔드포인트 **인증 필요**
+> 문서는 로그인한 사용자 본인 소유 문서만 접근 가능
+
+### GET /api/documents/{documentId}
+문서 조회
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "documentId": "uuid",
+    "workspaceId": "uuid",
+    "folderId": "uuid",
+    "title": "문서 제목",
+    "blocks": "[{\"type\":\"paragraph\",\"data\":{\"text\":\"내용\"}}]",
+    "plainText": "내용",
+    "contentHash": "sha256hex",
+    "createUser": "user-uuid",
+    "createTime": "2026-05-19T07:00:00Z",
+    "updateUser": "user-uuid",
+    "updateTime": "2026-05-19T07:00:00Z"
+  }
+}
+```
+
+---
+
+### PUT /api/documents/{documentId}
+문서 내용 저장
+
+**Request Body**
+```json
+{
+  "title": "문서 제목",
+  "blocks": [
+    { "type": "header", "data": { "text": "제목", "level": 1 } },
+    { "type": "paragraph", "data": { "text": "본문 내용" } },
+    { "type": "list", "data": { "items": ["항목1", "항목2"] } },
+    { "type": "code", "data": { "code": "console.log('hello')" } }
+  ]
+}
+```
+
+> `blocks` 허용 type: `paragraph`, `header`, `list`, `code`, `image`, `table`
+
+**Response**: `DocumentDto` (위와 동일)
+
+---
+
+### PATCH /api/documents/{documentId}/title
+문서 제목만 변경
+
+**Request Body**
+```json
+{
+  "title": "새 제목"
+}
+```
+
+**Response**: `DocumentDto`
+
+---
+
+### GET /api/documents/{documentId}/save-state
+마지막 저장 상태 조회 (자동저장 확인용)
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "lastSavedAt": "2026-05-19T07:00:00Z",
+    "contentHash": "sha256hex"
+  }
+}
+```
+
+---
+
+### POST /api/documents/{documentId}/duplicate
+문서 복제
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "newDocumentId": "new-uuid",
+    "workspaceId": "uuid",
+    "folderId": "uuid",
+    "title": "원본 제목 (1)"
+  }
+}
+```
+
+---
+
+### DELETE /api/documents/{documentId}
+문서 삭제 (소프트 삭제 — 복구 가능)
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "문서가 삭제되었습니다."
+}
+```
+
+---
+
+### PATCH /api/documents/{documentId}/move
+문서 폴더 이동
+
+**Request Body**
+```json
+{
+  "folderId": "target-folder-uuid"
+}
+```
+
+> `folderId`를 `null`로 보내면 루트로 이동
+
+**Response**: `DocumentDto`
+
+---
+
+### GET /api/documents/{documentId}/download
+문서 PDF 다운로드
+
+**Response**: `application/pdf` 바이너리
+```
+Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
+```
+
+---
+
+## 5. 폴더 API
+
+> 모든 엔드포인트 **인증 필요**
+
+### GET /api/folders?workspaceId={workspaceId}
+워크스페이스 루트 콘텐츠 조회 (루트 폴더 + 루트 문서 목록)
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "folders": [
+      {
+        "folderId": "uuid",
+        "workspaceId": "uuid",
+        "parentId": null,
+        "folderName": "프로젝트",
+        "ordinal": 0,
+        "createUser": "user-uuid",
+        "createTime": "2026-05-19T07:00:00Z",
+        "updateUser": "user-uuid",
+        "updateTime": "2026-05-19T07:00:00Z"
+      }
+    ],
+    "documents": []
+  }
+}
+```
+
+---
+
+### GET /api/folders/{folderId}/contents?workspaceId={workspaceId}
+폴더 콘텐츠 조회 (하위 폴더 + 문서 목록)
+
+**Response**: 위와 동일한 `FolderContentsDto` 형식
+
+---
+
+### GET /api/folders/workspace/{workspaceId}
+워크스페이스 전체 폴더 목록 (트리 구성용)
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": [
+    {
+      "folderId": "uuid",
+      "workspaceId": "uuid",
+      "parentId": null,
+      "folderName": "루트 폴더",
+      "ordinal": 0,
+      ...
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/folders/folder/{folderId}/workspace/{workspaceId}
+특정 폴더 정보 조회
+
+**Response**: `FolderDto`
+
+---
+
+### POST /api/folders
+폴더 생성
+
+**Request Body**
+```json
+{
+  "workspaceId": "uuid",
+  "parentId": "parent-folder-uuid",
+  "folderName": "새 폴더",
+  "ordinal": 0
+}
+```
+
+> `parentId`가 `null`이면 루트에 생성
+
+**Response**: `FolderDto`
+
+---
+
+### PUT /api/folders/{folderId}
+폴더 수정
+
+**Request Body**
+```json
+{
+  "workspaceId": "uuid",
+  "parentId": "parent-folder-uuid",
+  "folderName": "변경된 폴더명",
+  "ordinal": 1
+}
+```
+
+**Response**: `FolderDto`
+
+---
+
+### DELETE /api/folders/{folderId}/{workspaceId}
+폴더 삭제 (소프트 삭제)
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "폴더가 삭제되었습니다."
+}
+```
+
+---
+
+## 6. AI API
+
+> 모든 엔드포인트 **인증 필요**
+> `/ai/**` → OpenAI (GPT-4o), `/ollama/**` → Ollama (llama3)
+
+### POST /ai/analyze 또는 POST /ollama/analyze
+문서 분석 (요약 + 태그 + 임베딩 한 번에)
+
+**Request Body**
+```json
+{
+  "content": "분석할 문서 내용 (최대 50,000자)"
+}
+```
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "summary": "요약된 내용",
+    "tags": ["태그1", "태그2"],
+    "embedding": [0.123, -0.456, ...]
+  }
+}
+```
+
+---
+
+### POST /ai/summarize 또는 POST /ollama/summarize
+문서 요약
+
+**Request Body**
+```json
+{ "content": "요약할 내용" }
+```
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": "요약된 텍스트"
+}
+```
+
+---
+
+### POST /ai/tags 또는 POST /ollama/tags
+태그 자동 생성
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": ["Spring Boot", "JWT", "OAuth2"]
+}
+```
+
+---
+
+### POST /ai/embedding 또는 POST /ollama/embedding
+임베딩 벡터 생성
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": [0.123, -0.456, 0.789, ...]
+}
+```
+
+---
+
+## 7. 에러 처리
+
+### 401 처리 흐름 (토큰 재발급)
+
+```
+API 호출
+  → 401 응답 수신
+  → POST /auth/token/refresh { refreshToken }
+    → 성공: 새 accessToken 저장 후 원래 요청 재시도
+    → 실패 (refreshToken도 만료): 로그인 페이지로 이동
+```
+
+### 주요 에러 케이스
+
+| 상황 | code | HTTP |
+|------|------|------|
+| 토큰 없음 / 만료 | `UNAUTHORIZED` | 401 |
+| 문서/폴더 없거나 타인 소유 | `NOT_FOUND` | 404 |
+| blocks 유효성 실패 (type 오류, 크기 초과 등) | `INVALID_REQUEST` | 400 |
+| title 빈 값 | `INVALID_REQUEST` | 400 |
+| AI 서비스 오류 | `UNKNOWN` | 500 |
+
+### blocks 유효성 규칙
+
+| 항목 | 제한 |
+|------|------|
+| blocks 배열 최대 크기 | 5,000개 |
+| text / code 최대 길이 | 100,000자 |
+| list items 최대 개수 | 1,000개 |
+| 허용 block type | `paragraph`, `header`, `list`, `code`, `image`, `table` |
+
+---
+
+## Swagger UI
+
+개발 환경에서 직접 API 테스트 가능:
+
+```
+http://localhost:8080/fixlog/swagger-ui.html
+```
