@@ -38,3 +38,6 @@ out/
 
 ### Environment ###
 .env.properties
+
+### claude ###
+.claude/settings.local.json
