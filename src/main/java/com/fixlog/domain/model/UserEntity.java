@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "`fixLog_user`", schema = "public")
+@Table(name = "fixLog_user", schema = "public")
 public class UserEntity {
 
 	@Id
@@ -27,9 +27,6 @@ public class UserEntity {
 	@Column(name = "last_login_at")
 	private Instant lastLoginAt;
 
-	@Column(name = "is_deleted")
-	private Boolean isDeleted;
-
 	@Column(name = "create_at", updatable = false)
 	private Instant createAt;
 
@@ -43,14 +40,14 @@ public class UserEntity {
 		this.userName = userName;
 		this.email = email;
 		this.userStatus = UserStatus.ACTIVE;
-		this.isDeleted = false;
 		this.lastLoginAt = Instant.now();
 		this.createAt = Instant.now();
 		this.updateAt = Instant.now();
 	}
 
-	public void updateLoginInfo(String userName) {
+	public void updateLoginInfo(String userName, String email) {
 		this.userName = userName;
+		this.email = email;
 		this.lastLoginAt = Instant.now();
 		this.updateAt = Instant.now();
 
@@ -79,7 +76,7 @@ public class UserEntity {
 		return lastLoginAt;
 	}
 
-	public Boolean getIsDeleted() {
-		return isDeleted;
+	public boolean isDeleted() {
+		return this.userStatus == UserStatus.WITHDRAW;
 	}
 }

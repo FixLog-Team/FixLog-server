@@ -39,7 +39,7 @@ public class OAuth2UserService implements org.springframework.security.oauth2.cl
 
 		userOauthRepository.findByProviderAndProviderId(provider, providerId)
 			.ifPresentOrElse(
-				oauth -> oauth.getUser().updateLoginInfo(name),
+				oauth -> oauth.getUser().updateLoginInfo(name, email),
 				() -> {
 					UserEntity user = userRepository.findByEmail(email)
 						.orElseGet(() -> userRepository.save(new UserEntity(name, email)));
