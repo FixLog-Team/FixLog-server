@@ -1,18 +1,13 @@
 package com.fixlog.presentation.controller.auth;
 
-import com.fixlog.application.repository.RefreshTokenRepository;
 import com.fixlog.common.code.Code;
+import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
 import com.fixlog.common.security.JwtProvider;
-import com.fixlog.domain.model.RefreshTokenEntity;
+import com.fixlog.common.security.SecurityUtil;
 import com.fixlog.domain.model.UserEntity;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.Map;
 
 @RestController
@@ -20,53 +15,47 @@ import java.util.Map;
 public class AuthController {
 
     private final JwtProvider jwtProvider;
-    private final RefreshTokenRepository refreshTokenRepository;
 
-    public AuthController(JwtProvider jwtProvider, RefreshTokenRepository refreshTokenRepository) {
+    public AuthController(JwtProvider jwtProvider) {
         this.jwtProvider = jwtProvider;
-        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     @PostMapping("/token/refresh")
-    @Transactional
     public Response refresh(@RequestBody Map<String, String> body) {
         String refreshToken = body.get("refreshToken");
         if (refreshToken == null) {
             return Response.failure(Code.UNAUTHORIZED, "refreshToken이 없습니다.");
         }
 
-        RefreshTokenEntity tokenEntity = refreshTokenRepository.findByToken(refreshToken)
-                .orElse(null);
-
-        if (tokenEntity == null || tokenEntity.isExpired()) {
+        if (!jwtProvider.isValid(refreshToken)) {
             return Response.failure(Code.UNAUTHORIZED, "유효하지 않은 refreshToken입니다.");
         }
 
-        UserEntity user = tokenEntity.getUser();
-        String newAccessToken = jwtProvider.generateAccessToken(user.getUserId());
-        String newRefreshToken = jwtProvider.generateRefreshToken(user.getUserId());
+        String newAccessToken = jwtProvider.generateAccessToken(jwtProvider.extractUserId(refreshToken));
 
-        refreshTokenRepository.delete(tokenEntity);
-        refreshTokenRepository.save(new RefreshTokenEntity(
-                user,
-                newRefreshToken,
-                Instant.now().plusMillis(jwtProvider.getRefreshTokenExpiry())
-        ));
-
-        return new TokenResponse(newAccessToken, newRefreshToken);
+        return DataResponse.success(Map.of("accessToken", newAccessToken));
     }
 
-    @PostMapping("/logout")
-    @Transactional
-    public Response logout(@RequestBody Map<String, String> body) {
-        String refreshToken = body.get("refreshToken");
-        if (refreshToken == null) {
-            return Response.failure(Code.UNAUTHORIZED, "refreshToken이 없습니다.");
+    // TODO: 테스트용 임시 엔드포인트 - 확인 후 제거
+    @GetMapping("/token/test")
+    public Response tokenTest(@RequestParam String accessToken, @RequestParam String refreshToken) {
+        return DataResponse.success(Map.of(
+                "accessToken", accessToken,
+                "refreshToken", refreshToken
+        ));
+    }
+
+    @GetMapping("/session")
+    public Response session() {
+        UserEntity user = SecurityUtil.getCurrentUser();
+        if (user == null) {
+            return Response.failure(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
         }
 
-        refreshTokenRepository.findByToken(refreshToken)
-                .ifPresent(refreshTokenRepository::delete);
-
-        return Response.success();
+        return DataResponse.success(Map.of(
+                "userId", user.getUserId(),
+                "userName", user.getUserName(),
+                "email", user.getEmail()
+        ));
     }
 }
