@@ -39,7 +39,7 @@ public class SecurityConfig {
 		http.csrf(csrf -> csrf.disable())
 			.cors(cors -> cors.configurationSource(corsConfigurationSource()))
 			.sessionManagement(session -> session
-				.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.STATELESS)
+				.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
 			)
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/oauth2/**", "/login/**", "/auth/token/refresh",
