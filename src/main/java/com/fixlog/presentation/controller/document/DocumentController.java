@@ -3,12 +3,17 @@ package com.fixlog.presentation.controller.document;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
+import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import com.fixlog.presentation.dto.request.DocumentTitleRequest;
 import com.fixlog.presentation.dto.response.DocumentDuplicateDto;
 import com.fixlog.presentation.dto.response.DocumentDto;
+import com.fixlog.presentation.dto.response.DocumentPageDto;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +30,19 @@ public class DocumentController {
 
     public DocumentController(DocumentService documentService) {
         this.documentService = documentService;
+    }
+
+    @PostMapping
+    public Response create(@RequestBody DocumentCreateRequest req) {
+        return DataResponse.success(DocumentDto.from(documentService.create(req)));
+    }
+
+    @GetMapping
+    public Response list(@RequestParam(required = false) String folderId,
+                         @RequestParam(defaultValue = "0") int page,
+                         @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updateTime"));
+        return DataResponse.success(DocumentPageDto.from(documentService.list(folderId, pageable)));
     }
 
     @GetMapping("/{documentId}")

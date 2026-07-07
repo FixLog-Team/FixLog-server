@@ -9,10 +9,13 @@ import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.common.security.SecurityUtil;
 import com.fixlog.domain.model.DocumentEntity;
+import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import com.fixlog.presentation.dto.request.DocumentTitleRequest;
 import com.fixlog.presentation.dto.response.DocumentSaveStateDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +44,30 @@ public class DocumentService {
         this.pdfGenerator = pdfGenerator;
         this.canonicalMapper = new ObjectMapper()
                 .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+    }
+
+    @Transactional
+    public DocumentEntity create(DocumentCreateRequest req) {
+        String userId = requireUserId();
+        String folderId = req.folderId();
+        if (folderId != null) {
+            folderRepository.findByFolderIdAndCreateUser(folderId, userId)
+                    .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
+                    .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
+        }
+        String title = (req.title() == null || req.title().isBlank()) ? "제목 없음" : req.title();
+        String documentId = UUID.randomUUID().toString();
+        DocumentEntity doc = new DocumentEntity(documentId, folderId, title, "[]", "", null, userId);
+        return documentRepository.save(doc);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<DocumentEntity> list(String folderId, Pageable pageable) {
+        String userId = requireUserId();
+        if (folderId != null) {
+            return documentRepository.findByFolderIdAndCreateUserAndUsable(folderId, userId, 1, pageable);
+        }
+        return documentRepository.findByCreateUserAndUsable(userId, 1, pageable);
     }
 
     @Transactional(readOnly = true)

@@ -1,6 +1,8 @@
 package com.fixlog.application.repository;
 
 import com.fixlog.domain.model.DocumentEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -13,4 +15,9 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
     List<DocumentEntity> findByFolderIdAndCreateUserAndUsable(String folderId, String createUser, Integer usable);
 
     List<DocumentEntity> findByFolderIdIsNullAndCreateUserAndUsable(String createUser, Integer usable);
+
+    Page<DocumentEntity> findByCreateUserAndUsable(String createUser, Integer usable, Pageable pageable);
+
+    Page<DocumentEntity> findByFolderIdAndCreateUserAndUsable(
+            String folderId, String createUser, Integer usable, Pageable pageable);
 }
