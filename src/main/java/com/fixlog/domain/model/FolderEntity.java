@@ -6,16 +6,11 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "apj_folder")
-@IdClass(FolderId.class)
 public class FolderEntity {
 
     @Id
     @Column(name = "folder_id", length = 100)
     private String folderId;
-
-    @Id
-    @Column(name = "workspace_id", length = 100)
-    private String workspaceId;
 
     @Column(name = "parent_id", length = 100)
     private String parentId;
@@ -44,9 +39,8 @@ public class FolderEntity {
     protected FolderEntity() {
     }
 
-    public FolderEntity(String folderId, String workspaceId, String parentId, String folderName, String createUser) {
+    public FolderEntity(String folderId, String parentId, String folderName, String createUser) {
         this.folderId = folderId;
-        this.workspaceId = workspaceId;
         this.parentId = parentId;
         this.folderName = folderName;
         this.ordinal = 0;
@@ -72,10 +66,6 @@ public class FolderEntity {
 
     public String getFolderId() {
         return folderId;
-    }
-
-    public String getWorkspaceId() {
-        return workspaceId;
     }
 
     public String getParentId() {

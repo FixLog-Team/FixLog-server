@@ -6,7 +6,6 @@ import java.time.Instant;
 
 public record DocumentDto(
         String documentId,
-        String workspaceId,
         String folderId,
         String title,
         String blocks,
@@ -20,7 +19,6 @@ public record DocumentDto(
     public static DocumentDto from(DocumentEntity entity) {
         return new DocumentDto(
                 entity.getDocumentId(),
-                entity.getWorkspaceId(),
                 entity.getFolderId(),
                 entity.getTitle(),
                 entity.getBlocks(),

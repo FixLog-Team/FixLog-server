@@ -9,8 +9,6 @@ import com.fixlog.presentation.dto.response.FolderContentsDto;
 import com.fixlog.presentation.dto.response.FolderDto;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/folders")
 public class FolderController {
@@ -27,17 +25,22 @@ public class FolderController {
         return DataResponse.success(FolderDto.from(folder));
     }
 
-    @GetMapping("/workspace/{workspaceId}")
-    public Response getFoldersByWorkspace(@PathVariable String workspaceId) {
-        List<FolderEntity> folders = folderService.getFoldersByWorkspace(workspaceId);
-        List<FolderDto> result = folders.stream().map(FolderDto::from).toList();
-        return DataResponse.success(result);
+    @GetMapping
+    public Response getRootContents() {
+        FolderContentsDto contents = folderService.getRootContents();
+        return DataResponse.success(contents);
     }
 
-    @GetMapping("/folder/{folderId}/workspace/{workspaceId}")
-    public Response getFolder(@PathVariable String folderId, @PathVariable String workspaceId) {
-        FolderEntity folder = folderService.getFolder(folderId, workspaceId);
+    @GetMapping("/{folderId}")
+    public Response getFolder(@PathVariable String folderId) {
+        FolderEntity folder = folderService.getFolder(folderId);
         return DataResponse.success(FolderDto.from(folder));
+    }
+
+    @GetMapping("/{folderId}/contents")
+    public Response getFolderContents(@PathVariable String folderId) {
+        FolderContentsDto contents = folderService.getFolderContents(folderId);
+        return DataResponse.success(contents);
     }
 
     @PutMapping("/{folderId}")
@@ -47,22 +50,9 @@ public class FolderController {
         return DataResponse.success(FolderDto.from(folder));
     }
 
-    @DeleteMapping("/{folderId}/{workspaceId}")
-    public Response deleteFolder(@PathVariable String folderId, @PathVariable String workspaceId) {
-        folderService.deleteFolder(folderId, workspaceId);
+    @DeleteMapping("/{folderId}")
+    public Response deleteFolder(@PathVariable String folderId) {
+        folderService.deleteFolder(folderId);
         return Response.success("폴더가 삭제되었습니다.");
-    }
-
-    @GetMapping
-    public Response getRootContents(@RequestParam String workspaceId) {
-        FolderContentsDto contents = folderService.getRootContents(workspaceId);
-        return DataResponse.success(contents);
-    }
-
-    @GetMapping("/{folderId}/contents")
-    public Response getFolderContents(@PathVariable String folderId,
-                                      @RequestParam String workspaceId) {
-        FolderContentsDto contents = folderService.getFolderContents(folderId, workspaceId);
-        return DataResponse.success(contents);
     }
 }

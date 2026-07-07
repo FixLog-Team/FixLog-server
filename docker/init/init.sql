@@ -63,7 +63,6 @@ CREATE TABLE IF NOT EXISTS `fixLog_user_oauth` (
 -- 트러블슈팅 문서 (DocumentEntity)
 CREATE TABLE IF NOT EXISTS apj_document (
     document_id  varchar(100) NOT NULL,
-    workspace_id varchar(100) NOT NULL,
     folder_id    varchar(100),
     title        varchar(255) NOT NULL,
     blocks       text,
@@ -80,7 +79,6 @@ CREATE TABLE IF NOT EXISTS apj_document (
 -- 폴더 (FolderEntity)
 CREATE TABLE IF NOT EXISTS apj_folder (
     folder_id    varchar(100) NOT NULL,
-    workspace_id varchar(100) NOT NULL,
     parent_id    varchar(100),
     folder_name  varchar(100) NOT NULL,
     ordinal      int          DEFAULT 0,
@@ -89,8 +87,8 @@ CREATE TABLE IF NOT EXISTS apj_folder (
     create_time  datetime(6),
     update_user  varchar(100),
     update_time  datetime(6),
-    PRIMARY KEY (folder_id, workspace_id)
-) COMMENT='워크스페이스 내 폴더 구조';
+    PRIMARY KEY (folder_id)
+) COMMENT='사용자 폴더 구조';
 
 -- 파일
 CREATE TABLE IF NOT EXISTS apj_file (

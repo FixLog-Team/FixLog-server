@@ -78,7 +78,6 @@ public class DocumentService {
         String newId = UUID.randomUUID().toString();
         DocumentEntity copy = new DocumentEntity(
                 newId,
-                original.getWorkspaceId(),
                 original.getFolderId(),
                 original.getTitle() + " (1)",
                 original.getBlocks(),
@@ -98,14 +97,15 @@ public class DocumentService {
 
     @Transactional
     public DocumentEntity move(String documentId, DocumentMoveRequest req) {
+        String userId = requireUserId();
         DocumentEntity doc = loadOwned(documentId);
         String targetFolderId = req.folderId();
         if (targetFolderId != null) {
-            folderRepository.findByFolderIdAndWorkspaceId(targetFolderId, doc.getWorkspaceId())
+            folderRepository.findByFolderIdAndCreateUser(targetFolderId, userId)
                     .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
                     .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
         }
-        doc.moveTo(targetFolderId, requireUserId());
+        doc.moveTo(targetFolderId, userId);
         return documentRepository.save(doc);
     }
 

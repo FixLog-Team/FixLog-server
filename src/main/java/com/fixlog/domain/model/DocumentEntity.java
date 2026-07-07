@@ -15,9 +15,6 @@ public class DocumentEntity {
     @Column(name = "document_id", length = 100)
     private String documentId;
 
-    @Column(name = "workspace_id", length = 100, nullable = false)
-    private String workspaceId;
-
     @Column(name = "folder_id", length = 100)
     private String folderId;
 
@@ -51,11 +48,10 @@ public class DocumentEntity {
     protected DocumentEntity() {
     }
 
-    public DocumentEntity(String documentId, String workspaceId, String folderId,
+    public DocumentEntity(String documentId, String folderId,
                           String title, String blocks, String plainText, String contentHash,
                           String createUser) {
         this.documentId = documentId;
-        this.workspaceId = workspaceId;
         this.folderId = folderId;
         this.title = title;
         this.blocks = blocks;
@@ -96,7 +92,6 @@ public class DocumentEntity {
     }
 
     public String getDocumentId() { return documentId; }
-    public String getWorkspaceId() { return workspaceId; }
     public String getFolderId() { return folderId; }
     public String getTitle() { return title; }
     public String getBlocks() { return blocks; }
