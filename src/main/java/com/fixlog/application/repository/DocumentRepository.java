@@ -10,5 +10,7 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
     Optional<DocumentEntity> findByDocumentIdAndCreateUserAndUsable(
             String documentId, String createUser, Integer usable);
 
-    List<DocumentEntity> findByFolderIdAndWorkspaceIdAndUsable(String folderId, String workspaceId, Integer usable);
+    List<DocumentEntity> findByFolderIdAndCreateUserAndUsable(String folderId, String createUser, Integer usable);
+
+    List<DocumentEntity> findByFolderIdIsNullAndCreateUserAndUsable(String createUser, Integer usable);
 }

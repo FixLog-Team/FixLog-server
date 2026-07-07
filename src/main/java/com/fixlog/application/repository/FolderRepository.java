@@ -1,18 +1,17 @@
 package com.fixlog.application.repository;
 
 import com.fixlog.domain.model.FolderEntity;
-import com.fixlog.domain.model.FolderId;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface FolderRepository extends JpaRepository<FolderEntity, FolderId> {
-    List<FolderEntity> findByWorkspaceIdAndUsable(String workspaceId, Integer usable);
+public interface FolderRepository extends JpaRepository<FolderEntity, String> {
+    List<FolderEntity> findByCreateUserAndUsable(String createUser, Integer usable);
 
-    Optional<FolderEntity> findByFolderIdAndWorkspaceId(String folderId, String workspaceId);
+    Optional<FolderEntity> findByFolderIdAndCreateUser(String folderId, String createUser);
 
-    List<FolderEntity> findByParentIdAndWorkspaceIdAndUsable(String parentId, String workspaceId, Integer usable);
+    List<FolderEntity> findByParentIdAndCreateUserAndUsable(String parentId, String createUser, Integer usable);
 
-    List<FolderEntity> findByParentIdIsNullAndWorkspaceIdAndUsable(String workspaceId, Integer usable);
+    List<FolderEntity> findByParentIdIsNullAndCreateUserAndUsable(String createUser, Integer usable);
 }

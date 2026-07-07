@@ -6,7 +6,6 @@ import java.time.Instant;
 
 public record FolderDto(
         String folderId,
-        String workspaceId,
         String parentId,
         String folderName,
         Integer ordinal,
@@ -18,7 +17,6 @@ public record FolderDto(
     public static FolderDto from(FolderEntity entity) {
         return new FolderDto(
                 entity.getFolderId(),
-                entity.getWorkspaceId(),
                 entity.getParentId(),
                 entity.getFolderName(),
                 entity.getOrdinal(),
