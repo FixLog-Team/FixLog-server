@@ -173,6 +173,56 @@ Google OAuth 로그인 시작 (페이지 이동)
 > 모든 엔드포인트 **인증 필요**
 > 문서는 로그인한 사용자 본인 소유 문서만 접근 가능
 
+### POST /api/documents
+문서 생성 (빈 문서)
+
+**Request Body**
+```json
+{
+  "folderId": "target-folder-uuid",
+  "title": "새 문서"
+}
+```
+
+> `folderId`가 `null`이면 루트에 생성한다.
+> `title`을 생략하거나 비우면 `"제목 없음"`으로 생성된다.
+> 생성 직후 `blocks`는 빈 배열(`"[]"`)이다.
+
+**Response**: `DocumentDto`
+
+---
+
+### GET /api/documents
+문서 목록 조회 (페이지네이션 / 무한스크롤)
+
+**Query Params**
+
+| 파라미터 | 필수 | 기본값 | 설명 |
+|---|---|---|---|
+| `folderId` | 아니오 | (전체) | 특정 폴더의 문서만 필터. 생략 시 내 전체 문서 |
+| `page` | 아니오 | `0` | 0-based 페이지 번호 |
+| `size` | 아니오 | `20` | 페이지 크기 |
+
+> 정렬은 `updateTime` 내림차순(최근 수정 순) 고정.
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "items": [ /* DocumentDto 배열 */ ],
+    "page": 0,
+    "size": 20,
+    "totalElements": 42,
+    "totalPages": 3,
+    "hasNext": true
+  }
+}
+```
+
+---
+
 ### GET /api/documents/{documentId}
 문서 조회
 
@@ -183,7 +233,6 @@ Google OAuth 로그인 시작 (페이지 이동)
   "message": "",
   "result": {
     "documentId": "uuid",
-    "workspaceId": "uuid",
     "folderId": "uuid",
     "title": "문서 제목",
     "blocks": "[{\"type\":\"paragraph\",\"data\":{\"text\":\"내용\"}}]",
@@ -262,7 +311,6 @@ Google OAuth 로그인 시작 (페이지 이동)
   "message": "",
   "result": {
     "newDocumentId": "new-uuid",
-    "workspaceId": "uuid",
     "folderId": "uuid",
     "title": "원본 제목 (1)"
   }
@@ -314,8 +362,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 > 모든 엔드포인트 **인증 필요**
 
-### GET /api/folders?workspaceId={workspaceId}
-워크스페이스 루트 콘텐츠 조회 (루트 폴더 + 루트 문서 목록)
+### GET /api/folders
+루트 콘텐츠 조회 (루트 폴더 + 루트 문서 목록). 소유자는 로그인 사용자로 자동 결정된다.
 
 **Response**
 ```json
@@ -326,7 +374,6 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
     "folders": [
       {
         "folderId": "uuid",
-        "workspaceId": "uuid",
         "parentId": null,
         "folderName": "프로젝트",
         "ordinal": 0,
@@ -343,37 +390,16 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 ---
 
-### GET /api/folders/{folderId}/contents?workspaceId={workspaceId}
+### GET /api/folders/{folderId}/contents
 폴더 콘텐츠 조회 (하위 폴더 + 문서 목록)
 
 **Response**: 위와 동일한 `FolderContentsDto` 형식
 
----
-
-### GET /api/folders/workspace/{workspaceId}
-워크스페이스 전체 폴더 목록 (트리 구성용)
-
-**Response**
-```json
-{
-  "code": "SUCCESS",
-  "message": "",
-  "result": [
-    {
-      "folderId": "uuid",
-      "workspaceId": "uuid",
-      "parentId": null,
-      "folderName": "루트 폴더",
-      "ordinal": 0,
-      ...
-    }
-  ]
-}
-```
+> 폴더 트리는 이 엔드포인트를 재귀 호출하여 구성한다. (기존 `GET /api/folders/workspace/{workspaceId}` 전체 폴더 목록 엔드포인트는 제거됨)
 
 ---
 
-### GET /api/folders/folder/{folderId}/workspace/{workspaceId}
+### GET /api/folders/{folderId}
 특정 폴더 정보 조회
 
 **Response**: `FolderDto`
@@ -386,7 +412,6 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 **Request Body**
 ```json
 {
-  "workspaceId": "uuid",
   "parentId": "parent-folder-uuid",
   "folderName": "새 폴더",
   "ordinal": 0
@@ -405,7 +430,6 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 **Request Body**
 ```json
 {
-  "workspaceId": "uuid",
   "parentId": "parent-folder-uuid",
   "folderName": "변경된 폴더명",
   "ordinal": 1
@@ -416,7 +440,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 ---
 
-### DELETE /api/folders/{folderId}/{workspaceId}
+### DELETE /api/folders/{folderId}
 폴더 삭제 (소프트 삭제)
 
 **Response**
