@@ -1,16 +1,15 @@
 services:
-  mariadb:
-    image: mariadb:11
-    container_name: mariadb
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: fixlog-postgres
     restart: unless-stopped
     environment:
-      MARIADB_DATABASE: fixlog
-      MARIADB_USER: user
-      MARIADB_PASSWORD: ${DB_PASSWORD}
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_DB: fixlog
+      POSTGRES_USER: ${DB_USERNAME:-user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: Asia/Seoul
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - ./data:/var/lib/mysql
+      - ./pgdata:/var/lib/postgresql/data
       - ./init:/docker-entrypoint-initdb.d
