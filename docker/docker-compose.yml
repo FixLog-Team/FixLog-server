@@ -1,5 +1,5 @@
 services:
-  postgres:
+  fixlog_postgres:
     image: pgvector/pgvector:pg16
     container_name: fixlog-postgres
     restart: unless-stopped
