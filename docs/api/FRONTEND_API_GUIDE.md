@@ -425,16 +425,34 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### PUT /api/folders/{folderId}
-폴더 수정
+폴더 이름/순서 변경 (이동은 아래 `PATCH .../move` 사용)
 
 **Request Body**
 ```json
 {
-  "parentId": "parent-folder-uuid",
   "folderName": "변경된 폴더명",
   "ordinal": 1
 }
 ```
+
+> 폴더 이동(부모 변경)은 이 엔드포인트에서 처리하지 않는다. `parentId`를 보내도 무시된다.
+
+**Response**: `FolderDto`
+
+---
+
+### PATCH /api/folders/{folderId}/move
+폴더 이동 (부모 폴더 변경)
+
+**Request Body**
+```json
+{
+  "parentId": "target-parent-folder-uuid"
+}
+```
+
+> `parentId`를 `null`로 보내면 루트로 이동한다.
+> 자기 자신 또는 자신의 하위 폴더로 이동하면 `INVALID_REQUEST`로 거부된다(순환 방지).
 
 **Response**: `FolderDto`
 
@@ -442,6 +460,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 ### DELETE /api/folders/{folderId}
 폴더 삭제 (소프트 삭제)
+
+> 하위 폴더와 폴더 안의 모든 문서가 **함께 소프트 삭제**된다(캐스케이드).
 
 **Response**
 ```json
