@@ -58,6 +58,12 @@ public class FolderEntity {
         this.updateTime = Instant.now();
     }
 
+    public void moveTo(String parentId, String updateUser) {
+        this.parentId = parentId;
+        this.updateUser = updateUser;
+        this.updateTime = Instant.now();
+    }
+
     public void softDelete(String updateUser) {
         this.usable = 0;
         this.updateUser = updateUser;

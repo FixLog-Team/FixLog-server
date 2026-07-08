@@ -110,4 +110,58 @@ class WorkspaceRemovalFlowVerificationTest {
                 () -> documentService.getDocument(doc.getDocumentId()));
         System.out.println("[7] 소유권 격리 OK: " + ex.getMessage());
     }
+
+    @Test
+    void 폴더삭제_하위폴더와문서까지_캐스케이드() {
+        UserEntity owner = userRepository.save(new UserEntity("cascade", "cascade@fixlog.dev"));
+        loginAs(owner);
+        String uid = owner.getUserId().toString();
+
+        FolderEntity parent = folderService.createFolder(new FolderRequest(null, "부모", 0));
+        FolderEntity child = folderService.createFolder(new FolderRequest(parent.getFolderId(), "자식", 0));
+        DocumentEntity docParent = documentService.create(new DocumentCreateRequest(parent.getFolderId(), "부모문서"));
+        DocumentEntity docChild = documentService.create(new DocumentCreateRequest(child.getFolderId(), "자식문서"));
+
+        folderService.deleteFolder(parent.getFolderId());
+
+        // 루트 콘텐츠가 완전히 비어야 하고, 하위 폴더/문서 모두 usable=0
+        FolderContentsDto root = folderService.getRootContents();
+        assertTrue(root.folders().isEmpty(), "루트 폴더가 비어야 함");
+        assertTrue(root.documents().isEmpty(), "루트 문서가 비어야 함");
+        assertEquals(0, folderRepository.findByFolderIdAndCreateUser(child.getFolderId(), uid).orElseThrow().getUsable());
+        assertEquals(0, documentRepository.findByFolderIdAndCreateUserAndUsable(parent.getFolderId(), uid, 1).size());
+        assertEquals(0, documentRepository.findByFolderIdAndCreateUserAndUsable(child.getFolderId(), uid, 1).size());
+        assertNotNull(docParent);
+        assertNotNull(docChild);
+        System.out.println("[C] 폴더 삭제 캐스케이드 OK (하위 폴더+문서 전부 삭제)");
+    }
+
+    @Test
+    void 폴더_루트로이동_가능() {
+        UserEntity owner = userRepository.save(new UserEntity("rootmove", "rootmove@fixlog.dev"));
+        loginAs(owner);
+        FolderEntity a = folderService.createFolder(new FolderRequest(null, "A", 0));
+        FolderEntity b = folderService.createFolder(new FolderRequest(a.getFolderId(), "B", 0));
+
+        FolderEntity moved = folderService.moveFolder(b.getFolderId(), null);
+
+        assertNull(moved.getParentId(), "루트로 이동하면 parentId=null");
+        assertTrue(folderService.getRootContents().folders().stream()
+                .anyMatch(f -> f.folderId().equals(b.getFolderId())), "루트 콘텐츠에 B가 보여야 함");
+        System.out.println("[R] 폴더 루트 이동 OK");
+    }
+
+    @Test
+    void 폴더_순환참조이동_거부() {
+        UserEntity owner = userRepository.save(new UserEntity("cycle", "cycle@fixlog.dev"));
+        loginAs(owner);
+        FolderEntity a = folderService.createFolder(new FolderRequest(null, "A", 0));
+        FolderEntity b = folderService.createFolder(new FolderRequest(a.getFolderId(), "B", 0));
+
+        // A를 자신의 하위 B로 이동 → 거부
+        assertThrows(BusinessException.class, () -> folderService.moveFolder(a.getFolderId(), b.getFolderId()));
+        // A를 자기 자신으로 이동 → 거부
+        assertThrows(BusinessException.class, () -> folderService.moveFolder(a.getFolderId(), a.getFolderId()));
+        System.out.println("[X] 폴더 순환참조 이동 거부 OK");
+    }
 }
