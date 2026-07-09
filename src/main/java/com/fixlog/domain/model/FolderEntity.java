@@ -39,27 +39,31 @@ public class FolderEntity {
     protected FolderEntity() {
     }
 
-    public FolderEntity(String folderId, String parentId, String folderName, String createUser) {
+    public FolderEntity(String folderId, String parentId, String folderName, Integer ordinal, String createUser) {
         this.folderId = folderId;
         this.parentId = parentId;
         this.folderName = folderName;
-        this.ordinal = 0;
+        this.ordinal = ordinal;
         this.usable = 1;
         this.createUser = createUser;
         this.createTime = Instant.now();
         this.updateTime = Instant.now();
     }
 
-    public void updateFolder(String parentId, String folderName, Integer ordinal, String updateUser) {
-        this.parentId = parentId == null ? this.parentId : parentId;
+    public void rename(String folderName, String updateUser) {
         this.folderName = folderName == null ? this.folderName : folderName;
-        this.ordinal = ordinal == null ? this.ordinal : ordinal;
         this.updateUser = updateUser;
         this.updateTime = Instant.now();
     }
 
-    public void moveTo(String parentId, String updateUser) {
+    // 순서 재배치는 내용 변경이 아니므로 updateTime을 갱신하지 않는다.
+    public void applyOrdinal(int ordinal) {
+        this.ordinal = ordinal;
+    }
+
+    public void moveTo(String parentId, int ordinal, String updateUser) {
         this.parentId = parentId;
+        this.ordinal = ordinal;
         this.updateUser = updateUser;
         this.updateTime = Instant.now();
     }

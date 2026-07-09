@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS apj_document (
     blocks       text,
     plain_text   text,
     content_hash varchar(64),
+    ordinal      int          DEFAULT 0,
     usable       int          DEFAULT 1,
     create_user  varchar(100),
     create_time  timestamp(6),
