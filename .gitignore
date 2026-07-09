@@ -44,4 +44,5 @@ out/
 
 ### docker ###
 /docker/data/**
+/docker/pgdata/**
 /docker/.env
