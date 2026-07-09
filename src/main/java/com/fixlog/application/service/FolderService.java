@@ -17,8 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class FolderService {
@@ -44,8 +49,22 @@ public class FolderService {
         }
 
         String folderId = UUID.randomUUID().toString();
-        FolderEntity folder = new FolderEntity(folderId, request.parentId(), request.folderName(), userId);
+        FolderEntity folder = new FolderEntity(
+                folderId, request.parentId(), request.folderName(), nextOrdinal(request.parentId(), userId), userId);
         return folderRepository.save(folder);
+    }
+
+    /** 같은 부모 안에서 마지막 폴더 다음 순번. 형제가 없으면 0. */
+    private int nextOrdinal(String parentId, String userId) {
+        return folderRepository.maxOrdinal(parentId, userId) + 1;
+    }
+
+    private List<FolderEntity> siblings(String parentId, String userId) {
+        return parentId == null
+                ? folderRepository.findByParentIdIsNullAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(
+                        userId, Integer.valueOf(1))
+                : folderRepository.findByParentIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(
+                        parentId, userId, Integer.valueOf(1));
     }
 
     @Transactional(readOnly = true)
@@ -68,9 +87,53 @@ public class FolderService {
         FolderEntity folder = folderRepository.findByFolderIdAndCreateUser(folderId, userId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
 
-        // 부모 변경은 moveFolder에서만 처리한다. 여기서는 이름/순서만 수정한다.
-        folder.updateFolder(null, request.folderName(), request.ordinal(), userId);
+        // 부모 변경은 moveFolder, 순서 변경은 reorderFolders에서만 처리한다.
+        folder.rename(request.folderName(), userId);
         return folderRepository.save(folder);
+    }
+
+    /**
+     * 같은 부모 아래 폴더들의 순서를 folderIds 순서대로 다시 매긴다.
+     * folderIds는 해당 부모의 활성 폴더 전체와 정확히 일치해야 한다. 일부만 보내면 순번에 구멍이나 중복이 생긴다.
+     */
+    @Transactional
+    public List<FolderEntity> reorderFolders(String parentId, List<String> folderIds) {
+        String userId = requireUserId();
+
+        if (folderIds == null || folderIds.isEmpty()) {
+            throw new BusinessException(Code.INVALID_REQUEST, "정렬할 폴더 목록이 비어 있습니다.");
+        }
+
+        Set<String> requested = new LinkedHashSet<>(folderIds);
+        if (requested.size() != folderIds.size()) {
+            throw new BusinessException(Code.INVALID_REQUEST, "폴더 목록에 중복된 항목이 있습니다.");
+        }
+
+        if (parentId != null) {
+            folderRepository.findByFolderIdAndCreateUser(parentId, userId)
+                    .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
+                    .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "상위 폴더를 찾을 수 없습니다."));
+        }
+
+        List<FolderEntity> current = siblings(parentId, userId);
+        if (current.size() != requested.size()) {
+            throw new BusinessException(Code.INVALID_REQUEST, "해당 폴더의 하위 폴더 전체를 순서대로 보내야 합니다.");
+        }
+
+        Map<String, FolderEntity> byId = current.stream()
+                .collect(Collectors.toMap(FolderEntity::getFolderId, Function.identity()));
+
+        List<FolderEntity> reordered = new ArrayList<>();
+        int ordinal = 0;
+        for (String folderId : requested) {
+            FolderEntity folder = byId.get(folderId);
+            if (folder == null) {
+                throw new BusinessException(Code.INVALID_REQUEST, "해당 위치에 속하지 않은 폴더가 포함되어 있습니다.");
+            }
+            folder.applyOrdinal(ordinal++);
+            reordered.add(folder);
+        }
+        return folderRepository.saveAll(reordered);
     }
 
     @Transactional
@@ -92,7 +155,8 @@ public class FolderService {
             }
         }
 
-        folder.moveTo(newParentId, userId);
+        // 새 부모의 형제들과 순번이 겹치지 않도록 맨 끝으로 보낸다.
+        folder.moveTo(newParentId, nextOrdinal(newParentId, userId), userId);
         return folderRepository.save(folder);
     }
 
@@ -109,8 +173,9 @@ public class FolderService {
         subtree.add(folder);
         queue.add(folder.getFolderId());
         while (!queue.isEmpty()) {
-            List<FolderEntity> children =
-                    folderRepository.findByParentIdAndCreateUserAndUsable(queue.poll(), userId, Integer.valueOf(1));
+            List<FolderEntity> children = folderRepository
+                    .findByParentIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(
+                            queue.poll(), userId, Integer.valueOf(1));
             for (FolderEntity child : children) {
                 subtree.add(child);
                 queue.add(child.getFolderId());
@@ -121,8 +186,8 @@ public class FolderService {
         List<DocumentEntity> documents = new ArrayList<>();
         for (FolderEntity f : subtree) {
             f.softDelete(userId);
-            for (DocumentEntity doc :
-                    documentRepository.findByFolderIdAndCreateUserAndUsable(f.getFolderId(), userId, 1)) {
+            for (DocumentEntity doc : documentRepository
+                    .findByFolderIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(f.getFolderId(), userId, 1)) {
                 doc.softDelete(userId);
                 documents.add(doc);
             }
@@ -148,12 +213,10 @@ public class FolderService {
     @Transactional(readOnly = true)
     public FolderContentsDto getRootContents() {
         String userId = requireUserId();
-        List<FolderDto> folders = folderRepository
-                .findByParentIdIsNullAndCreateUserAndUsable(userId, Integer.valueOf(1))
-                .stream().map(FolderDto::from).toList();
+        List<FolderDto> folders = siblings(null, userId).stream().map(FolderDto::from).toList();
 
         List<DocumentDto> documents = documentRepository
-                .findByFolderIdIsNullAndCreateUserAndUsable(userId, 1)
+                .findByFolderIdIsNullAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(userId, 1)
                 .stream().map(DocumentDto::from).toList();
 
         return new FolderContentsDto(folders, documents);
@@ -166,12 +229,10 @@ public class FolderService {
                 .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
 
-        List<FolderDto> folders = folderRepository
-                .findByParentIdAndCreateUserAndUsable(folderId, userId, Integer.valueOf(1))
-                .stream().map(FolderDto::from).toList();
+        List<FolderDto> folders = siblings(folderId, userId).stream().map(FolderDto::from).toList();
 
         List<DocumentDto> documents = documentRepository
-                .findByFolderIdAndCreateUserAndUsable(folderId, userId, 1)
+                .findByFolderIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(folderId, userId, 1)
                 .stream().map(DocumentDto::from).toList();
 
         return new FolderContentsDto(folders, documents);

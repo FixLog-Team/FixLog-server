@@ -65,7 +65,7 @@ class WorkspaceRemovalFlowVerificationTest {
         Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "updateTime"));
 
         // 1) 폴더 생성 (workspaceId 없이)
-        FolderEntity folder = folderService.createFolder(new FolderRequest(null, "트러블슈팅", 0));
+        FolderEntity folder = folderService.createFolder(new FolderRequest(null, "트러블슈팅"));
         assertNotNull(folder.getFolderId());
         assertEquals("트러블슈팅", folder.getFolderName());
         assertEquals(owner.getUserId().toString(), folder.getCreateUser());
@@ -117,8 +117,8 @@ class WorkspaceRemovalFlowVerificationTest {
         loginAs(owner);
         String uid = owner.getUserId().toString();
 
-        FolderEntity parent = folderService.createFolder(new FolderRequest(null, "부모", 0));
-        FolderEntity child = folderService.createFolder(new FolderRequest(parent.getFolderId(), "자식", 0));
+        FolderEntity parent = folderService.createFolder(new FolderRequest(null, "부모"));
+        FolderEntity child = folderService.createFolder(new FolderRequest(parent.getFolderId(), "자식"));
         DocumentEntity docParent = documentService.create(new DocumentCreateRequest(parent.getFolderId(), "부모문서"));
         DocumentEntity docChild = documentService.create(new DocumentCreateRequest(child.getFolderId(), "자식문서"));
 
@@ -129,8 +129,8 @@ class WorkspaceRemovalFlowVerificationTest {
         assertTrue(root.folders().isEmpty(), "루트 폴더가 비어야 함");
         assertTrue(root.documents().isEmpty(), "루트 문서가 비어야 함");
         assertEquals(0, folderRepository.findByFolderIdAndCreateUser(child.getFolderId(), uid).orElseThrow().getUsable());
-        assertEquals(0, documentRepository.findByFolderIdAndCreateUserAndUsable(parent.getFolderId(), uid, 1).size());
-        assertEquals(0, documentRepository.findByFolderIdAndCreateUserAndUsable(child.getFolderId(), uid, 1).size());
+        assertEquals(0, documentRepository.findByFolderIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(parent.getFolderId(), uid, 1).size());
+        assertEquals(0, documentRepository.findByFolderIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(child.getFolderId(), uid, 1).size());
         assertNotNull(docParent);
         assertNotNull(docChild);
         System.out.println("[C] 폴더 삭제 캐스케이드 OK (하위 폴더+문서 전부 삭제)");
@@ -140,8 +140,8 @@ class WorkspaceRemovalFlowVerificationTest {
     void 폴더_루트로이동_가능() {
         UserEntity owner = userRepository.save(new UserEntity("rootmove", "rootmove@fixlog.dev"));
         loginAs(owner);
-        FolderEntity a = folderService.createFolder(new FolderRequest(null, "A", 0));
-        FolderEntity b = folderService.createFolder(new FolderRequest(a.getFolderId(), "B", 0));
+        FolderEntity a = folderService.createFolder(new FolderRequest(null, "A"));
+        FolderEntity b = folderService.createFolder(new FolderRequest(a.getFolderId(), "B"));
 
         FolderEntity moved = folderService.moveFolder(b.getFolderId(), null);
 
@@ -155,8 +155,8 @@ class WorkspaceRemovalFlowVerificationTest {
     void 폴더_순환참조이동_거부() {
         UserEntity owner = userRepository.save(new UserEntity("cycle", "cycle@fixlog.dev"));
         loginAs(owner);
-        FolderEntity a = folderService.createFolder(new FolderRequest(null, "A", 0));
-        FolderEntity b = folderService.createFolder(new FolderRequest(a.getFolderId(), "B", 0));
+        FolderEntity a = folderService.createFolder(new FolderRequest(null, "A"));
+        FolderEntity b = folderService.createFolder(new FolderRequest(a.getFolderId(), "B"));
 
         // A를 자신의 하위 B로 이동 → 거부
         assertThrows(BusinessException.class, () -> folderService.moveFolder(a.getFolderId(), b.getFolderId()));

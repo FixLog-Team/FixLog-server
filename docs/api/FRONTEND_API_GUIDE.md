@@ -238,6 +238,7 @@ Google OAuth 로그인 시작 (페이지 이동)
     "blocks": "[{\"type\":\"paragraph\",\"data\":{\"text\":\"내용\"}}]",
     "plainText": "내용",
     "contentHash": "sha256hex",
+    "ordinal": 0,
     "createUser": "user-uuid",
     "createTime": "2026-05-19T07:00:00Z",
     "updateUser": "user-uuid",
@@ -343,8 +344,29 @@ Google OAuth 로그인 시작 (페이지 이동)
 ```
 
 > `folderId`를 `null`로 보내면 루트로 이동
+> 이동한 문서는 대상 폴더의 **맨 뒤** 순번을 새로 받는다.
 
 **Response**: `DocumentDto`
+
+---
+
+### PATCH /api/documents/reorder
+같은 폴더 안 문서 순서 변경 (드래그 앤 드롭)
+
+**Request Body**
+```json
+{
+  "folderId": "folder-uuid",
+  "documentIds": ["uuid-3", "uuid-1", "uuid-2"]
+}
+```
+
+> `folderId`가 `null`이면 루트 문서들이 대상이다.
+> `documentIds`는 **해당 폴더의 활성 문서 전체**를 새 순서대로 빠짐없이 담아야 한다.
+> 일부만 보내거나, 중복이 있거나, 다른 폴더의 문서가 섞이면 `INVALID_REQUEST`로 거부된다.
+> 순서 변경은 `updateTime`을 갱신하지 않으므로 `GET /api/documents`의 최신순 정렬에 영향을 주지 않는다.
+
+**Response**: `DocumentDto[]` (새 순서대로, `ordinal`은 0부터 재부여됨)
 
 ---
 
@@ -395,6 +417,9 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 **Response**: 위와 동일한 `FolderContentsDto` 형식
 
+> `folders`와 `documents`는 각각 `ordinal` 오름차순(동률이면 생성순)으로 정렬되어 내려온다.
+> 두 목록은 **서로 독립된 순번 공간**을 쓴다. 사이드바에서는 폴더를 먼저, 문서를 그다음에 렌더링하면 된다.
+
 > 폴더 트리는 이 엔드포인트를 재귀 호출하여 구성한다. (기존 `GET /api/folders/workspace/{workspaceId}` 전체 폴더 목록 엔드포인트는 제거됨)
 
 ---
@@ -413,31 +438,49 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ```json
 {
   "parentId": "parent-folder-uuid",
-  "folderName": "새 폴더",
-  "ordinal": 0
+  "folderName": "새 폴더"
 }
 ```
 
 > `parentId`가 `null`이면 루트에 생성
+> `ordinal`은 서버가 형제들의 맨 뒤 순번으로 자동 부여한다.
 
 **Response**: `FolderDto`
 
 ---
 
 ### PUT /api/folders/{folderId}
-폴더 이름/순서 변경 (이동은 아래 `PATCH .../move` 사용)
+폴더 이름 변경 (이동은 `PATCH .../move`, 순서 변경은 `PATCH /reorder` 사용)
 
 **Request Body**
 ```json
 {
-  "folderName": "변경된 폴더명",
-  "ordinal": 1
+  "folderName": "변경된 폴더명"
 }
 ```
 
-> 폴더 이동(부모 변경)은 이 엔드포인트에서 처리하지 않는다. `parentId`를 보내도 무시된다.
+> 폴더 이동(부모 변경)과 순서 변경은 이 엔드포인트에서 처리하지 않는다. `parentId`나 `ordinal`을 보내도 무시된다.
 
 **Response**: `FolderDto`
+
+---
+
+### PATCH /api/folders/reorder
+같은 부모 아래 폴더 순서 변경 (드래그 앤 드롭)
+
+**Request Body**
+```json
+{
+  "parentId": "parent-folder-uuid",
+  "folderIds": ["uuid-c", "uuid-a", "uuid-b"]
+}
+```
+
+> `parentId`가 `null`이면 루트 폴더들이 대상이다.
+> `folderIds`는 **해당 부모의 활성 폴더 전체**를 새 순서대로 빠짐없이 담아야 한다.
+> 일부만 보내거나, 중복이 있거나, 다른 부모의 폴더가 섞이면 `INVALID_REQUEST`로 거부된다.
+
+**Response**: `FolderDto[]` (새 순서대로, `ordinal`은 0부터 재부여됨)
 
 ---
 
@@ -453,6 +496,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 > `parentId`를 `null`로 보내면 루트로 이동한다.
 > 자기 자신 또는 자신의 하위 폴더로 이동하면 `INVALID_REQUEST`로 거부된다(순환 방지).
+> 이동한 폴더는 새 부모의 **맨 뒤** 순번을 새로 받는다.
 
 **Response**: `FolderDto`
 

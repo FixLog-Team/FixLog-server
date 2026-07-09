@@ -5,6 +5,7 @@ import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
+import com.fixlog.presentation.dto.request.DocumentReorderRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import com.fixlog.presentation.dto.request.DocumentTitleRequest;
 import com.fixlog.presentation.dto.response.DocumentDuplicateDto;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/documents")
@@ -76,6 +78,13 @@ public class DocumentController {
     public Response delete(@PathVariable String documentId) {
         documentService.delete(documentId);
         return Response.success("문서가 삭제되었습니다.");
+    }
+
+    @PatchMapping("/reorder")
+    public Response reorder(@RequestBody DocumentReorderRequest req) {
+        List<DocumentDto> documents = documentService.reorder(req.folderId(), req.documentIds())
+                .stream().map(DocumentDto::from).toList();
+        return DataResponse.success(documents);
     }
 
     @PatchMapping("/{documentId}/move")

@@ -30,6 +30,9 @@ public class DocumentEntity {
     @Column(name = "content_hash", length = 64)
     private String contentHash;
 
+    @Column(name = "ordinal")
+    private Integer ordinal;
+
     @Column(name = "usable")
     private Integer usable;
 
@@ -50,13 +53,14 @@ public class DocumentEntity {
 
     public DocumentEntity(String documentId, String folderId,
                           String title, String blocks, String plainText, String contentHash,
-                          String createUser) {
+                          Integer ordinal, String createUser) {
         this.documentId = documentId;
         this.folderId = folderId;
         this.title = title;
         this.blocks = blocks;
         this.plainText = plainText;
         this.contentHash = contentHash;
+        this.ordinal = ordinal;
         this.usable = 1;
         this.createUser = createUser;
         this.createTime = Instant.now();
@@ -79,8 +83,14 @@ public class DocumentEntity {
         this.updateTime = Instant.now();
     }
 
-    public void moveTo(String folderId, String updateUser) {
+    // 순서 재배치는 내용 변경이 아니므로 updateTime을 갱신하지 않는다.
+    public void applyOrdinal(int ordinal) {
+        this.ordinal = ordinal;
+    }
+
+    public void moveTo(String folderId, int ordinal, String updateUser) {
         this.folderId = folderId;
+        this.ordinal = ordinal;
         this.updateUser = updateUser;
         this.updateTime = Instant.now();
     }
@@ -97,6 +107,7 @@ public class DocumentEntity {
     public String getBlocks() { return blocks; }
     public String getPlainText() { return plainText; }
     public String getContentHash() { return contentHash; }
+    public Integer getOrdinal() { return ordinal; }
     public Integer getUsable() { return usable; }
     public String getCreateUser() { return createUser; }
     public Instant getCreateTime() { return createTime; }
