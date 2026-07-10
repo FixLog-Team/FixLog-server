@@ -35,6 +35,11 @@ public class FolderController {
         return DataResponse.success(contents);
     }
 
+    @GetMapping("/tree")
+    public Response getFolderTree() {
+        return DataResponse.success(folderService.getFolderTree());
+    }
+
     @GetMapping("/{folderId}")
     public Response getFolder(@PathVariable String folderId) {
         FolderEntity folder = folderService.getFolder(folderId);

@@ -11,11 +11,13 @@ import com.fixlog.presentation.dto.request.FolderRequest;
 import com.fixlog.presentation.dto.response.DocumentDto;
 import com.fixlog.presentation.dto.response.FolderContentsDto;
 import com.fixlog.presentation.dto.response.FolderDto;
+import com.fixlog.presentation.dto.response.FolderTreeDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,6 +29,15 @@ import java.util.stream.Collectors;
 
 @Service
 public class FolderService {
+
+    /** groupingBy는 null 키를 허용하지 않으므로 루트를 가리키는 대체 키. 폴더 ID로는 쓰이지 않는다. */
+    private static final String ROOT_KEY = "";
+
+    /** 형제 정렬 기준. Postgres의 ordinal asc, create_time asc 조회 순서와 동일하게 맞춘다(NULL은 뒤). */
+    private static final Comparator<FolderEntity> TREE_ORDER =
+            Comparator.comparing(FolderEntity::getOrdinal, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(FolderEntity::getCreateTime, Comparator.nullsLast(Comparator.naturalOrder()));
+
     private final FolderRepository folderRepository;
     private final DocumentRepository documentRepository;
 
@@ -67,10 +78,41 @@ public class FolderService {
                         parentId, userId, Integer.valueOf(1));
     }
 
+    /**
+     * 사이드바용 전체 폴더 트리. 폴더 전량과 폴더별 문서 수를 각각 한 번씩 조회한 뒤 메모리에서 엮는다.
+     * 깊이만큼 {@code getFolderContents}를 재귀 호출하지 않기 위한 엔드포인트다.
+     */
     @Transactional(readOnly = true)
-    public List<FolderEntity> getFolders() {
+    public List<FolderTreeDto> getFolderTree() {
         String userId = requireUserId();
-        return folderRepository.findByCreateUserAndUsable(userId, Integer.valueOf(1));
+
+        List<FolderEntity> folders = folderRepository.findByCreateUserAndUsable(userId, Integer.valueOf(1));
+
+        Map<String, Long> documentCounts = documentRepository.countDocumentsByFolder(userId).stream()
+                .collect(Collectors.toMap(
+                        DocumentRepository.FolderDocumentCount::getFolderId,
+                        DocumentRepository.FolderDocumentCount::getDocumentCount));
+
+        // 루트 폴더는 parentId가 null이므로 groupingBy에 넣을 수 없다. 빈 문자열을 루트 키로 쓴다.
+        Map<String, List<FolderEntity>> childrenByParent = folders.stream()
+                .collect(Collectors.groupingBy(f -> f.getParentId() == null ? ROOT_KEY : f.getParentId()));
+
+        return buildNodes(ROOT_KEY, childrenByParent, documentCounts);
+    }
+
+    private List<FolderTreeDto> buildNodes(String parentKey,
+                                           Map<String, List<FolderEntity>> childrenByParent,
+                                           Map<String, Long> documentCounts) {
+        return childrenByParent.getOrDefault(parentKey, List.of()).stream()
+                .sorted(TREE_ORDER)
+                .map(folder -> new FolderTreeDto(
+                        folder.getFolderId(),
+                        folder.getParentId(),
+                        folder.getFolderName(),
+                        folder.getOrdinal(),
+                        documentCounts.getOrDefault(folder.getFolderId(), 0L),
+                        buildNodes(folder.getFolderId(), childrenByParent, documentCounts)))
+                .toList();
     }
 
     @Transactional(readOnly = true)
