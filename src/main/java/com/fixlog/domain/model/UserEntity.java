@@ -1,8 +1,6 @@
 package com.fixlog.domain.model;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -13,8 +11,7 @@ public class UserEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.UUID)
-	@JdbcTypeCode(SqlTypes.CHAR)
-	@Column(name = "user_id", columnDefinition = "CHAR(36)", updatable = false, nullable = false)
+	@Column(name = "user_id", columnDefinition = "uuid", updatable = false, nullable = false)
 	private UUID userId;
 
 	@Column(name = "user_name", length = 50, nullable = false)
