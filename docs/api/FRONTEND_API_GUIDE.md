@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-05-19
+> 최종 업데이트: 2026-07-09
 > Base URL (개발): `http://localhost:8080/fixlog`
 
 ---
@@ -420,7 +420,47 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 > `folders`와 `documents`는 각각 `ordinal` 오름차순(동률이면 생성순)으로 정렬되어 내려온다.
 > 두 목록은 **서로 독립된 순번 공간**을 쓴다. 사이드바에서는 폴더를 먼저, 문서를 그다음에 렌더링하면 된다.
 
-> 폴더 트리는 이 엔드포인트를 재귀 호출하여 구성한다. (기존 `GET /api/folders/workspace/{workspaceId}` 전체 폴더 목록 엔드포인트는 제거됨)
+> 사이드바 폴더 트리는 이 엔드포인트를 재귀 호출하지 말고 `GET /api/folders/tree`를 한 번 호출한다.
+> 이 엔드포인트는 특정 폴더를 열었을 때 그 안의 문서 목록까지 함께 받는 용도다.
+
+---
+
+### GET /api/folders/tree
+전체 폴더 트리 조회 (사이드바용). 한 번의 요청으로 모든 폴더를 중첩 구조로 받는다.
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": [
+    {
+      "folderId": "uuid",
+      "parentId": null,
+      "folderName": "Engineering",
+      "ordinal": 0,
+      "documentCount": 42,
+      "children": [
+        {
+          "folderId": "uuid",
+          "parentId": "부모-uuid",
+          "folderName": "Backend",
+          "ordinal": 0,
+          "documentCount": 7,
+          "children": []
+        }
+      ]
+    }
+  ]
+}
+```
+
+> `result`는 **루트 폴더 배열**이다. 각 노드의 `children`은 같은 형태로 중첩된다.
+> 형제 노드는 `ordinal` 오름차순(동률이면 생성순)으로 정렬되어 내려온다.
+> `documentCount`는 **직속 문서 수**다. 하위 폴더 안의 문서는 합산하지 않는다.
+> 즉 `Parent(2)` + `Parent/Child(1)`이면 Parent의 `documentCount`는 3이 아니라 2다. 폴더를 열었을 때 보이는 개수와 일치시키기 위함이다.
+> 루트에 바로 놓인 문서(`folderId`가 `null`)는 어떤 폴더의 `documentCount`에도 포함되지 않는다. 루트 문서 목록은 `GET /api/folders`로 받는다.
+> 트리에는 폴더만 담긴다. 문서 목록은 포함되지 않는다.
 
 ---
 

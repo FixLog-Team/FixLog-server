@@ -32,4 +32,18 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
 
     Page<DocumentEntity> findByFolderIdAndCreateUserAndUsable(
             String folderId, String createUser, Integer usable, Pageable pageable);
+
+    /** 폴더별 직속 문서 수. 루트 문서(folderId is null)는 집계에서 제외된다. */
+    @Query("""
+            select d.folderId as folderId, count(d) as documentCount from DocumentEntity d
+            where d.createUser = :createUser and d.usable = 1 and d.folderId is not null
+            group by d.folderId
+            """)
+    List<FolderDocumentCount> countDocumentsByFolder(@Param("createUser") String createUser);
+
+    interface FolderDocumentCount {
+        String getFolderId();
+
+        long getDocumentCount();
+    }
 }
