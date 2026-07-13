@@ -1,6 +1,8 @@
 package com.fixlog.application.service;
 
 import tools.jackson.databind.JsonNode;
+import com.fixlog.application.event.DocumentDeletedEvent;
+import com.fixlog.application.event.DocumentSavedEvent;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.common.code.Code;
@@ -12,6 +14,7 @@ import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import com.fixlog.presentation.dto.request.DocumentTitleRequest;
 import com.fixlog.presentation.dto.response.DocumentSaveStateDto;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -36,15 +39,18 @@ public class DocumentService {
     private final FolderRepository folderRepository;
     private final DocumentTextExtractor textExtractor;
     private final DocumentPdfGenerator pdfGenerator;
+    private final ApplicationEventPublisher eventPublisher;
 
     public DocumentService(DocumentRepository documentRepository,
                            FolderRepository folderRepository,
                            DocumentTextExtractor textExtractor,
-                           DocumentPdfGenerator pdfGenerator) {
+                           DocumentPdfGenerator pdfGenerator,
+                           ApplicationEventPublisher eventPublisher) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.textExtractor = textExtractor;
         this.pdfGenerator = pdfGenerator;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -90,7 +96,9 @@ public class DocumentService {
         String plainText = textExtractor.extract(canonicalJson);
         String hash = hashContent(canonicalJson);
         doc.updateContent(req.title(), canonicalJson, plainText, hash, requireUserId());
-        return documentRepository.save(doc);
+        DocumentEntity saved = documentRepository.save(doc);
+        eventPublisher.publishEvent(new DocumentSavedEvent(saved));
+        return saved;
     }
 
     @Transactional
@@ -128,6 +136,7 @@ public class DocumentService {
         DocumentEntity doc = loadOwned(documentId);
         doc.softDelete(requireUserId());
         documentRepository.save(doc);
+        eventPublisher.publishEvent(new DocumentDeletedEvent(documentId));
     }
 
     @Transactional

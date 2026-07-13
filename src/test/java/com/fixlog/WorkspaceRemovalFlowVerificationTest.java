@@ -45,7 +45,7 @@ class WorkspaceRemovalFlowVerificationTest {
     void setUp() {
         folderService = new FolderService(folderRepository, documentRepository);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator());
+                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {});
     }
 
     @AfterEach
