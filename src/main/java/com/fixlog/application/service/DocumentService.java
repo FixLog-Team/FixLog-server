@@ -1,8 +1,6 @@
 package com.fixlog.application.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.JsonNode;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.common.code.Code;
@@ -39,8 +37,6 @@ public class DocumentService {
     private final DocumentTextExtractor textExtractor;
     private final DocumentPdfGenerator pdfGenerator;
 
-    private final ObjectMapper canonicalMapper;
-
     public DocumentService(DocumentRepository documentRepository,
                            FolderRepository folderRepository,
                            DocumentTextExtractor textExtractor,
@@ -49,8 +45,6 @@ public class DocumentService {
         this.folderRepository = folderRepository;
         this.textExtractor = textExtractor;
         this.pdfGenerator = pdfGenerator;
-        this.canonicalMapper = new ObjectMapper()
-                .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
     }
 
     @Transactional
@@ -229,11 +223,7 @@ public class DocumentService {
 
     private String normalizeBlocks(JsonNode blocks) {
         if (blocks == null || blocks.isNull()) return "[]";
-        try {
-            return canonicalMapper.writeValueAsString(blocks);
-        } catch (Exception e) {
-            throw new BusinessException(Code.INVALID_REQUEST, "blocks 형식이 올바르지 않습니다.");
-        }
+        return blocks.toString();
     }
 
     private String hashContent(String canonicalJson) {
