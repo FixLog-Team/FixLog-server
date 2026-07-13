@@ -15,7 +15,7 @@ public class DocumentAIService extends AbstractAIService {
 
     private final DocumentRepository documentRepository;
 
-    public DocumentAIService(@Qualifier("openAiChatModel") ChatModel chatModel,
+    public DocumentAIService(@Qualifier("googleGenAiChatModel") ChatModel chatModel,
                              DocumentRepository documentRepository) {
         super(ChatClient.builder(chatModel).build());
         this.documentRepository = documentRepository;
