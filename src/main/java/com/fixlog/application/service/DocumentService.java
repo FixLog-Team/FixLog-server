@@ -24,13 +24,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 public class DocumentService {
@@ -56,31 +51,27 @@ public class DocumentService {
     @Transactional
     public DocumentEntity create(DocumentCreateRequest req) {
         String userId = requireUserId();
-        String folderId = req.folderId();
-        if (folderId != null) {
-            folderRepository.findByFolderIdAndCreateUser(folderId, userId)
-                    .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
-                    .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
-        }
-        String title = (req.title() == null || req.title().isBlank()) ? "제목 없음" : req.title();
-        String documentId = UUID.randomUUID().toString();
+        int ordinal = documentRepository.maxOrdinal(req.folderId(), userId) + 1;
         DocumentEntity doc = new DocumentEntity(
-                documentId, folderId, title, "[]", "", null, nextOrdinal(folderId, userId), userId);
+                UUID.randomUUID().toString(),
+                req.folderId(),
+                req.title() != null && !req.title().isBlank() ? req.title() : "제목 없음",
+                "[]",
+                "",
+                hashContent("[]"),
+                ordinal,
+                userId
+        );
         return documentRepository.save(doc);
-    }
-
-    /** 같은 폴더 안에서 마지막 문서 다음 순번. 문서가 없으면 0. */
-    private int nextOrdinal(String folderId, String userId) {
-        return documentRepository.maxOrdinal(folderId, userId) + 1;
     }
 
     @Transactional(readOnly = true)
     public Page<DocumentEntity> list(String folderId, Pageable pageable) {
         String userId = requireUserId();
         if (folderId != null) {
-            return documentRepository.findByFolderIdAndCreateUserAndUsable(folderId, userId, 1, pageable);
+            return documentRepository.findByFolderIdAndCreateUserAndUsable(folderId, userId, Integer.valueOf(1), pageable);
         }
-        return documentRepository.findByCreateUserAndUsable(userId, 1, pageable);
+        return documentRepository.findByCreateUserAndUsable(userId, Integer.valueOf(1), pageable);
     }
 
     @Transactional(readOnly = true)
@@ -117,15 +108,15 @@ public class DocumentService {
     public DocumentEntity duplicate(String documentId) {
         DocumentEntity original = loadOwned(documentId);
         String userId = requireUserId();
-        String newId = UUID.randomUUID().toString();
+        int ordinal = documentRepository.maxOrdinal(original.getFolderId(), userId) + 1;
         DocumentEntity copy = new DocumentEntity(
-                newId,
+                UUID.randomUUID().toString(),
                 original.getFolderId(),
                 original.getTitle() + " (1)",
                 original.getBlocks(),
                 original.getPlainText(),
                 original.getContentHash(),
-                nextOrdinal(original.getFolderId(), userId),
+                ordinal,
                 userId
         );
         return documentRepository.save(copy);
@@ -140,6 +131,20 @@ public class DocumentService {
     }
 
     @Transactional
+    public List<DocumentEntity> reorder(String folderId, List<String> documentIds) {
+        String userId = requireUserId();
+        List<DocumentEntity> result = new ArrayList<>();
+        for (int i = 0; i < documentIds.size(); i++) {
+            DocumentEntity doc = documentRepository
+                    .findByDocumentIdAndCreateUserAndUsable(documentIds.get(i), userId, Integer.valueOf(1))
+                    .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
+            doc.applyOrdinal(i);
+            result.add(documentRepository.save(doc));
+        }
+        return result;
+    }
+
+    @Transactional
     public DocumentEntity move(String documentId, DocumentMoveRequest req) {
         String userId = requireUserId();
         DocumentEntity doc = loadOwned(documentId);
@@ -149,56 +154,9 @@ public class DocumentService {
                     .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
                     .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
         }
-        // 새 폴더의 문서들과 순번이 겹치지 않도록 맨 끝으로 보낸다.
-        doc.moveTo(targetFolderId, nextOrdinal(targetFolderId, userId), userId);
+        int ordinal = documentRepository.maxOrdinal(targetFolderId, userId) + 1;
+        doc.moveTo(targetFolderId, ordinal, userId);
         return documentRepository.save(doc);
-    }
-
-    /**
-     * 같은 폴더 안 문서들의 순서를 documentIds 순서대로 다시 매긴다.
-     * documentIds는 해당 폴더의 활성 문서 전체와 정확히 일치해야 한다.
-     */
-    @Transactional
-    public List<DocumentEntity> reorder(String folderId, List<String> documentIds) {
-        String userId = requireUserId();
-
-        if (documentIds == null || documentIds.isEmpty()) {
-            throw new BusinessException(Code.INVALID_REQUEST, "정렬할 문서 목록이 비어 있습니다.");
-        }
-
-        Set<String> requested = new LinkedHashSet<>(documentIds);
-        if (requested.size() != documentIds.size()) {
-            throw new BusinessException(Code.INVALID_REQUEST, "문서 목록에 중복된 항목이 있습니다.");
-        }
-
-        if (folderId != null) {
-            folderRepository.findByFolderIdAndCreateUser(folderId, userId)
-                    .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
-                    .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
-        }
-
-        List<DocumentEntity> current = folderId == null
-                ? documentRepository.findByFolderIdIsNullAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(userId, 1)
-                : documentRepository.findByFolderIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(
-                        folderId, userId, 1);
-        if (current.size() != requested.size()) {
-            throw new BusinessException(Code.INVALID_REQUEST, "해당 폴더의 문서 전체를 순서대로 보내야 합니다.");
-        }
-
-        Map<String, DocumentEntity> byId = current.stream()
-                .collect(Collectors.toMap(DocumentEntity::getDocumentId, Function.identity()));
-
-        List<DocumentEntity> reordered = new ArrayList<>();
-        int ordinal = 0;
-        for (String documentId : requested) {
-            DocumentEntity doc = byId.get(documentId);
-            if (doc == null) {
-                throw new BusinessException(Code.INVALID_REQUEST, "해당 폴더에 속하지 않은 문서가 포함되어 있습니다.");
-            }
-            doc.applyOrdinal(ordinal++);
-            reordered.add(doc);
-        }
-        return documentRepository.saveAll(reordered);
     }
 
     @Transactional(readOnly = true)

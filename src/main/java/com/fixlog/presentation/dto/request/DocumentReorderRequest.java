@@ -3,8 +3,8 @@ package com.fixlog.presentation.dto.request;
 import java.util.List;
 
 /**
- * folderId 안의 문서들의 새 순서. documentIds는 해당 폴더의 활성 문서 전체를 빠짐없이 담아야 한다.
- * folderId가 null이면 최상위 문서가 대상이다.
+ * documentIds 순서대로 각 문서의 ordinal을 다시 매긴다. 각 documentId는 요청자 소유
+ * 문서인지만 확인하며, folderId나 목록의 완전성(빠짐/중복)은 검증하지 않는다.
  */
 public record DocumentReorderRequest(
         String folderId,
