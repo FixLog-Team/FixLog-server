@@ -21,6 +21,10 @@ public abstract class AbstractAIService {
         String promptText = """
                 다음 문서를 간결하게 요약해주세요. 핵심 내용만 3-5문장으로 요약하세요.
 
+                작성 규칙:
+                - 어떤 문제가 있었고, 원인이 무엇이었으며, 어떻게 해결했는지를 설명하세요.
+                - 문서에 없는 내용은 추측해서 덧붙이지 마세요.
+
                 문서 내용:
                 {content}
 

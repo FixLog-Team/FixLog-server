@@ -37,6 +37,11 @@ public class AIController {
         return DataResponse.success("요약이 완료되었습니다.", documentAIService.summarizeDocument(request.content()));
     }
 
+    @PostMapping("/documents/{documentId}/summarize")
+    public DataResponse<String> summarizeDocumentById(@PathVariable String documentId) {
+        return DataResponse.success("요약이 완료되었습니다.", documentAIService.summarizeDocumentById(documentId));
+    }
+
     @PostMapping("/tags")
     public DataResponse<List<String>> generateTags(@Valid @RequestBody DocumentRequest request) {
         return DataResponse.success("태그 생성이 완료되었습니다.", documentAIService.generateTags(request.content()));
