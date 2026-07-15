@@ -22,19 +22,25 @@ public class DocumentSearchService {
     }
 
     public List<SearchResultDto> search(String query, int topK) {
+        return toResults(similaritySearch(query, topK));
+    }
+
+    public List<Document> similaritySearch(String query, int topK) {
         String userId = SecurityUtil.getCurrentUserId();
         if (userId == null) throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
 
         FilterExpressionBuilder b = new FilterExpressionBuilder();
-        List<Document> results = vectorStore.similaritySearch(
+        return vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(query)
                         .topK(topK)
                         .filterExpression(b.eq("createUser", userId).build())
                         .build()
         );
+    }
 
-        return results.stream()
+    public List<SearchResultDto> toResults(List<Document> documents) {
+        return documents.stream()
                 .map(doc -> new SearchResultDto(
                         (String) doc.getMetadata().get("documentId"),
                         (String) doc.getMetadata().get("title"),

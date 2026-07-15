@@ -1,9 +1,12 @@
 package com.fixlog.presentation.controller.ai;
 
 import com.fixlog.application.service.DocumentAIService;
+import com.fixlog.application.service.DocumentQAService;
 import com.fixlog.application.service.EmbeddingService;
 import com.fixlog.common.response.DataResponse;
+import com.fixlog.presentation.dto.request.AskRequest;
 import com.fixlog.presentation.dto.request.DocumentRequest;
+import com.fixlog.presentation.dto.response.AskResponse;
 import com.fixlog.presentation.dto.response.DocumentSummaryResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -17,10 +20,13 @@ public class AIController {
 
     private final DocumentAIService documentAIService;
     private final EmbeddingService embeddingService;
+    private final DocumentQAService documentQAService;
 
-    public AIController(DocumentAIService documentAIService, EmbeddingService embeddingService) {
+    public AIController(DocumentAIService documentAIService, EmbeddingService embeddingService,
+                         DocumentQAService documentQAService) {
         this.documentAIService = documentAIService;
         this.embeddingService = embeddingService;
+        this.documentQAService = documentQAService;
     }
 
     @PostMapping("/analyze")
@@ -50,5 +56,10 @@ public class AIController {
     @PostMapping("/embedding")
     public DataResponse<List<Double>> generateEmbedding(@Valid @RequestBody DocumentRequest request) {
         return DataResponse.success("임베딩 생성이 완료되었습니다.", embeddingService.generateEmbedding(request.content()));
+    }
+
+    @PostMapping("/ask")
+    public DataResponse<AskResponse> ask(@Valid @RequestBody AskRequest request) {
+        return DataResponse.success("답변 생성이 완료되었습니다.", documentQAService.ask(request.question(), request.topK()));
     }
 }
