@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-07-09
+> 최종 업데이트: 2026-07-15
 > Base URL (개발): `http://localhost:8080/fixlog`
 
 ---
@@ -13,7 +13,8 @@
 4. [문서 API](#4-문서-api)
 5. [폴더 API](#5-폴더-api)
 6. [AI API](#6-ai-api)
-7. [에러 처리](#7-에러-처리)
+7. [검색 API](#7-검색-api)
+8. [에러 처리](#8-에러-처리)
 
 ---
 
@@ -560,10 +561,10 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ## 6. AI API
 
 > 모든 엔드포인트 **인증 필요**
-> `/ai/**` → OpenAI (GPT-4o), `/ollama/**` → Ollama (llama3)
+> AI 모델: Google Gemini (Chat), OpenAI (Embedding)
 
-### POST /ai/analyze 또는 POST /ollama/analyze
-문서 분석 (요약 + 태그 + 임베딩 한 번에)
+### POST /ai/analyze
+문서 분석 (요약 + 태그 + 임베딩 한 번에). content를 직접 body로 전달.
 
 **Request Body**
 ```json
@@ -576,7 +577,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ```json
 {
   "code": "SUCCESS",
-  "message": "",
+  "message": "문서 분석이 완료되었습니다.",
   "result": {
     "summary": "요약된 내용",
     "tags": ["태그1", "태그2"],
@@ -587,54 +588,137 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 ---
 
-### POST /ai/summarize 또는 POST /ollama/summarize
-문서 요약
+### POST /ai/summarize
+문서 요약. content를 직접 body로 전달.
 
 **Request Body**
 ```json
-{ "content": "요약할 내용" }
+{ "content": "요약할 내용 (최대 50,000자)" }
 ```
 
 **Response**
 ```json
 {
   "code": "SUCCESS",
-  "message": "",
+  "message": "요약이 완료되었습니다.",
   "result": "요약된 텍스트"
 }
 ```
 
 ---
 
-### POST /ai/tags 또는 POST /ollama/tags
-태그 자동 생성
+### POST /ai/documents/{documentId}/summarize
+문서 ID 기반 요약. 서버가 DB에서 문서 원문(`plainText`)을 조회해 요약한다.
+본인 소유 + 삭제되지 않은(`usable=1`) 문서만 대상이며, 요청 body는 없다.
+
+**Path Variable**
+
+| 이름 | 타입 | 설명 |
+|---|---|---|
+| documentId | String | 요약할 문서 ID |
 
 **Response**
 ```json
 {
   "code": "SUCCESS",
-  "message": "",
+  "message": "요약이 완료되었습니다.",
+  "result": "요약된 텍스트"
+}
+```
+
+**에러**
+
+| 상황 | code | HTTP |
+|---|---|---|
+| 미인증 | UNAUTHORIZED | 401 |
+| 문서 없음 / 타인 소유 / 삭제됨 | NOT_FOUND | 404 |
+
+> `POST /ai/summarize`와 달리 클라이언트가 원문을 직접 전송할 필요가 없고, 소유권 검증이 서버에서 자동 수행된다.
+
+---
+
+### POST /ai/tags
+태그 자동 생성 (5개, content를 직접 body로 전달)
+
+**Request Body**
+```json
+{ "content": "분석할 문서 내용 (최대 50,000자)" }
+```
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "태그 생성이 완료되었습니다.",
   "result": ["Spring Boot", "JWT", "OAuth2"]
 }
 ```
 
 ---
 
-### POST /ai/embedding 또는 POST /ollama/embedding
-임베딩 벡터 생성
+### POST /ai/embedding
+임베딩 벡터 생성 (OpenAI Embedding 모델 사용)
+
+**Request Body**
+```json
+{ "content": "임베딩할 내용 (최대 50,000자)" }
+```
 
 **Response**
 ```json
 {
   "code": "SUCCESS",
-  "message": "",
+  "message": "임베딩 생성이 완료되었습니다.",
   "result": [0.123, -0.456, 0.789, ...]
 }
 ```
 
 ---
 
-## 7. 에러 처리
+## 7. 검색 API
+
+> 모든 엔드포인트 **인증 필요**
+
+### POST /search
+의미 기반(semantic) 문서 검색. 검색 문장을 임베딩한 뒤 벡터 유사도로 본인 소유 문서 중 상위 N개를 반환한다.
+
+**Request Body**
+
+| 필드 | 타입 | 필수 | 기본값 | 설명 |
+|---|---|---|---|---|
+| query | String | 예 | - | 검색 문장 (`@NotBlank`) |
+| topK | Integer | 아니오 | 5 | 반환 개수 (1~20) |
+
+```json
+{
+  "query": "스프링 시큐리티 401 에러 원인",
+  "topK": 5
+}
+```
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "검색이 완료되었습니다.",
+  "result": [
+    {
+      "documentId": "uuid",
+      "title": "문서 제목",
+      "folderId": "uuid",
+      "excerpt": "관련 문장 발췌...",
+      "score": 0.87
+    }
+  ]
+}
+```
+
+> `topK`가 1 미만이거나 20을 초과하면 `INVALID_REQUEST`(400)로 거부된다.
+> 문서 저장/삭제 시 임베딩이 비동기로 갱신되므로, 저장 직후에는 검색 결과에 반영되기까지 약간의 지연이 있을 수 있다.
+
+---
+
+## 8. 에러 처리
 
 ### 401 처리 흐름 (토큰 재발급)
 
@@ -654,7 +738,9 @@ API 호출
 | 문서/폴더 없거나 타인 소유 | `NOT_FOUND` | 404 |
 | blocks 유효성 실패 (type 오류, 크기 초과 등) | `INVALID_REQUEST` | 400 |
 | title 빈 값 | `INVALID_REQUEST` | 400 |
-| AI 서비스 오류 | `UNKNOWN` | 500 |
+| content 빈 값 / 50,000자 초과 (AI API) | `INVALID_REQUEST` | 400 |
+| query 빈 값 / topK 범위(1~20) 초과 (검색 API) | `INVALID_REQUEST` | 400 |
+| AI 서비스 오류 (요약/태그/임베딩 실패) | `UNKNOWN` | 500 |
 
 ### blocks 유효성 규칙
 

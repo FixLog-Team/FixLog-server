@@ -15,13 +15,13 @@ public class DocumentAIService extends AbstractAIService {
 
     private final DocumentRepository documentRepository;
 
-    public DocumentAIService(@Qualifier("openAiChatModel") ChatModel chatModel,
+    public DocumentAIService(@Qualifier("googleGenAiChatModel") ChatModel chatModel,
                              DocumentRepository documentRepository) {
         super(ChatClient.builder(chatModel).build());
         this.documentRepository = documentRepository;
     }
 
-    public String summarizeDocument(String documentId) {
+    public String summarizeDocumentById(String documentId) {
         String userId = SecurityUtil.getCurrentUserId();
         if (userId == null) {
             throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
@@ -29,6 +29,6 @@ public class DocumentAIService extends AbstractAIService {
         DocumentEntity doc = documentRepository
                 .findByDocumentIdAndCreateUserAndUsable(documentId, userId, Integer.valueOf(1))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
-        return summarizeDocument(doc.getPlainText());
+        return super.summarizeDocument(doc.getPlainText());
     }
 }

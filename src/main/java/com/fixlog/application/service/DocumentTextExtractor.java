@@ -1,7 +1,7 @@
 package com.fixlog.application.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import org.springframework.stereotype.Component;
@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 @Component
 public class DocumentTextExtractor {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper = JsonMapper.builder().build();
     private static final Pattern HTML_TAG = Pattern.compile("<[^>]+>");
     private static final Set<String> ALLOWED_TYPES =
             Set.of("paragraph", "header", "list", "code", "image", "table");
