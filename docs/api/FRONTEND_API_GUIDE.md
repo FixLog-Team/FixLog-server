@@ -675,6 +675,49 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 ---
 
+### POST /ai/ask
+질문 기반 AI 답변 생성 (RAG). 본인 소유 문서 중 질문과 유사한 문서를 검색해 그 내용을 근거로 답변을 생성하고, 참고한 문서 정보를 함께 반환한다.
+
+**Request Body**
+
+| 필드 | 타입 | 필수 | 기본값 | 설명 |
+|---|---|---|---|---|
+| question | String | 예 | - | 질문 (`@NotBlank`, 최대 2,000자) |
+| topK | Integer | 아니오 | 5 | 참고할 문서 개수 (1~20) |
+
+```json
+{
+  "question": "스프링 시큐리티 401 에러가 계속 나는데 원인이 뭐였지?",
+  "topK": 5
+}
+```
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "답변 생성이 완료되었습니다.",
+  "result": {
+    "answer": "문서 1을 참고하면, 401 에러의 원인은 ... 이었습니다.",
+    "references": [
+      {
+        "documentId": "uuid",
+        "title": "문서 제목",
+        "folderId": "uuid",
+        "excerpt": "관련 문장 발췌...",
+        "score": 0.87
+      }
+    ]
+  }
+}
+```
+
+> 검색된 문서가 없으면 AI 호출 없이 `answer: "질문과 관련된 문서를 찾지 못해 답변할 수 없습니다."`, `references: []`를 즉시 반환한다.
+> `references`는 `POST /search` 응답과 동일한 구조(top-K 문서 요약 정보)다.
+> 답변은 검색된 문서 내용에 근거해서만 생성되며, 문서에 없는 내용은 추측하지 않도록 프롬프트에서 제한한다.
+
+---
+
 ## 7. 검색 API
 
 > 모든 엔드포인트 **인증 필요**
@@ -739,8 +782,8 @@ API 호출
 | blocks 유효성 실패 (type 오류, 크기 초과 등) | `INVALID_REQUEST` | 400 |
 | title 빈 값 | `INVALID_REQUEST` | 400 |
 | content 빈 값 / 50,000자 초과 (AI API) | `INVALID_REQUEST` | 400 |
-| query 빈 값 / topK 범위(1~20) 초과 (검색 API) | `INVALID_REQUEST` | 400 |
-| AI 서비스 오류 (요약/태그/임베딩 실패) | `UNKNOWN` | 500 |
+| question 빈 값 / 2,000자 초과, query 빈 값 / topK 범위(1~20) 초과 | `INVALID_REQUEST` | 400 |
+| AI 서비스 오류 (요약/태그/임베딩/답변 생성 실패) | `UNKNOWN` | 500 |
 
 ### blocks 유효성 규칙
 
