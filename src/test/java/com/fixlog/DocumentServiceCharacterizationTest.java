@@ -15,6 +15,7 @@ import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
 import com.fixlog.application.service.PermissionEvaluator;
+import com.fixlog.application.service.PermissionService;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.code.Code;
@@ -90,9 +91,12 @@ class DocumentServiceCharacterizationTest {
         PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
                 permissionRepository, workspaceMemberRepository, groupMemberRepository,
                 groupRepository, folderRepository, documentRepository, workspaceContext);
-        folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator);
+                PermissionService permissionService = new PermissionService(
+                permissionRepository, workspaceMemberRepository, groupRepository,
+                userRepository, permissionEvaluator, workspaceContext);
+folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), publishedEvents::add, workspaceContext, permissionEvaluator);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(), publishedEvents::add, workspaceContext, permissionEvaluator, permissionService);
     }
 
     @AfterEach

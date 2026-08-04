@@ -47,6 +47,7 @@ public class DocumentService {
     private final ApplicationEventPublisher eventPublisher;
     private final WorkspaceContext workspaceContext;
     private final PermissionEvaluator permissionEvaluator;
+    private final PermissionService permissionService;
 
     public DocumentService(DocumentRepository documentRepository,
                            FolderRepository folderRepository,
@@ -54,7 +55,8 @@ public class DocumentService {
                            DocumentPdfGenerator pdfGenerator,
                            ApplicationEventPublisher eventPublisher,
                            WorkspaceContext workspaceContext,
-                           PermissionEvaluator permissionEvaluator) {
+                           PermissionEvaluator permissionEvaluator,
+                           PermissionService permissionService) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.textExtractor = textExtractor;
@@ -62,6 +64,7 @@ public class DocumentService {
         this.eventPublisher = eventPublisher;
         this.workspaceContext = workspaceContext;
         this.permissionEvaluator = permissionEvaluator;
+        this.permissionService = permissionService;
     }
 
     @Transactional
@@ -86,7 +89,7 @@ public class DocumentService {
                 ordinal,
                 userId
         );
-        return documentRepository.save(doc);
+        return saveWithOwnership(doc, userId);
     }
 
     /**
@@ -112,6 +115,26 @@ public class DocumentService {
                 .toList();
 
         return paginate(visible, pageable);
+    }
+
+    /**
+     * 내가 만들지 않았지만 권한을 받은 문서 (FR-SHR-005).
+     *
+     * <p>관리자 특권은 여기서 세지 않는다. 관리자가 워크스페이스의 모든 문서를 "공유받았다"고
+     * 보면 목록이 의미를 잃기 때문이다.
+     */
+    @Transactional(readOnly = true)
+    public List<DocumentEntity> sharedWithMe() {
+        UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
+        String me = requireUserId();
+        PermissionEvaluator.Scope scope = permissionEvaluator.explicitScopeFor(workspaceId);
+
+        return documentRepository
+                .findByWorkspaceIdAndUsableOrderByOrdinalAscCreateTimeAsc(workspaceId, Integer.valueOf(1))
+                .stream()
+                .filter(doc -> !me.equals(doc.getCreateUser()))
+                .filter(doc -> scope.canViewDocument(doc.getDocumentId(), doc.getFolderId()))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -164,7 +187,18 @@ public class DocumentService {
                 ordinal,
                 userId
         );
-        return documentRepository.save(copy);
+        return saveWithOwnership(copy, userId);
+    }
+
+    /**
+     * 만든 사람에게 소유 권한을 함께 준다. 없으면 일반 구성원이 문서를 만드는 즉시 접근을 잃는다.
+     * 만들었다는 사실은 접근 제어에 쓰이지 않기 때문이다 (FR-PRM-011).
+     */
+    private DocumentEntity saveWithOwnership(DocumentEntity document, String creatorId) {
+        DocumentEntity saved = documentRepository.save(document);
+        permissionService.grantCreatorOwnership(saved.getWorkspaceId(), ResourceType.DOCUMENT,
+                saved.getDocumentId(), UUID.fromString(creatorId));
+        return saved;
     }
 
     @Transactional
