@@ -75,6 +75,8 @@ public class DocumentVectorStoreService {
         for (int i = 0; i < chunks.size(); i++) {
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("documentId", doc.getDocumentId());
+            // 검색 사전 필터의 1차 조건. 없으면 워크스페이스를 넘어 검색된다 (FR-MIG-007)
+            metadata.put("workspaceId", doc.getWorkspaceId().toString());
             metadata.put("title", doc.getTitle());
             metadata.put("folderId", doc.getFolderId() != null ? doc.getFolderId() : "");
             metadata.put("createUser", doc.getCreateUser());

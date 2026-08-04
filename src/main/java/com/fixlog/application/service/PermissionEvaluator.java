@@ -148,12 +148,25 @@ public class PermissionEvaluator {
      */
     @Transactional(readOnly = true)
     public Scope scopeFor(UUID workspaceId) {
+        return buildScope(workspaceId, true);
+    }
+
+    /**
+     * 관리자 특권을 무시하고 <b>부여된 권한 레코드만</b>으로 판정하는 범위.
+     * "나와 공유됨"처럼 실제로 공유받은 것을 묻는 자리에 쓴다. 관리자에게도 공유는 공유다.
+     */
+    @Transactional(readOnly = true)
+    public Scope explicitScopeFor(UUID workspaceId) {
+        return buildScope(workspaceId, false);
+    }
+
+    private Scope buildScope(UUID workspaceId, boolean honorAdmin) {
         UUID userId = workspaceContext.requireCurrentUserId();
         WorkspaceMemberEntity membership = workspaceMemberRepository
                 .findByWorkspaceIdAndUserId(workspaceId, userId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
 
-        if (membership.isAdmin()) {
+        if (honorAdmin && membership.isAdmin()) {
             return new Scope(true, List.of(), Map.of());
         }
 
@@ -275,6 +288,12 @@ public class PermissionEvaluator {
 
     private String key(ResourceType type, String id) {
         return type.name() + ":" + id;
+    }
+
+    /** 대상이 속한 워크스페이스. 권한 레코드를 만들 때 대상과 같은 워크스페이스에 달기 위한 것이다. */
+    @Transactional(readOnly = true)
+    public UUID workspaceIdOf(ResourceType resourceType, String resourceId) {
+        return loadTarget(resourceType, resourceId).workspaceId();
     }
 
     /** 대상이 속한 워크스페이스와, 상속 판정에 쓸 조상 폴더 ID들(루트→가까운 순). */

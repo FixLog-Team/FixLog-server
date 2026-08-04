@@ -10,6 +10,7 @@ import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.FolderService;
 import com.fixlog.application.service.PermissionEvaluator;
+import com.fixlog.application.service.PermissionService;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.code.Code;
@@ -71,7 +72,10 @@ class PermissionEvaluatorTest {
         evaluator = new PermissionEvaluator(permissionRepository, workspaceMemberRepository,
                 groupMemberRepository, groupRepository, folderRepository, documentRepository,
                 workspaceContext);
-        folderService = new FolderService(folderRepository, documentRepository, workspaceContext, evaluator);
+                PermissionService permissionService = new PermissionService(
+                permissionRepository, workspaceMemberRepository, groupRepository,
+                userRepository, evaluator, workspaceContext);
+folderService = new FolderService(folderRepository, documentRepository, workspaceContext, evaluator, permissionService);
 
         admin = signUp("admin");
         loginAs(admin);
