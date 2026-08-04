@@ -4,6 +4,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
@@ -43,6 +44,12 @@ public class VectorStoreConfig {
         return new JdbcTemplate(dataSource);
     }
 
+    /**
+     * 벡터 테이블 생성 여부. pgvector 전용 DDL이라 Postgres가 아닌 환경(H2 테스트)에서는 꺼야 한다.
+     */
+    @Value("${fixlog.vectorstore.initialize-schema:true}")
+    private boolean initializeVectorSchema;
+
     @Bean
     public VectorStore vectorStore(
             @Qualifier("pgVectorJdbcTemplate") JdbcTemplate jdbcTemplate,
@@ -51,7 +58,7 @@ public class VectorStoreConfig {
                 .vectorTableName("document_embeddings")
                 .dimensions(1536)
                 .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
-                .initializeSchema(true)
+                .initializeSchema(initializeVectorSchema)
                 .build();
     }
 }
