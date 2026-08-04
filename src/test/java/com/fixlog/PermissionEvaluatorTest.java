@@ -71,7 +71,7 @@ class PermissionEvaluatorTest {
         evaluator = new PermissionEvaluator(permissionRepository, workspaceMemberRepository,
                 groupMemberRepository, groupRepository, folderRepository, documentRepository,
                 workspaceContext);
-        folderService = new FolderService(folderRepository, documentRepository, workspaceContext);
+        folderService = new FolderService(folderRepository, documentRepository, workspaceContext, evaluator);
 
         admin = signUp("admin");
         loginAs(admin);

@@ -4,6 +4,9 @@ import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.GroupMemberRepository;
+import com.fixlog.application.repository.GroupRepository;
+import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.DocumentHistoryService;
@@ -11,6 +14,7 @@ import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
+import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.exception.BusinessException;
@@ -46,6 +50,9 @@ class WorkspaceRemovalFlowVerificationTest {
     @Autowired UserRepository userRepository;
     @Autowired WorkspaceRepository workspaceRepository;
     @Autowired WorkspaceMemberRepository workspaceMemberRepository;
+    @Autowired PermissionRepository permissionRepository;
+    @Autowired GroupRepository groupRepository;
+    @Autowired GroupMemberRepository groupMemberRepository;
 
     private FolderService folderService;
     private DocumentService documentService;
@@ -57,10 +64,13 @@ class WorkspaceRemovalFlowVerificationTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
-        folderService = new FolderService(folderRepository, documentRepository, workspaceContext);
+        PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
+                permissionRepository, workspaceMemberRepository, groupMemberRepository,
+                groupRepository, folderRepository, documentRepository, workspaceContext);
+        folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
-                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50), event -> {}, workspaceContext);
+                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50), event -> {}, workspaceContext, permissionEvaluator);
     }
 
     @AfterEach
@@ -144,9 +154,11 @@ class WorkspaceRemovalFlowVerificationTest {
         FolderContentsDto root = folderService.getRootContents();
         assertTrue(root.folders().isEmpty(), "루트 폴더가 비어야 함");
         assertTrue(root.documents().isEmpty(), "루트 문서가 비어야 함");
-        assertEquals(0, folderRepository.findByFolderIdAndCreateUser(child.getFolderId(), uid).orElseThrow().getUsable());
-        assertEquals(0, documentRepository.findByFolderIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(parent.getFolderId(), uid, 1).size());
-        assertEquals(0, documentRepository.findByFolderIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(child.getFolderId(), uid, 1).size());
+        assertEquals(0, folderRepository.findById(child.getFolderId()).orElseThrow().getUsable());
+        assertEquals(0, documentRepository.findByWorkspaceIdAndFolderIdAndUsableOrderByOrdinalAscCreateTimeAsc(
+                parent.getWorkspaceId(), parent.getFolderId(), 1).size());
+        assertEquals(0, documentRepository.findByWorkspaceIdAndFolderIdAndUsableOrderByOrdinalAscCreateTimeAsc(
+                child.getWorkspaceId(), child.getFolderId(), 1).size());
         assertNotNull(docParent);
         assertNotNull(docChild);
         System.out.println("[C] 폴더 삭제 캐스케이드 OK (하위 폴더+문서 전부 삭제)");
