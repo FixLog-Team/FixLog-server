@@ -40,10 +40,14 @@ public class FolderService {
 
     private final FolderRepository folderRepository;
     private final DocumentRepository documentRepository;
+    private final WorkspaceContext workspaceContext;
 
-    public FolderService(FolderRepository folderRepository, DocumentRepository documentRepository) {
+    public FolderService(FolderRepository folderRepository,
+                         DocumentRepository documentRepository,
+                         WorkspaceContext workspaceContext) {
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
+        this.workspaceContext = workspaceContext;
     }
 
     @Transactional
@@ -61,7 +65,12 @@ public class FolderService {
 
         String folderId = UUID.randomUUID().toString();
         FolderEntity folder = new FolderEntity(
-                folderId, request.parentId(), request.folderName(), nextOrdinal(request.parentId(), userId), userId);
+                folderId,
+                workspaceContext.requireCurrentWorkspaceId(),
+                request.parentId(),
+                request.folderName(),
+                nextOrdinal(request.parentId(), userId),
+                userId);
         return folderRepository.save(folder);
     }
 

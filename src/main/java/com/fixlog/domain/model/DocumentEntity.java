@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "apj_document")
@@ -14,6 +15,10 @@ public class DocumentEntity {
     @Id
     @Column(name = "document_id", length = 100)
     private String documentId;
+
+    /** 소속 워크스페이스. 문서는 정확히 하나의 워크스페이스에 속한다 (FR-WS-003). */
+    @Column(name = "workspace_id", columnDefinition = "uuid", nullable = false)
+    private UUID workspaceId;
 
     @Column(name = "folder_id", length = 100)
     private String folderId;
@@ -51,10 +56,11 @@ public class DocumentEntity {
     protected DocumentEntity() {
     }
 
-    public DocumentEntity(String documentId, String folderId,
+    public DocumentEntity(String documentId, UUID workspaceId, String folderId,
                           String title, String blocks, String plainText, String contentHash,
                           Integer ordinal, String createUser) {
         this.documentId = documentId;
+        this.workspaceId = workspaceId;
         this.folderId = folderId;
         this.title = title;
         this.blocks = blocks;
@@ -102,6 +108,7 @@ public class DocumentEntity {
     }
 
     public String getDocumentId() { return documentId; }
+    public UUID getWorkspaceId() { return workspaceId; }
     public String getFolderId() { return folderId; }
     public String getTitle() { return title; }
     public String getBlocks() { return blocks; }
