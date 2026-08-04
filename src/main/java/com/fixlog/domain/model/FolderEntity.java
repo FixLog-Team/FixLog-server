@@ -3,6 +3,7 @@ package com.fixlog.domain.model;
 import jakarta.persistence.*;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "apj_folder")
@@ -11,6 +12,10 @@ public class FolderEntity {
     @Id
     @Column(name = "folder_id", length = 100)
     private String folderId;
+
+    /** 소속 워크스페이스. 폴더는 정확히 하나의 워크스페이스에 속한다 (FR-WS-003). */
+    @Column(name = "workspace_id", columnDefinition = "uuid", nullable = false)
+    private UUID workspaceId;
 
     @Column(name = "parent_id", length = 100)
     private String parentId;
@@ -39,8 +44,10 @@ public class FolderEntity {
     protected FolderEntity() {
     }
 
-    public FolderEntity(String folderId, String parentId, String folderName, Integer ordinal, String createUser) {
+    public FolderEntity(String folderId, UUID workspaceId, String parentId, String folderName,
+                        Integer ordinal, String createUser) {
         this.folderId = folderId;
+        this.workspaceId = workspaceId;
         this.parentId = parentId;
         this.folderName = folderName;
         this.ordinal = ordinal;
@@ -76,6 +83,10 @@ public class FolderEntity {
 
     public String getFolderId() {
         return folderId;
+    }
+
+    public UUID getWorkspaceId() {
+        return workspaceId;
     }
 
     public String getParentId() {
