@@ -13,6 +13,12 @@ public interface FolderRepository extends JpaRepository<FolderEntity, String> {
 
     Optional<FolderEntity> findByFolderIdAndCreateUser(String folderId, String createUser);
 
+    /**
+     * 경로 접두사로 서브트리를 통째로 가져온다. 경로 조각이 폴더 UUID라 접두사는 전역에서 유일하므로
+     * 소유자 조건 없이도 다른 사용자의 폴더가 섞이지 않는다.
+     */
+    List<FolderEntity> findByPathStartingWith(String pathPrefix);
+
     List<FolderEntity> findByParentIdAndCreateUserAndUsableOrderByOrdinalAscCreateTimeAsc(
             String parentId, String createUser, Integer usable);
 
