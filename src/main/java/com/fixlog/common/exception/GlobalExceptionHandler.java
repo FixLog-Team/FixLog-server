@@ -30,6 +30,7 @@ public class GlobalExceptionHandler {
     private HttpStatus resolveHttpStatus(Code code) {
         return switch (code) {
             case UNAUTHORIZED -> HttpStatus.UNAUTHORIZED;
+            case FORBIDDEN -> HttpStatus.FORBIDDEN;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
             case INVALID_REQUEST -> HttpStatus.BAD_REQUEST;
             default -> HttpStatus.INTERNAL_SERVER_ERROR;
