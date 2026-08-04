@@ -13,6 +13,7 @@ import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
 import com.fixlog.application.service.PermissionEvaluator;
+import com.fixlog.application.service.PermissionService;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.code.Code;
@@ -87,10 +88,13 @@ class ServicePermissionFlowTest {
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext);
-        folderService = new FolderService(folderRepository, documentRepository, workspaceContext, evaluator);
+                PermissionService permissionService = new PermissionService(
+                permissionRepository, workspaceMemberRepository, groupRepository,
+                userRepository, evaluator, workspaceContext);
+folderService = new FolderService(folderRepository, documentRepository, workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {},
-                workspaceContext, evaluator);
+                workspaceContext, evaluator, permissionService);
 
         admin = signUp("admin");
         loginAs(admin);
@@ -244,6 +248,16 @@ class ServicePermissionFlowTest {
         assertEquals("폴더 안 문서", documentService.getDocument(docId).getTitle());
         assertTrue(folderService.getFolderContents(folder.getFolderId()).documents().stream()
                 .anyMatch(d -> d.documentId().equals(docId)));
+    }
+
+    // 만든 사람이 자기 문서를 못 여는 상태였다. 생성 시 소유 권한이 부여되지 않으면
+    // 일반 구성원은 문서를 만든 즉시 접근을 잃는다.
+    @Test
+    void 구성원이_만든_문서는_본인이_열_수_있다() {
+        loginAs(member);
+        String docId = documentService.create(new DocumentCreateRequest(null, "내가 만든 문서")).getDocumentId();
+
+        assertEquals("내가 만든 문서", documentService.getDocument(docId).getTitle());
     }
 
     @Test
