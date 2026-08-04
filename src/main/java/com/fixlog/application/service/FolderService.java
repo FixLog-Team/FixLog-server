@@ -70,13 +70,24 @@ public class FolderService {
                 request.parentId(),
                 request.folderName(),
                 nextOrdinal(request.parentId(), userId),
-                userId);
+                userId,
+                parentPath(request.parentId(), userId));
         return folderRepository.save(folder);
     }
 
     /** 같은 부모 안에서 마지막 폴더 다음 순번. 형제가 없으면 0. */
     private int nextOrdinal(String parentId, String userId) {
         return folderRepository.maxOrdinal(parentId, userId) + 1;
+    }
+
+    /** 루트 아래면 "/", 아니면 부모의 경로. */
+    private String parentPath(String parentId, String userId) {
+        if (parentId == null) {
+            return "/";
+        }
+        return folderRepository.findByFolderIdAndCreateUser(parentId, userId)
+                .map(FolderEntity::getPath)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "상위 폴더를 찾을 수 없습니다."));
     }
 
     private List<FolderEntity> siblings(String parentId, String userId) {
@@ -208,7 +219,27 @@ public class FolderService {
 
         // 새 부모의 형제들과 순번이 겹치지 않도록 맨 끝으로 보낸다.
         folder.moveTo(newParentId, nextOrdinal(newParentId, userId), userId);
+        repath(folder, parentPath(newParentId, userId));
         return folderRepository.save(folder);
+    }
+
+    /**
+     * 폴더를 옮기면 그 아래 모든 폴더의 경로도 함께 바뀐다. 하나라도 빠지면 권한 상속이
+     * 옛 조상을 따라가므로, 서브트리 일괄 갱신은 반드시 이 메서드 하나를 통한다 (R-04).
+     */
+    private void repath(FolderEntity folder, String newParentPath) {
+        String oldPath = folder.getPath();
+        String newPath = FolderEntity.pathUnder(newParentPath, folder.getFolderId());
+        if (newPath.equals(oldPath)) {
+            return;
+        }
+
+        List<FolderEntity> subtree = folderRepository.findByPathStartingWith(oldPath);
+        for (FolderEntity node : subtree) {
+            node.applyPath(newPath + node.getPath().substring(oldPath.length()));
+        }
+        folderRepository.saveAll(subtree);
+        folder.applyPath(newPath);
     }
 
     @Transactional
