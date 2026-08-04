@@ -5,12 +5,16 @@ import com.fixlog.application.event.DocumentSavedEvent;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.GroupMemberRepository;
+import com.fixlog.application.repository.GroupRepository;
+import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
+import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.code.Code;
@@ -47,12 +51,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * DocumentService의 현재 동작을 고정하는 회귀 테스트 (FR-MIG-003).
+ * DocumentService의 동작을 고정하는 회귀 테스트 (FR-MIG-003).
  *
- * <p>M1 이후 소유자 결합 조회를 권한 판정으로 갈아엎는다. 그때 깨지면 안 되는 것은
- * "누가 접근할 수 있는가"가 아니라 <b>문서가 어떻게 만들어지고 저장되고 옮겨지는가</b>다.
- * 접근 제어 자체는 바뀔 예정이므로, 소유자 격리 테스트는 "현재 이렇게 막힌다"는 사실만
- * 기록해 두고 권한 모델 도입 시 워크스페이스·권한 기준으로 다시 쓴다.
+ * <p>소유자 결합 조회를 권한 판정으로 갈아엎을 때 깨지면 안 되는 것은 "누가 접근할 수 있는가"가
+ * 아니라 <b>문서가 어떻게 만들어지고 저장되고 옮겨지는가</b>였고, 실제로 이 테스트들은
+ * 전환 후에도 그대로 통과했다.
+ *
+ * <p>아래 격리 테스트는 이제 <b>워크스페이스 격리</b>를 검증한다. 사용자마다 개인 워크스페이스가
+ * 경계이므로 남의 문서는 구성원이 아니라서 보이지 않는다. 같은 워크스페이스 안에서 권한이 없어
+ * 막히는 경우(FORBIDDEN)는 {@code ServicePermissionFlowTest}가 덮는다.
  */
 @DataJpaTest
 class DocumentServiceCharacterizationTest {
@@ -64,6 +71,9 @@ class DocumentServiceCharacterizationTest {
     @Autowired UserRepository userRepository;
     @Autowired WorkspaceRepository workspaceRepository;
     @Autowired WorkspaceMemberRepository workspaceMemberRepository;
+    @Autowired PermissionRepository permissionRepository;
+    @Autowired GroupRepository groupRepository;
+    @Autowired GroupMemberRepository groupMemberRepository;
 
     private DocumentService documentService;
     private FolderService folderService;
@@ -77,9 +87,12 @@ class DocumentServiceCharacterizationTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
-        folderService = new FolderService(folderRepository, documentRepository, workspaceContext);
+        PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
+                permissionRepository, workspaceMemberRepository, groupMemberRepository,
+                groupRepository, folderRepository, documentRepository, workspaceContext);
+        folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), publishedEvents::add, workspaceContext);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(), publishedEvents::add, workspaceContext, permissionEvaluator);
     }
 
     @AfterEach
@@ -323,8 +336,10 @@ class DocumentServiceCharacterizationTest {
         assertFalse(result.bytes().length == 0, "PDF 바이트가 비어 있으면 안 된다");
     }
 
-    // ---------- 접근 제어 (현재 동작 — 권한 모델 도입 시 재작성 대상) ----------
+    // ---------- 워크스페이스 격리 ----------
 
+    // 다른 사용자의 개인 워크스페이스에 있는 문서다. 권한 부족(FORBIDDEN)이 아니라
+    // 구성원이 아니라서 존재 자체가 드러나지 않는다 (FR-PRM-008).
     @Test
     void 남의_문서는_존재하지_않는_것으로_취급된다() {
         loginAsNewUser("owner");

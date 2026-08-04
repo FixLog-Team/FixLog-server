@@ -3,12 +3,16 @@ package com.fixlog;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.GroupMemberRepository;
+import com.fixlog.application.repository.GroupRepository;
+import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
+import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.domain.model.UserEntity;
@@ -35,6 +39,9 @@ class FolderTreeTest {
     @Autowired UserRepository userRepository;
     @Autowired WorkspaceRepository workspaceRepository;
     @Autowired WorkspaceMemberRepository workspaceMemberRepository;
+    @Autowired PermissionRepository permissionRepository;
+    @Autowired GroupRepository groupRepository;
+    @Autowired GroupMemberRepository groupMemberRepository;
 
     private FolderService folderService;
     private DocumentService documentService;
@@ -46,9 +53,12 @@ class FolderTreeTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
-        folderService = new FolderService(folderRepository, documentRepository, workspaceContext);
+        PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
+                permissionRepository, workspaceMemberRepository, groupMemberRepository,
+                groupRepository, folderRepository, documentRepository, workspaceContext);
+        folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {}, workspaceContext);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {}, workspaceContext, permissionEvaluator);
     }
 
     @AfterEach
