@@ -23,6 +23,13 @@ public class FolderEntity {
     @Column(name = "folder_name", length = 100, nullable = false)
     private String folderName;
 
+    /**
+     * 조상 경로를 비정규화해 둔 값 ({@code /루트ID/중간ID/자기ID/}).
+     * 권한 상속 판정이 조상 집합을 단일 쿼리로 얻기 위한 것이다 (FR-PRM-007).
+     */
+    @Column(name = "path", length = 1000, nullable = false)
+    private String path;
+
     @Column(name = "ordinal")
     private Integer ordinal;
 
@@ -45,9 +52,10 @@ public class FolderEntity {
     }
 
     public FolderEntity(String folderId, UUID workspaceId, String parentId, String folderName,
-                        Integer ordinal, String createUser) {
+                        Integer ordinal, String createUser, String parentPath) {
         this.folderId = folderId;
         this.workspaceId = workspaceId;
+        this.path = pathUnder(parentPath, folderId);
         this.parentId = parentId;
         this.folderName = folderName;
         this.ordinal = ordinal;
@@ -75,6 +83,27 @@ public class FolderEntity {
         this.updateTime = Instant.now();
     }
 
+    /** 루트 경로는 {@code /}다. 부모 경로 뒤에 자기 ID를 붙인다. */
+    public static String pathUnder(String parentPath, String folderId) {
+        String base = (parentPath == null || parentPath.isBlank()) ? "/" : parentPath;
+        return base + folderId + "/";
+    }
+
+    /**
+     * 이동으로 조상이 바뀌면 경로도 함께 바뀐다. 서브트리 전체를 한 번에 갱신해야 하므로
+     * 호출자는 {@code FolderService.moveFolder}의 일괄 갱신 경로를 통해서만 쓴다.
+     */
+    public void applyPath(String path) {
+        this.path = path;
+    }
+
+    /** 자기 자신을 포함한 조상 폴더 ID들. 권한 상속 판정의 입력이다. */
+    public java.util.List<String> pathSegments() {
+        return java.util.Arrays.stream(path.split("/"))
+                .filter(segment -> !segment.isBlank())
+                .toList();
+    }
+
     public void softDelete(String updateUser) {
         this.usable = 0;
         this.updateUser = updateUser;
@@ -95,6 +124,10 @@ public class FolderEntity {
 
     public String getFolderName() {
         return folderName;
+    }
+
+    public String getPath() {
+        return path;
     }
 
     public Integer getOrdinal() {
