@@ -5,9 +5,10 @@ import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.common.ai.TokenUsageLogger;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
-import com.fixlog.common.security.SecurityUtil;
 import com.fixlog.domain.model.DocumentAiSummaryEntity;
 import com.fixlog.domain.model.DocumentEntity;
+import com.fixlog.domain.model.PermissionAction;
+import com.fixlog.domain.model.ResourceType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -22,28 +23,24 @@ public class DocumentAIService extends AbstractAIService {
 
     private final DocumentRepository documentRepository;
     private final DocumentAiSummaryRepository summaryRepository;
+    private final PermissionEvaluator permissionEvaluator;
 
     public DocumentAIService(@Qualifier("googleGenAiChatModel") ChatModel chatModel,
                              TokenUsageLogger tokenUsageLogger,
                              DocumentRepository documentRepository,
-                             DocumentAiSummaryRepository summaryRepository) {
+                             DocumentAiSummaryRepository summaryRepository,
+                             PermissionEvaluator permissionEvaluator) {
         super(ChatClient.builder(chatModel).build(), tokenUsageLogger);
         this.documentRepository = documentRepository;
         this.summaryRepository = summaryRepository;
+        this.permissionEvaluator = permissionEvaluator;
     }
 
-    /**
-     * 문서 요약. contentHash가 동일한 캐시가 있으면 LLM 호출 없이 캐시를 반환한다.
-     * 수 초가 걸리는 LLM 외부 호출 동안 DB 커넥션을 점유하지 않도록
-     * 의도적으로 트랜잭션을 걸지 않는다. (캐시 저장은 리포지토리 내부 트랜잭션으로 처리)
-     */
+    /** AI 처리도 대상 문서의 권한 판정을 선행한다 (FR-AI-011). */
     public String summarizeDocumentById(String documentId) {
-        String userId = SecurityUtil.getCurrentUserId();
-        if (userId == null) {
-            throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
-        }
+        permissionEvaluator.require(ResourceType.DOCUMENT, documentId, PermissionAction.VIEW);
         DocumentEntity doc = documentRepository
-                .findByDocumentIdAndCreateUserAndUsable(documentId, userId, Integer.valueOf(1))
+                .findByDocumentIdAndUsable(documentId, Integer.valueOf(1))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
 
         DocumentAiSummaryEntity cached = summaryRepository.findById(documentId).orElse(null);
