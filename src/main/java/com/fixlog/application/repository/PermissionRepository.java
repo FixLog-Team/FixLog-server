@@ -35,6 +35,21 @@ public interface PermissionRepository extends JpaRepository<PermissionEntity, UU
                                           @Param("userId") UUID userId,
                                           @Param("groupIds") Collection<UUID> groupIds);
 
+    /**
+     * 워크스페이스 안에서 요청자에게 해당하는 권한 전부. 목록 판정처럼 대상이 여러 개일 때
+     * 대상마다 조회하지 않기 위한 것이다.
+     */
+    @Query("""
+            select p from PermissionEntity p
+            where p.workspaceId = :workspaceId
+              and ((p.principalType = com.fixlog.domain.model.PrincipalType.USER and p.principalId = :userId)
+                   or (p.principalType = com.fixlog.domain.model.PrincipalType.GROUP
+                       and p.principalId in :groupIds))
+            """)
+    List<PermissionEntity> findForPrincipals(@Param("workspaceId") UUID workspaceId,
+                                             @Param("userId") UUID userId,
+                                             @Param("groupIds") Collection<UUID> groupIds);
+
     List<PermissionEntity> findByResourceTypeAndResourceId(ResourceType resourceType, String resourceId);
 
     Optional<PermissionEntity> findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(

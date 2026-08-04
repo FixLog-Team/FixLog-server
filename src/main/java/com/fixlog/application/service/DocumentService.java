@@ -9,6 +9,8 @@ import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.common.security.SecurityUtil;
 import com.fixlog.domain.model.DocumentEntity;
+import com.fixlog.domain.model.PermissionAction;
+import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
@@ -16,6 +18,7 @@ import com.fixlog.presentation.dto.request.DocumentTitleRequest;
 import com.fixlog.presentation.dto.response.DocumentSaveStateDto;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +30,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 문서 서비스.
+ *
+ * <p>접근 여부는 이 클래스가 판단하지 않는다. 어떤 행위인지만 정하고
+ * {@link PermissionEvaluator}에 묻는다. {@code create_user}는 작성자 정보로만 남으며
+ * 접근 제어에 쓰이지 않는다 (FR-PRM-011).
+ */
 @Service
 public class DocumentService {
 
@@ -36,28 +46,38 @@ public class DocumentService {
     private final DocumentPdfGenerator pdfGenerator;
     private final ApplicationEventPublisher eventPublisher;
     private final WorkspaceContext workspaceContext;
+    private final PermissionEvaluator permissionEvaluator;
 
     public DocumentService(DocumentRepository documentRepository,
                            FolderRepository folderRepository,
                            DocumentTextExtractor textExtractor,
                            DocumentPdfGenerator pdfGenerator,
                            ApplicationEventPublisher eventPublisher,
-                           WorkspaceContext workspaceContext) {
-        this.workspaceContext = workspaceContext;
+                           WorkspaceContext workspaceContext,
+                           PermissionEvaluator permissionEvaluator) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.textExtractor = textExtractor;
         this.pdfGenerator = pdfGenerator;
         this.eventPublisher = eventPublisher;
+        this.workspaceContext = workspaceContext;
+        this.permissionEvaluator = permissionEvaluator;
     }
 
     @Transactional
     public DocumentEntity create(DocumentCreateRequest req) {
         String userId = requireUserId();
-        int ordinal = documentRepository.maxOrdinal(req.folderId(), userId) + 1;
+        UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
+
+        // 폴더 안에 만들려면 그 폴더를 편집할 수 있어야 한다. 루트는 워크스페이스 구성원이면 된다.
+        if (req.folderId() != null) {
+            permissionEvaluator.require(ResourceType.FOLDER, req.folderId(), PermissionAction.EDIT);
+        }
+
+        int ordinal = documentRepository.maxOrdinal(req.folderId(), workspaceId) + 1;
         DocumentEntity doc = new DocumentEntity(
                 UUID.randomUUID().toString(),
-                workspaceContext.requireCurrentWorkspaceId(),
+                workspaceId,
                 req.folderId(),
                 req.title() != null && !req.title().isBlank() ? req.title() : "제목 없음",
                 "[]",
@@ -69,23 +89,39 @@ public class DocumentService {
         return documentRepository.save(doc);
     }
 
+    /**
+     * 현재 워크스페이스에서 볼 수 있는 문서만 돌려준다.
+     *
+     * <p>권한 조건을 쿼리에 넣지 않기로 했으므로 DB에서 페이지를 자를 수 없다. 워크스페이스
+     * 문서를 가져와 판정으로 거른 뒤 페이지를 만든다. 워크스페이스 규모가 커지면 이 방식이
+     * 부담이 되므로, 공유 목록을 설계하는 시점에 다시 본다 (A-03).
+     */
     @Transactional(readOnly = true)
     public Page<DocumentEntity> list(String folderId, Pageable pageable) {
-        String userId = requireUserId();
-        if (folderId != null) {
-            return documentRepository.findByFolderIdAndCreateUserAndUsable(folderId, userId, Integer.valueOf(1), pageable);
-        }
-        return documentRepository.findByCreateUserAndUsable(userId, Integer.valueOf(1), pageable);
+        UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
+        PermissionEvaluator.Scope scope = permissionEvaluator.scopeFor(workspaceId);
+
+        List<DocumentEntity> candidates = folderId != null
+                ? documentRepository.findByWorkspaceIdAndFolderIdAndUsableOrderByOrdinalAscCreateTimeAsc(
+                        workspaceId, folderId, Integer.valueOf(1))
+                : documentRepository.findByWorkspaceIdAndUsableOrderByOrdinalAscCreateTimeAsc(
+                        workspaceId, Integer.valueOf(1));
+
+        List<DocumentEntity> visible = candidates.stream()
+                .filter(doc -> scope.canViewDocument(doc.getDocumentId(), doc.getFolderId()))
+                .toList();
+
+        return paginate(visible, pageable);
     }
 
     @Transactional(readOnly = true)
     public DocumentEntity getDocument(String documentId) {
-        return loadOwned(documentId);
+        return loadPermitted(documentId, PermissionAction.VIEW);
     }
 
     @Transactional
     public DocumentEntity saveContent(String documentId, DocumentSaveRequest req) {
-        DocumentEntity doc = loadOwned(documentId);
+        DocumentEntity doc = loadPermitted(documentId, PermissionAction.EDIT);
         textExtractor.validateBlocks(req.blocks());
         String canonicalJson = normalizeBlocks(req.blocks());
         String plainText = textExtractor.extract(canonicalJson);
@@ -100,21 +136,22 @@ public class DocumentService {
 
     @Transactional
     public DocumentEntity updateTitle(String documentId, DocumentTitleRequest req) {
-        DocumentEntity doc = loadOwned(documentId);
+        DocumentEntity doc = loadPermitted(documentId, PermissionAction.EDIT);
         doc.updateTitle(req.title(), requireUserId());
         return documentRepository.save(doc);
     }
 
     @Transactional(readOnly = true)
     public DocumentSaveStateDto getSaveState(String documentId) {
-        return DocumentSaveStateDto.from(loadOwned(documentId));
+        return DocumentSaveStateDto.from(loadPermitted(documentId, PermissionAction.VIEW));
     }
 
+    /** 복제는 같은 자리에 새 문서를 만드는 일이라 편집 권한을 요구한다. */
     @Transactional
     public DocumentEntity duplicate(String documentId) {
-        DocumentEntity original = loadOwned(documentId);
+        DocumentEntity original = loadPermitted(documentId, PermissionAction.EDIT);
         String userId = requireUserId();
-        int ordinal = documentRepository.maxOrdinal(original.getFolderId(), userId) + 1;
+        int ordinal = documentRepository.maxOrdinal(original.getFolderId(), original.getWorkspaceId()) + 1;
         // 복제본은 원본과 같은 워크스페이스에 둔다. 현재 컨텍스트를 쓰면 원본과 갈라질 수 있다.
         DocumentEntity copy = new DocumentEntity(
                 UUID.randomUUID().toString(),
@@ -132,7 +169,7 @@ public class DocumentService {
 
     @Transactional
     public void delete(String documentId) {
-        DocumentEntity doc = loadOwned(documentId);
+        DocumentEntity doc = loadPermitted(documentId, PermissionAction.DELETE);
         doc.softDelete(requireUserId());
         documentRepository.save(doc);
         eventPublisher.publishEvent(new DocumentDeletedEvent(documentId));
@@ -140,12 +177,9 @@ public class DocumentService {
 
     @Transactional
     public List<DocumentEntity> reorder(String folderId, List<String> documentIds) {
-        String userId = requireUserId();
         List<DocumentEntity> result = new ArrayList<>();
         for (int i = 0; i < documentIds.size(); i++) {
-            DocumentEntity doc = documentRepository
-                    .findByDocumentIdAndCreateUserAndUsable(documentIds.get(i), userId, Integer.valueOf(1))
-                    .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
+            DocumentEntity doc = loadPermitted(documentIds.get(i), PermissionAction.EDIT);
             doc.applyOrdinal(i);
             result.add(documentRepository.save(doc));
         }
@@ -154,38 +188,59 @@ public class DocumentService {
 
     @Transactional
     public DocumentEntity move(String documentId, DocumentMoveRequest req) {
-        String userId = requireUserId();
-        DocumentEntity doc = loadOwned(documentId);
+        DocumentEntity doc = loadPermitted(documentId, PermissionAction.EDIT);
         String targetFolderId = req.folderId();
+
         if (targetFolderId != null) {
-            folderRepository.findByFolderIdAndCreateUser(targetFolderId, userId)
-                    .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
+            // 옮겨 넣을 폴더도 편집할 수 있어야 한다
+            permissionEvaluator.require(ResourceType.FOLDER, targetFolderId, PermissionAction.EDIT);
+            folderRepository.findByFolderIdAndUsable(targetFolderId, Integer.valueOf(1))
+                    .filter(f -> f.getWorkspaceId().equals(doc.getWorkspaceId()))
                     .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
         }
-        int ordinal = documentRepository.maxOrdinal(targetFolderId, userId) + 1;
-        doc.moveTo(targetFolderId, ordinal, userId);
+
+        int ordinal = documentRepository.maxOrdinal(targetFolderId, doc.getWorkspaceId()) + 1;
+        doc.moveTo(targetFolderId, ordinal, requireUserId());
         return documentRepository.save(doc);
     }
 
     @Transactional(readOnly = true)
     public byte[] downloadPdf(String documentId) {
-        DocumentEntity doc = loadOwned(documentId);
-        return pdfGenerator.generate(doc);
+        return pdfGenerator.generate(loadForDownload(documentId));
     }
 
     public record PdfResult(String title, byte[] bytes) {}
 
     @Transactional(readOnly = true)
     public PdfResult downloadPdfResult(String documentId) {
-        DocumentEntity doc = loadOwned(documentId);
+        DocumentEntity doc = loadForDownload(documentId);
         return new PdfResult(doc.getTitle(), pdfGenerator.generate(doc));
     }
 
-    private DocumentEntity loadOwned(String documentId) {
-        String userId = requireUserId();
+    /** 다운로드는 레벨이 아니라 별도 플래그로 막힌다 (FR-PRM-002). */
+    private DocumentEntity loadForDownload(String documentId) {
+        permissionEvaluator.requireDownload(ResourceType.DOCUMENT, documentId);
+        return load(documentId);
+    }
+
+    private DocumentEntity loadPermitted(String documentId, PermissionAction action) {
+        permissionEvaluator.require(ResourceType.DOCUMENT, documentId, action);
+        return load(documentId);
+    }
+
+    private DocumentEntity load(String documentId) {
         return documentRepository
-                .findByDocumentIdAndCreateUserAndUsable(documentId, userId, Integer.valueOf(1))
+                .findByDocumentIdAndUsable(documentId, Integer.valueOf(1))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
+    }
+
+    private Page<DocumentEntity> paginate(List<DocumentEntity> items, Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return new PageImpl<>(items, pageable, items.size());
+        }
+        int from = (int) Math.min(pageable.getOffset(), items.size());
+        int to = Math.min(from + pageable.getPageSize(), items.size());
+        return new PageImpl<>(items.subList(from, to), pageable, items.size());
     }
 
     private String requireUserId() {

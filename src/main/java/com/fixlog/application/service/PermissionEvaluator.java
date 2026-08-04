@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -122,7 +123,7 @@ public class PermissionEvaluator {
 
         // 2. 관리자는 워크스페이스 안의 모든 리소스에 접근한다 (FR-PRM-010)
         if (membership.isAdmin()) {
-            return new Decision(PermissionLevel.OWNER, true, true);
+            return adminDecision();
         }
 
         List<UUID> groupIds = groupIdsOf(userId, target.workspaceId());
@@ -136,6 +137,94 @@ public class PermissionEvaluator {
 
         return resolve(candidates, resourceType, resourceId, target.ancestorFolderIds())
                 .orElseThrow(() -> new BusinessException(Code.FORBIDDEN, "이 리소스에 접근할 권한이 없습니다."));
+    }
+
+    /**
+     * 워크스페이스 하나에 대한 판정 재료를 한 번에 적재한다.
+     *
+     * <p>목록 조회는 대상이 여러 개다. 대상마다 판정 쿼리를 돌리면 N+1이 되고, 반대로 판정을
+     * 건너뛰면 같은 워크스페이스의 모든 문서가 목록에 노출된다. 재료만 미리 모으고
+     * <b>판정 규칙 자체는 단건과 같은 {@link #resolve} 하나를 쓴다.</b>
+     */
+    @Transactional(readOnly = true)
+    public Scope scopeFor(UUID workspaceId) {
+        UUID userId = workspaceContext.requireCurrentUserId();
+        WorkspaceMemberEntity membership = workspaceMemberRepository
+                .findByWorkspaceIdAndUserId(workspaceId, userId)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
+
+        if (membership.isAdmin()) {
+            return new Scope(true, List.of(), Map.of());
+        }
+
+        List<UUID> groupIds = groupIdsOf(userId, workspaceId);
+        List<PermissionEntity> permissions = permissionRepository.findForPrincipals(
+                workspaceId, userId, groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
+
+        Map<String, String> folderPaths = folderRepository
+                .findByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1)).stream()
+                .collect(Collectors.toMap(FolderEntity::getFolderId, FolderEntity::getPath));
+
+        return new Scope(false, permissions, folderPaths);
+    }
+
+    /** 한 워크스페이스 안에서 여러 대상을 판정하기 위한 재료 묶음. */
+    public final class Scope {
+
+        private final boolean workspaceAdmin;
+        private final List<PermissionEntity> permissions;
+        private final Map<String, String> folderPaths;
+
+        private Scope(boolean workspaceAdmin,
+                      List<PermissionEntity> permissions,
+                      Map<String, String> folderPaths) {
+            this.workspaceAdmin = workspaceAdmin;
+            this.permissions = permissions;
+            this.folderPaths = folderPaths;
+        }
+
+        public Optional<Decision> decisionForDocument(String documentId, String folderId) {
+            if (workspaceAdmin) {
+                return Optional.of(adminDecision());
+            }
+            return resolve(permissions, ResourceType.DOCUMENT, documentId, ancestorsOf(folderId));
+        }
+
+        public Optional<Decision> decisionForFolder(String folderId) {
+            if (workspaceAdmin) {
+                return Optional.of(adminDecision());
+            }
+            List<String> segments = segmentsOf(folderPaths.get(folderId));
+            // 자기 자신은 직접 권한으로 따로 보므로 조상에서 뺀다
+            return resolve(permissions, ResourceType.FOLDER, folderId,
+                    segments.subList(0, Math.max(0, segments.size() - 1)));
+        }
+
+        public boolean canViewDocument(String documentId, String folderId) {
+            return decisionForDocument(documentId, folderId)
+                    .filter(d -> d.allows(PermissionAction.VIEW)).isPresent();
+        }
+
+        public boolean canViewFolder(String folderId) {
+            return decisionForFolder(folderId)
+                    .filter(d -> d.allows(PermissionAction.VIEW)).isPresent();
+        }
+
+        /** 루트 문서는 상속받을 조상이 없다. */
+        private List<String> ancestorsOf(String folderId) {
+            return folderId == null ? List.of() : segmentsOf(folderPaths.get(folderId));
+        }
+
+        private List<String> segmentsOf(String path) {
+            if (path == null) {
+                return List.of();
+            }
+            return java.util.Arrays.stream(path.split("/")).filter(s -> !s.isBlank()).toList();
+        }
+    }
+
+    private Decision adminDecision() {
+        return new Decision(PermissionLevel.OWNER, true, true);
     }
 
     /**
