@@ -3,10 +3,14 @@ package com.fixlog;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceMemberRepository;
+import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
+import com.fixlog.application.service.WorkspaceContext;
+import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.UserEntity;
@@ -39,15 +43,22 @@ class FolderServiceCharacterizationTest {
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
     @Autowired UserRepository userRepository;
+    @Autowired WorkspaceRepository workspaceRepository;
+    @Autowired WorkspaceMemberRepository workspaceMemberRepository;
 
     private FolderService folderService;
     private DocumentService documentService;
+    private WorkspaceService workspaceService;
 
     @BeforeEach
     void setUp() {
-        folderService = new FolderService(folderRepository, documentRepository);
+        WorkspaceContext workspaceContext =
+                new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
+        workspaceService = new WorkspaceService(
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+        folderService = new FolderService(folderRepository, documentRepository, workspaceContext);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {});
+                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {}, workspaceContext);
     }
 
     @AfterEach
@@ -57,6 +68,7 @@ class FolderServiceCharacterizationTest {
 
     private void loginAsNewUser(String id) {
         UserEntity user = userRepository.save(new UserEntity(id, id + "@fixlog.dev"));
+        workspaceService.ensurePersonalWorkspace(user);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(user, null, List.of()));
     }

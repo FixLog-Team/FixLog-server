@@ -38,13 +38,16 @@ public class DocumentService {
     private final DocumentPdfGenerator pdfGenerator;
     private final DocumentHistoryService historyService;
     private final ApplicationEventPublisher eventPublisher;
+    private final WorkspaceContext workspaceContext;
 
     public DocumentService(DocumentRepository documentRepository,
                            FolderRepository folderRepository,
                            DocumentTextExtractor textExtractor,
                            DocumentPdfGenerator pdfGenerator,
                            DocumentHistoryService historyService,
-                           ApplicationEventPublisher eventPublisher) {
+                           ApplicationEventPublisher eventPublisher,
+                           WorkspaceContext workspaceContext) {
+        this.workspaceContext = workspaceContext;
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.textExtractor = textExtractor;
@@ -59,6 +62,7 @@ public class DocumentService {
         int ordinal = documentRepository.maxOrdinal(req.folderId(), userId) + 1;
         DocumentEntity doc = new DocumentEntity(
                 UUID.randomUUID().toString(),
+                workspaceContext.requireCurrentWorkspaceId(),
                 req.folderId(),
                 req.title() != null && !req.title().isBlank() ? req.title() : "제목 없음",
                 "[]",
@@ -146,8 +150,10 @@ public class DocumentService {
         DocumentEntity original = loadOwned(documentId);
         String userId = requireUserId();
         int ordinal = documentRepository.maxOrdinal(original.getFolderId(), userId) + 1;
+        // 복제본은 원본과 같은 워크스페이스에 둔다. 현재 컨텍스트를 쓰면 원본과 갈라질 수 있다.
         DocumentEntity copy = new DocumentEntity(
                 UUID.randomUUID().toString(),
+                original.getWorkspaceId(),
                 original.getFolderId(),
                 original.getTitle() + " (1)",
                 original.getBlocks(),
