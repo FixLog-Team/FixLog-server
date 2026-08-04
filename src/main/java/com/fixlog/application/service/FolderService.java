@@ -50,15 +50,18 @@ public class FolderService {
     private final DocumentRepository documentRepository;
     private final WorkspaceContext workspaceContext;
     private final PermissionEvaluator permissionEvaluator;
+    private final PermissionService permissionService;
 
     public FolderService(FolderRepository folderRepository,
                          DocumentRepository documentRepository,
                          WorkspaceContext workspaceContext,
-                         PermissionEvaluator permissionEvaluator) {
+                         PermissionEvaluator permissionEvaluator,
+                         PermissionService permissionService) {
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
         this.workspaceContext = workspaceContext;
         this.permissionEvaluator = permissionEvaluator;
+        this.permissionService = permissionService;
     }
 
     @Transactional
@@ -84,7 +87,12 @@ public class FolderService {
                 nextOrdinal(request.parentId(), workspaceId),
                 userId,
                 parentPath(request.parentId(), workspaceId));
-        return folderRepository.save(folder);
+
+        FolderEntity saved = folderRepository.save(folder);
+        // 만든 사람에게 소유 권한을 함께 준다 (DocumentService.saveWithOwnership과 같은 이유)
+        permissionService.grantCreatorOwnership(
+                workspaceId, ResourceType.FOLDER, saved.getFolderId(), UUID.fromString(userId));
+        return saved;
     }
 
     /** 같은 부모 안에서 마지막 폴더 다음 순번. 형제가 없으면 0. */
