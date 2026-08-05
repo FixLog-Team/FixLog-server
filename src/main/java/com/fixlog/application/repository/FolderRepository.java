@@ -17,6 +17,8 @@ public interface FolderRepository extends JpaRepository<FolderEntity, String> {
 
     List<FolderEntity> findByWorkspaceIdAndUsable(UUID workspaceId, Integer usable);
 
+    long countByWorkspaceIdAndUsable(UUID workspaceId, Integer usable);
+
     /** 휴지통 목록용. */
     List<FolderEntity> findByWorkspaceIdAndUsableOrderByDeletedAtDesc(UUID workspaceId, Integer usable);
 
