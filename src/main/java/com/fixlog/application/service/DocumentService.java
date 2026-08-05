@@ -51,6 +51,7 @@ public class DocumentService {
     private final PermissionEvaluator permissionEvaluator;
     private final PermissionService permissionService;
     private final DocumentRevisionRepository revisionRepository;
+    private final SecurityPolicyService securityPolicyService;
 
     public DocumentService(DocumentRepository documentRepository,
                            FolderRepository folderRepository,
@@ -60,7 +61,8 @@ public class DocumentService {
                            WorkspaceContext workspaceContext,
                            PermissionEvaluator permissionEvaluator,
                            PermissionService permissionService,
-                           DocumentRevisionRepository revisionRepository) {
+                           DocumentRevisionRepository revisionRepository,
+                           SecurityPolicyService securityPolicyService) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.textExtractor = textExtractor;
@@ -70,6 +72,7 @@ public class DocumentService {
         this.permissionEvaluator = permissionEvaluator;
         this.permissionService = permissionService;
         this.revisionRepository = revisionRepository;
+        this.securityPolicyService = securityPolicyService;
     }
 
     @Transactional
@@ -296,7 +299,8 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public byte[] downloadPdf(String documentId) {
-        return pdfGenerator.generate(loadForDownload(documentId));
+        DocumentEntity doc = loadForDownload(documentId);
+        return pdfGenerator.generate(doc, watermarkFor(doc));
     }
 
     public record PdfResult(String title, byte[] bytes) {}
@@ -304,7 +308,20 @@ public class DocumentService {
     @Transactional(readOnly = true)
     public PdfResult downloadPdfResult(String documentId) {
         DocumentEntity doc = loadForDownload(documentId);
-        return new PdfResult(doc.getTitle(), pdfGenerator.generate(doc));
+        return new PdfResult(doc.getTitle(), pdfGenerator.generate(doc, watermarkFor(doc)));
+    }
+
+    /**
+     * 정책이 워터마크를 강제하면 내려받는 사람을 각인한다 (FR-SEC-003).
+     * 반출을 막지는 못하지만 유출 시 경로를 남긴다.
+     */
+    private String watermarkFor(DocumentEntity doc) {
+        if (!securityPolicyService.effectivePolicy(doc.getWorkspaceId()).isEnforceWatermark()) {
+            return null;
+        }
+        var user = com.fixlog.common.security.SecurityUtil.getCurrentUser();
+        String who = user == null ? requireUserId() : user.getUserName() + " (" + user.getEmail() + ")";
+        return "FixLog · " + who + " · " + java.time.Instant.now();
     }
 
     /** 다운로드는 레벨이 아니라 별도 플래그로 막힌다 (FR-PRM-002). */

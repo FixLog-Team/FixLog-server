@@ -25,6 +25,15 @@ public class DocumentPdfGenerator {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public byte[] generate(DocumentEntity doc) {
+        return generate(doc, null);
+    }
+
+    /**
+     * 워터마크를 각인해 내보낸다 (FR-SEC-003).
+     *
+     * <p>반출 자체를 막지는 못한다. 유출됐을 때 누구를 통해 나갔는지 남기는 것이 목적이다.
+     */
+    public byte[] generate(DocumentEntity doc, String watermark) {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             PdfWriter writer = new PdfWriter(baos);
             PdfDocument pdf = new PdfDocument(writer);
@@ -41,6 +50,12 @@ public class DocumentPdfGenerator {
                     layout.setFont(font);
                 } catch (Exception fontEx) {
                     // 폰트 미존재 시 기본 폰트 폴백 (운영 환경에서는 NanumGothic.ttf 필수)
+                }
+
+                if (watermark != null && !watermark.isBlank()) {
+                    layout.add(new Paragraph(watermark)
+                            .setFontSize(9)
+                            .setFontColor(new com.itextpdf.kernel.colors.DeviceRgb(150, 150, 150)));
                 }
 
                 layout.add(new Paragraph(doc.getTitle()).setBold().setFontSize(20));
