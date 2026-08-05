@@ -5,6 +5,7 @@ import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
+import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
@@ -17,6 +18,7 @@ import com.fixlog.application.repository.DocumentRevisionRepository;
 import com.fixlog.application.service.AuditService;
 import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
+import com.fixlog.application.service.SecurityPolicyService;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.code.Code;
@@ -63,6 +65,7 @@ class SharingTest {
     @Autowired GroupRepository groupRepository;
     @Autowired GroupMemberRepository groupMemberRepository;
     @Autowired PermissionRepository permissionRepository;
+    @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
     @Autowired DocumentRevisionRepository revisionRepository;
     @Autowired FolderRepository folderRepository;
@@ -85,14 +88,16 @@ class SharingTest {
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
-                folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository));
+                folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository), policyRepository);
         permissionService = new PermissionService(permissionRepository, workspaceMemberRepository,
                 groupRepository, userRepository, evaluator, workspaceContext);
+        SecurityPolicyService securityPolicyService =
+                new SecurityPolicyService(policyRepository, workspaceService);
         folderService = new FolderService(folderRepository, documentRepository,
                 workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {},
-                workspaceContext, evaluator, permissionService, revisionRepository);
+                workspaceContext, evaluator, permissionService, revisionRepository, securityPolicyService);
 
         UserEntity admin = signUp("admin");
         loginAs(admin);

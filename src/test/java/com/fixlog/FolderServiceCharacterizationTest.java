@@ -6,6 +6,7 @@ import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
+import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.DocumentPdfGenerator;
@@ -17,6 +18,7 @@ import com.fixlog.application.repository.DocumentRevisionRepository;
 import com.fixlog.application.service.AuditService;
 import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
+import com.fixlog.application.service.SecurityPolicyService;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.code.Code;
@@ -54,6 +56,7 @@ class FolderServiceCharacterizationTest {
     @Autowired WorkspaceRepository workspaceRepository;
     @Autowired WorkspaceMemberRepository workspaceMemberRepository;
     @Autowired PermissionRepository permissionRepository;
+    @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
     @Autowired DocumentRevisionRepository revisionRepository;
     @Autowired GroupRepository groupRepository;
@@ -71,13 +74,15 @@ class FolderServiceCharacterizationTest {
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
         PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
                 permissionRepository, workspaceMemberRepository, groupMemberRepository,
-                groupRepository, folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository));
+                groupRepository, folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository), policyRepository);
                 PermissionService permissionService = new PermissionService(
                 permissionRepository, workspaceMemberRepository, groupRepository,
                 userRepository, permissionEvaluator, workspaceContext);
+        SecurityPolicyService securityPolicyService =
+                new SecurityPolicyService(policyRepository, workspaceService);
 folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {}, workspaceContext, permissionEvaluator, permissionService, revisionRepository);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {}, workspaceContext, permissionEvaluator, permissionService, revisionRepository, securityPolicyService);
     }
 
     @AfterEach
