@@ -7,6 +7,7 @@ import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
+import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
@@ -17,6 +18,7 @@ import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
 import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
+import com.fixlog.application.service.SecurityPolicyService;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.code.Code;
@@ -64,6 +66,7 @@ class RevisionAndAuditTest {
     @Autowired GroupRepository groupRepository;
     @Autowired GroupMemberRepository groupMemberRepository;
     @Autowired PermissionRepository permissionRepository;
+    @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
     @Autowired DocumentRevisionRepository revisionRepository;
     @Autowired FolderRepository folderRepository;
@@ -87,14 +90,16 @@ class RevisionAndAuditTest {
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext,
-                new AuditService(auditLogRepository));
+                new AuditService(auditLogRepository), policyRepository);
         permissionService = new PermissionService(permissionRepository, workspaceMemberRepository,
                 groupRepository, userRepository, evaluator, workspaceContext);
+        SecurityPolicyService securityPolicyService =
+                new SecurityPolicyService(policyRepository, workspaceService);
         FolderService folderService = new FolderService(folderRepository, documentRepository,
                 workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {},
-                workspaceContext, evaluator, permissionService, revisionRepository);
+                workspaceContext, evaluator, permissionService, revisionRepository, securityPolicyService);
 
         // 감사 로그는 별도 트랜잭션에 커밋되므로 테스트 롤백으로 지워지지 않는다
         auditLogRepository.deleteAll();
