@@ -36,6 +36,13 @@ public class FolderEntity {
     @Column(name = "usable")
     private Integer usable;
 
+    /** 휴지통 목록에 "언제 누가 지웠는지"를 보여주기 위해 따로 남긴다. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    @Column(name = "deleted_by", length = 100)
+    private String deletedBy;
+
     @Column(name = "create_user", length = 100)
     private String createUser;
 
@@ -104,10 +111,25 @@ public class FolderEntity {
                 .toList();
     }
 
+    /** 행을 지우지 않고 휴지통으로 보낸다. 복원할 수 있어야 하기 때문이다. */
     public void softDelete(String updateUser) {
         this.usable = 0;
+        this.deletedAt = Instant.now();
+        this.deletedBy = updateUser;
         this.updateUser = updateUser;
         this.updateTime = Instant.now();
+    }
+
+    public void restore(String updateUser) {
+        this.usable = 1;
+        this.deletedAt = null;
+        this.deletedBy = null;
+        this.updateUser = updateUser;
+        this.updateTime = Instant.now();
+    }
+
+    public boolean isTrashed() {
+        return Integer.valueOf(0).equals(usable);
     }
 
     public String getFolderId() {
@@ -152,5 +174,13 @@ public class FolderEntity {
 
     public Instant getUpdateTime() {
         return updateTime;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public String getDeletedBy() {
+        return deletedBy;
     }
 }
