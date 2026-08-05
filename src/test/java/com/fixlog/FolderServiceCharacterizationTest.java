@@ -12,6 +12,9 @@ import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
+import com.fixlog.application.repository.AuditLogRepository;
+import com.fixlog.application.repository.DocumentRevisionRepository;
+import com.fixlog.application.service.AuditService;
 import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
 import com.fixlog.application.service.WorkspaceContext;
@@ -51,6 +54,8 @@ class FolderServiceCharacterizationTest {
     @Autowired WorkspaceRepository workspaceRepository;
     @Autowired WorkspaceMemberRepository workspaceMemberRepository;
     @Autowired PermissionRepository permissionRepository;
+    @Autowired AuditLogRepository auditLogRepository;
+    @Autowired DocumentRevisionRepository revisionRepository;
     @Autowired GroupRepository groupRepository;
     @Autowired GroupMemberRepository groupMemberRepository;
 
@@ -66,13 +71,13 @@ class FolderServiceCharacterizationTest {
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
         PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
                 permissionRepository, workspaceMemberRepository, groupMemberRepository,
-                groupRepository, folderRepository, documentRepository, workspaceContext);
+                groupRepository, folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository));
                 PermissionService permissionService = new PermissionService(
                 permissionRepository, workspaceMemberRepository, groupRepository,
                 userRepository, permissionEvaluator, workspaceContext);
 folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {}, workspaceContext, permissionEvaluator, permissionService);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {}, workspaceContext, permissionEvaluator, permissionService, revisionRepository);
     }
 
     @AfterEach
