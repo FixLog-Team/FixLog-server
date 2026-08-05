@@ -59,6 +59,22 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
             """)
     List<FolderDocumentCount> countDocumentsByFolder(@Param("workspaceId") UUID workspaceId);
 
+    long countByWorkspaceIdAndUsable(UUID workspaceId, Integer usable);
+
+    /** 관리자 콘솔의 사용자별 분포. */
+    @Query("""
+            select d.createUser as userId, count(d) as documentCount from DocumentEntity d
+            where d.workspaceId = :workspaceId and d.usable = 1
+            group by d.createUser
+            """)
+    List<UserDocumentCount> countDocumentsByUser(@Param("workspaceId") UUID workspaceId);
+
+    interface UserDocumentCount {
+        String getUserId();
+
+        long getDocumentCount();
+    }
+
     interface FolderDocumentCount {
         String getFolderId();
 
