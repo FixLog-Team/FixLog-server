@@ -52,6 +52,9 @@ public interface PermissionRepository extends JpaRepository<PermissionEntity, UU
 
     List<PermissionEntity> findByResourceTypeAndResourceId(ResourceType resourceType, String resourceId);
 
+    /** 관리자 콘솔의 권한 현황. 워크스페이스 밖은 보이지 않는다. */
+    List<PermissionEntity> findByWorkspaceIdOrderByCreateAtDesc(UUID workspaceId);
+
     Optional<PermissionEntity> findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
             ResourceType resourceType, String resourceId, PrincipalType principalType, UUID principalId);
 }
