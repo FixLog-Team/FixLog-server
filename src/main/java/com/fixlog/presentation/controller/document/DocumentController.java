@@ -10,6 +10,7 @@ import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import com.fixlog.presentation.dto.request.DocumentTitleRequest;
 import com.fixlog.presentation.dto.response.DocumentDuplicateDto;
 import com.fixlog.presentation.dto.response.DocumentDto;
+import com.fixlog.presentation.dto.response.DocumentRevisionDto;
 import com.fixlog.presentation.dto.response.DocumentPageDto;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
@@ -91,6 +92,24 @@ public class DocumentController {
     public Response move(@PathVariable String documentId,
                          @RequestBody DocumentMoveRequest req) {
         return DataResponse.success(DocumentDto.from(documentService.move(documentId, req)));
+    }
+
+    /** 리비전 목록. 본문 없이 언제 누가 저장했는지만 내려준다 (FR-REV-004). */
+    @GetMapping("/{documentId}/revisions")
+    public Response revisions(@PathVariable String documentId) {
+        return DataResponse.success(documentService.revisions(documentId).stream()
+                .map(DocumentRevisionDto::from).toList());
+    }
+
+    @GetMapping("/{documentId}/revisions/{revisionNo}")
+    public Response revision(@PathVariable String documentId, @PathVariable int revisionNo) {
+        return DataResponse.success(documentService.revision(documentId, revisionNo));
+    }
+
+    /** 해당 시점으로 되돌린다. 되돌린 결과도 새 리비전으로 남는다 (FR-REV-006). */
+    @PostMapping("/{documentId}/revisions/{revisionNo}/restore")
+    public Response restore(@PathVariable String documentId, @PathVariable int revisionNo) {
+        return DataResponse.success(DocumentDto.from(documentService.restore(documentId, revisionNo)));
     }
 
     @GetMapping("/{documentId}/download")

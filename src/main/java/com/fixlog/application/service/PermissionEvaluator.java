@@ -8,6 +8,8 @@ import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
+import com.fixlog.domain.model.AuditAction;
+import com.fixlog.domain.model.AuditResult;
 import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.domain.model.FolderEntity;
 import com.fixlog.domain.model.GroupEntity;
@@ -63,6 +65,7 @@ public class PermissionEvaluator {
     private final FolderRepository folderRepository;
     private final DocumentRepository documentRepository;
     private final WorkspaceContext workspaceContext;
+    private final AuditService auditService;
 
     public PermissionEvaluator(PermissionRepository permissionRepository,
                                WorkspaceMemberRepository workspaceMemberRepository,
@@ -70,7 +73,8 @@ public class PermissionEvaluator {
                                GroupRepository groupRepository,
                                FolderRepository folderRepository,
                                DocumentRepository documentRepository,
-                               WorkspaceContext workspaceContext) {
+                               WorkspaceContext workspaceContext,
+                               AuditService auditService) {
         this.permissionRepository = permissionRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.groupMemberRepository = groupMemberRepository;
@@ -78,6 +82,7 @@ public class PermissionEvaluator {
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
         this.workspaceContext = workspaceContext;
+        this.auditService = auditService;
     }
 
     /**
@@ -91,24 +96,70 @@ public class PermissionEvaluator {
         }
     }
 
-    /** 행위를 허용하지 않으면 예외를 던진다. 호출부는 성공 경로만 신경 쓰면 된다. */
+    /**
+     * 행위를 허용하지 않으면 예외를 던진다. 호출부는 성공 경로만 신경 쓰면 된다.
+     *
+     * <p>허용과 거부를 모두 감사 로그에 남긴다. 판정이 전부 이 지점을 지나므로 기록 지점도
+     * 여기 하나면 된다 — 서비스마다 흩어 두면 새 경로에서 빠뜨리게 된다 (FR-AUD-001).
+     */
     @Transactional(readOnly = true)
     public Decision require(ResourceType resourceType, String resourceId, PermissionAction action) {
-        Decision decision = evaluate(resourceType, resourceId);
-        if (!decision.allows(action)) {
-            throw new BusinessException(Code.FORBIDDEN, "이 작업을 수행할 권한이 없습니다.");
-        }
-        return decision;
+        return audited(resourceType, resourceId, auditActionOf(action), () -> {
+            Decision decision = evaluate(resourceType, resourceId);
+            if (!decision.allows(action)) {
+                throw new BusinessException(Code.FORBIDDEN, "이 작업을 수행할 권한이 없습니다.");
+            }
+            return decision;
+        });
     }
 
     /** 다운로드는 레벨과 분리된 플래그로 판정한다. */
     @Transactional(readOnly = true)
     public Decision requireDownload(ResourceType resourceType, String resourceId) {
-        Decision decision = require(resourceType, resourceId, PermissionAction.VIEW);
-        if (!decision.canDownload()) {
-            throw new BusinessException(Code.FORBIDDEN, "이 문서를 다운로드할 권한이 없습니다.");
+        return audited(resourceType, resourceId, AuditAction.DOWNLOAD, () -> {
+            Decision decision = evaluate(resourceType, resourceId);
+            if (!decision.allows(PermissionAction.VIEW)) {
+                throw new BusinessException(Code.FORBIDDEN, "이 작업을 수행할 권한이 없습니다.");
+            }
+            if (!decision.canDownload()) {
+                throw new BusinessException(Code.FORBIDDEN, "이 문서를 다운로드할 권한이 없습니다.");
+            }
+            return decision;
+        });
+    }
+
+    /** 판정을 감싸 허용·거부를 남긴다. 거부는 본 트랜잭션이 롤백되므로 별도 트랜잭션에 쓴다. */
+    private Decision audited(ResourceType resourceType, String resourceId,
+                             AuditAction auditAction, java.util.function.Supplier<Decision> judgement) {
+        UUID actorId = workspaceContext.requireCurrentUserId();
+        try {
+            Decision decision = judgement.get();
+            auditService.record(workspaceIdQuietly(resourceType, resourceId), actorId, auditAction,
+                    resourceType, resourceId, AuditResult.ALLOWED, decision.workspaceAdmin());
+            return decision;
+        } catch (BusinessException e) {
+            auditService.record(workspaceIdQuietly(resourceType, resourceId), actorId, auditAction,
+                    resourceType, resourceId, AuditResult.DENIED, false);
+            throw e;
         }
-        return decision;
+    }
+
+    /** 리소스가 없으면 남길 워크스페이스도 없다. 기록을 위해 예외를 새로 던지지는 않는다. */
+    private UUID workspaceIdQuietly(ResourceType resourceType, String resourceId) {
+        try {
+            return loadTarget(resourceType, resourceId).workspaceId();
+        } catch (BusinessException e) {
+            return null;
+        }
+    }
+
+    private AuditAction auditActionOf(PermissionAction action) {
+        return switch (action) {
+            case VIEW -> AuditAction.VIEW;
+            case EDIT -> AuditAction.EDIT;
+            case DELETE -> AuditAction.DELETE;
+            case SHARE -> AuditAction.SHARE;
+        };
     }
 
     @Transactional(readOnly = true)
