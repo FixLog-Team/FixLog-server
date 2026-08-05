@@ -35,6 +35,9 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
     List<DocumentEntity> findByWorkspaceIdAndUsableOrderByOrdinalAscCreateTimeAsc(
             UUID workspaceId, Integer usable);
 
+    /** 휴지통 목록용. 삭제된 문서를 최근 삭제순으로 가져온다. */
+    List<DocumentEntity> findByWorkspaceIdAndUsableOrderByDeletedAtDesc(UUID workspaceId, Integer usable);
+
     /** 같은 폴더 안 최대 ordinal. 문서가 없거나 값이 NULL이면 -1. */
     @Query("""
             select coalesce(max(d.ordinal), -1) from DocumentEntity d
