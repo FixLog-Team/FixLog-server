@@ -9,6 +9,9 @@ import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.FolderService;
+import com.fixlog.application.repository.AuditLogRepository;
+import com.fixlog.application.repository.DocumentRevisionRepository;
+import com.fixlog.application.service.AuditService;
 import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
 import com.fixlog.application.service.WorkspaceContext;
@@ -52,6 +55,8 @@ class PermissionEvaluatorTest {
     @Autowired GroupRepository groupRepository;
     @Autowired GroupMemberRepository groupMemberRepository;
     @Autowired PermissionRepository permissionRepository;
+    @Autowired AuditLogRepository auditLogRepository;
+    @Autowired DocumentRevisionRepository revisionRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
 
@@ -71,7 +76,7 @@ class PermissionEvaluatorTest {
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
         evaluator = new PermissionEvaluator(permissionRepository, workspaceMemberRepository,
                 groupMemberRepository, groupRepository, folderRepository, documentRepository,
-                workspaceContext);
+                workspaceContext, new AuditService(auditLogRepository));
                 PermissionService permissionService = new PermissionService(
                 permissionRepository, workspaceMemberRepository, groupRepository,
                 userRepository, evaluator, workspaceContext);
