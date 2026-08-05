@@ -66,6 +66,7 @@ public class PermissionEvaluator {
     private final DocumentRepository documentRepository;
     private final WorkspaceContext workspaceContext;
     private final AuditService auditService;
+    private final com.fixlog.application.repository.SecurityPolicyRepository policyRepository;
 
     public PermissionEvaluator(PermissionRepository permissionRepository,
                                WorkspaceMemberRepository workspaceMemberRepository,
@@ -74,7 +75,8 @@ public class PermissionEvaluator {
                                FolderRepository folderRepository,
                                DocumentRepository documentRepository,
                                WorkspaceContext workspaceContext,
-                               AuditService auditService) {
+                               AuditService auditService,
+                               com.fixlog.application.repository.SecurityPolicyRepository policyRepository) {
         this.permissionRepository = permissionRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.groupMemberRepository = groupMemberRepository;
@@ -83,6 +85,7 @@ public class PermissionEvaluator {
         this.documentRepository = documentRepository;
         this.workspaceContext = workspaceContext;
         this.auditService = auditService;
+        this.policyRepository = policyRepository;
     }
 
     /**
@@ -105,6 +108,8 @@ public class PermissionEvaluator {
     @Transactional(readOnly = true)
     public Decision require(ResourceType resourceType, String resourceId, PermissionAction action) {
         return audited(resourceType, resourceId, auditActionOf(action), () -> {
+            // 정책이 먼저다. 개별 권한은 물론 관리자 특권보다도 위다 (FR-SEC-002)
+            requirePolicyAllows(resourceType, resourceId, action);
             Decision decision = evaluate(resourceType, resourceId);
             if (!decision.allows(action)) {
                 throw new BusinessException(Code.FORBIDDEN, "이 작업을 수행할 권한이 없습니다.");
@@ -117,6 +122,10 @@ public class PermissionEvaluator {
     @Transactional(readOnly = true)
     public Decision requireDownload(ResourceType resourceType, String resourceId) {
         return audited(resourceType, resourceId, AuditAction.DOWNLOAD, () -> {
+            if (!policyOf(resourceType, resourceId).isAllowDownload()) {
+                throw new BusinessException(Code.FORBIDDEN,
+                        "워크스페이스 정책에서 다운로드가 금지되어 있습니다.");
+            }
             Decision decision = evaluate(resourceType, resourceId);
             if (!decision.allows(PermissionAction.VIEW)) {
                 throw new BusinessException(Code.FORBIDDEN, "이 작업을 수행할 권한이 없습니다.");
@@ -126,6 +135,27 @@ public class PermissionEvaluator {
             }
             return decision;
         });
+    }
+
+    /**
+     * 워크스페이스 정책은 개별 권한 위에 있다. 권한이 허용해도 정책이 금지하면 금지된다.
+     * 관리자에게도 적용된다 — 정책은 관리자가 스스로에게 건 제약이기 때문이다.
+     */
+    private void requirePolicyAllows(ResourceType resourceType, String resourceId, PermissionAction action) {
+        if (action == PermissionAction.SHARE && !policyOf(resourceType, resourceId).isAllowSharing()) {
+            throw new BusinessException(Code.FORBIDDEN,
+                    "워크스페이스 정책에서 공유가 금지되어 있습니다.");
+        }
+    }
+
+    /** 정책 행이 없으면 기본값으로 본다. */
+    private com.fixlog.domain.model.SecurityPolicyEntity policyOf(ResourceType resourceType, String resourceId) {
+        UUID workspaceId = workspaceIdQuietly(resourceType, resourceId);
+        if (workspaceId == null) {
+            return new com.fixlog.domain.model.SecurityPolicyEntity(new UUID(0L, 0L));
+        }
+        return policyRepository.findById(workspaceId)
+                .orElseGet(() -> new com.fixlog.domain.model.SecurityPolicyEntity(workspaceId));
     }
 
     /** 판정을 감싸 허용·거부를 남긴다. 거부는 본 트랜잭션이 롤백되므로 별도 트랜잭션에 쓴다. */
