@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/ai")
@@ -31,11 +30,10 @@ public class AIController {
 
     @PostMapping("/analyze")
     public DataResponse<DocumentSummaryResponse> analyzeDocument(@Valid @RequestBody DocumentRequest request) {
-        Map<String, Object> result = documentAIService.summarizeAndTag(request.content());
-        String summary = (String) result.get("summary");
-        List<String> tags = (List<String>) result.get("tags");
-        List<Double> embedding = embeddingService.generateEmbedding(summary);
-        return DataResponse.success("문서 분석이 완료되었습니다.", new DocumentSummaryResponse(summary, tags, embedding));
+        DocumentAIService.DocumentAnalysis analysis = documentAIService.analyzeDocument(request.content());
+        List<Double> embedding = embeddingService.generateEmbedding(analysis.summary());
+        return DataResponse.success("문서 분석이 완료되었습니다.",
+                new DocumentSummaryResponse(analysis.summary(), analysis.tags(), embedding));
     }
 
     @PostMapping("/summarize")
