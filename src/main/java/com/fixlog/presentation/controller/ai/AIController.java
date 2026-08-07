@@ -30,7 +30,7 @@ public class AIController {
 
     @PostMapping("/analyze")
     public DataResponse<DocumentSummaryResponse> analyzeDocument(@Valid @RequestBody DocumentRequest request) {
-        DocumentAIService.DocumentAnalysis analysis = documentAIService.analyzeDocument(request.content());
+        DocumentAIService.DocumentAnalysisDto analysis = documentAIService.analyzeDocument(request.content());
         List<Double> embedding = embeddingService.generateEmbedding(analysis.summary());
         return DataResponse.success("문서 분석이 완료되었습니다.",
                 new DocumentSummaryResponse(analysis.summary(), analysis.tags(), embedding));

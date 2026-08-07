@@ -93,7 +93,7 @@ public abstract class AbstractAIService {
     }
 
     /** 요약 + 태그 통합 결과 */
-    public record DocumentAnalysis(String summary, List<String> tags) {
+    public record DocumentAnalysisDto(String summary, List<String> tags) {
     }
 
     public String summarizeDocument(String content) {
@@ -109,7 +109,7 @@ public abstract class AbstractAIService {
      * 요약과 태그를 단일 호출로 생성한다.
      * JSON 파싱에 실패하면 개별 호출 방식으로 폴백한다.
      */
-    public DocumentAnalysis analyzeDocument(String content) {
+    public DocumentAnalysisDto analyzeDocument(String content) {
         String response = callAndLog("analyze", ANALYZE_PROMPT, content);
         try {
             JsonNode root = objectMapper.readTree(stripCodeFence(response));
@@ -122,12 +122,12 @@ public abstract class AbstractAIService {
             if (summary.isBlank()) {
                 throw new BusinessException(Code.UNKNOWN, "요약 결과가 비어 있습니다.");
             }
-            return new DocumentAnalysis(summary, tags);
+            return new DocumentAnalysisDto(summary, tags);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
             // 모델이 JSON 형식을 지키지 않은 경우: 기존 개별 호출 방식으로 폴백
-            return new DocumentAnalysis(summarizeDocument(content), generateTags(content));
+            return new DocumentAnalysisDto(summarizeDocument(content), generateTags(content));
         }
     }
 

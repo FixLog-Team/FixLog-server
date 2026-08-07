@@ -34,6 +34,8 @@ public class DocumentAIService extends AbstractAIService {
 
     /**
      * 문서 요약. contentHash가 동일한 캐시가 있으면 LLM 호출 없이 캐시를 반환한다.
+     * 수 초가 걸리는 LLM 외부 호출 동안 DB 커넥션을 점유하지 않도록
+     * 의도적으로 트랜잭션을 걸지 않는다. (캐시 저장은 리포지토리 내부 트랜잭션으로 처리)
      */
     public String summarizeDocumentById(String documentId) {
         String userId = SecurityUtil.getCurrentUserId();
