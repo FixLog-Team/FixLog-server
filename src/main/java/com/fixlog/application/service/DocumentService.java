@@ -86,9 +86,11 @@ public class DocumentService {
         String canonicalJson = normalizeBlocks(req.blocks());
         String plainText = textExtractor.extract(canonicalJson);
         String hash = hashContent(canonicalJson);
+        boolean contentChanged = !hash.equals(doc.getContentHash());
+        boolean titleChanged = !java.util.Objects.equals(req.title(), doc.getTitle());
         doc.updateContent(req.title(), canonicalJson, plainText, hash, requireUserId());
         DocumentEntity saved = documentRepository.save(doc);
-        eventPublisher.publishEvent(new DocumentSavedEvent(saved));
+        eventPublisher.publishEvent(new DocumentSavedEvent(saved, contentChanged, titleChanged));
         return saved;
     }
 
