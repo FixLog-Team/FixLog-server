@@ -26,6 +26,14 @@ public class DocumentSearchService {
     }
 
     public List<Document> similaritySearch(String query, int topK) {
+        return similaritySearch(query, topK, SearchRequest.SIMILARITY_THRESHOLD_ACCEPT_ALL);
+    }
+
+    /**
+     * 유사도 threshold를 적용한 검색. 관련성 낮은 청크를 걸러
+     * LLM 컨텍스트에 불필요한 토큰이 들어가는 것을 막는다.
+     */
+    public List<Document> similaritySearch(String query, int topK, double similarityThreshold) {
         String userId = SecurityUtil.getCurrentUserId();
         if (userId == null) throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
 
@@ -34,6 +42,7 @@ public class DocumentSearchService {
                 SearchRequest.builder()
                         .query(query)
                         .topK(topK)
+                        .similarityThreshold(similarityThreshold)
                         .filterExpression(b.eq("createUser", userId).build())
                         .build()
         );
