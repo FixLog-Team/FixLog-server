@@ -2,4 +2,4 @@ package com.fixlog.presentation.dto.response;
 
 import java.util.List;
 
-public record AskResponse(String answer, List<SearchResultDto> references) {}
+public record AskResponse(String answer, List<SearchResultDto> references, String conversationId) {}

@@ -9,7 +9,9 @@ public record AskRequest(
         @NotBlank(message = "question은 필수입니다.")
         @Size(max = 2000, message = "question은 2000자를 초과할 수 없습니다.")
         String question,
-        @Min(1) @Max(20) Integer topK
+        @Min(1) @Max(20) Integer topK,
+        @Size(max = 100, message = "conversationId는 100자를 초과할 수 없습니다.")
+        String conversationId
 ) {
     public AskRequest {
         if (topK == null) topK = 5;

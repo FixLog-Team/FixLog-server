@@ -7,6 +7,7 @@ import com.fixlog.common.response.DataResponse;
 import com.fixlog.presentation.dto.request.AskRequest;
 import com.fixlog.presentation.dto.request.DocumentRequest;
 import com.fixlog.presentation.dto.response.AskResponse;
+import com.fixlog.presentation.dto.response.ChatMessageDto;
 import com.fixlog.presentation.dto.response.DocumentSummaryResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -58,6 +59,15 @@ public class AIController {
 
     @PostMapping("/ask")
     public DataResponse<AskResponse> ask(@Valid @RequestBody AskRequest request) {
-        return DataResponse.success("답변 생성이 완료되었습니다.", documentQAService.ask(request.question(), request.topK()));
+        return DataResponse.success("답변 생성이 완료되었습니다.",
+                documentQAService.ask(request.question(), request.topK(), request.conversationId()));
+    }
+
+    @GetMapping("/conversations/{conversationId}/messages")
+    public DataResponse<List<ChatMessageDto>> getConversationMessages(@PathVariable String conversationId) {
+        List<ChatMessageDto> messages = documentQAService.getConversationMessages(conversationId).stream()
+                .map(ChatMessageDto::from)
+                .toList();
+        return DataResponse.success("대화 이력 조회가 완료되었습니다.", messages);
     }
 }
