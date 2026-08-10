@@ -688,6 +688,10 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 }
 ```
 
+> **이 응답은 제안일 뿐 문서에 저장되지 않습니다.** 라벨로 붙이려면 사용자가 고른 것만
+> `POST /api/documents/{documentId}/labels`로 보냅니다 (→ [라벨 API](#12-라벨-api)).
+> 서버가 "제안 상태"를 들고 있지 않으므로, 수락 전 목록은 화면에서 관리합니다.
+
 ---
 
 ### POST /ai/embedding
@@ -1005,6 +1009,23 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 | `DELETE` | `/api/documents/{documentId}/labels/{labelId}` | 편집 권한 필요 |
 
 같은 이름의 라벨은 워크스페이스에서 하나로 공유되며, 없는 이름을 붙이면 그때 만들어집니다.
+별도의 "라벨 만들기" 단계는 없습니다.
+
+### AI 태그를 라벨로 붙이기
+
+`POST /ai/tags`가 돌려주는 태그는 **제안**입니다. 서버는 제안을 저장하지 않으므로 흐름은
+이렇습니다.
+
+```
+1. POST /ai/tags                          → ["Spring Boot", "JWT", "OAuth2"]
+2. 화면에서 사용자에게 보여주고 고르게 함     (수락 전 목록은 프론트가 들고 있음)
+3. 고른 것만 하나씩
+   POST /api/documents/{documentId}/labels  { "labelName": "Spring Boot" }
+```
+
+**AI 결과는 항상 제안이고 사용자가 수락해야 반영된다**는 원칙을 이 분담으로 지킵니다.
+서버에 "제안됨/수락됨" 상태를 두지 않는 이유는, 수락되지 않은 제안은 아무 데도 남을 필요가
+없기 때문입니다. 사용자가 화면을 떠나면 그냥 사라지는 것이 맞습니다.
 
 ---
 
