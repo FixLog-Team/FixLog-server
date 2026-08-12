@@ -1,1 +1,6 @@
+plugins {
+    // JDK 21 toolchain이 로컬에 없을 때 자동 다운로드
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 rootProject.name = 'fixlog'
