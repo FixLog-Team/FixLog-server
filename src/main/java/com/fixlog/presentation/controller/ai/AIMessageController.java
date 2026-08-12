@@ -43,7 +43,9 @@ public class AIMessageController {
     @PostMapping
     @Operation(
             summary = "AI 메시지 전송",
-            description = "사용자 메시지를 저장하고 최근 완료 메시지 최대 20개를 맥락으로 Gemini 답변을 생성해 함께 저장합니다. "
+            description = "사용자 메시지를 저장하고, 사용자의 과거 트러블슈팅 문서를 벡터 검색해 근거(references)와 함께 "
+                    + "Gemini 답변을 생성해 저장합니다. 후속 질문은 대화 맥락 기반으로 독립 질문으로 재작성 후 검색되며, "
+                    + "관련 문서가 없으면 일반 대화로 답변합니다(references 빈 목록). "
                     + "AI 호출 중에는 응답 메시지가 PENDING이며, 성공 시 COMPLETED, 실패 시 FAILED로 변경됩니다."
     )
     @ApiResponses({
@@ -59,7 +61,8 @@ public class AIMessageController {
                          @PathVariable UUID conversationId,
                          @Valid @RequestBody AIMessageCreateRequest request) {
         AIChatService.ChatResult messages = chatService.send(conversationId, request.content());
-        return DataResponse.success(AIChatResponse.from(messages.userMessage(), messages.assistantMessage()));
+        return DataResponse.success(AIChatResponse.from(
+                messages.userMessage(), messages.assistantMessage(), messages.references()));
     }
 
     @GetMapping

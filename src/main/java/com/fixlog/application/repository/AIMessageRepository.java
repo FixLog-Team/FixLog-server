@@ -21,7 +21,7 @@ public interface AIMessageRepository extends JpaRepository<AIMessageEntity, UUID
     Slice<AIMessageEntity> findByConversationIdAndMessageSequenceLessThanOrderByMessageSequenceDesc(
             UUID conversationId, Integer beforeSequence, Pageable pageable);
 
-    List<AIMessageEntity>
-    findTop20ByConversationIdAndStatusAndMessageSequenceLessThanEqualOrderByMessageSequenceDesc(
-            UUID conversationId, AIMessageStatus status, Integer messageSequence);
+    /** 현재 순번 이전의 완료 메시지를 최근순으로 조회 (대화 맥락 윈도우용). */
+    List<AIMessageEntity> findByConversationIdAndStatusAndMessageSequenceLessThanOrderByMessageSequenceDesc(
+            UUID conversationId, AIMessageStatus status, Integer messageSequence, Pageable pageable);
 }
