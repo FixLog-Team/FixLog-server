@@ -80,9 +80,23 @@ export interface AIMessage {
   completeTime: string | null;
 }
 
+/** 답변 근거로 검색된 참고 문서. POST /search 응답과 동일 구조. */
+export interface AIChatReference {
+  documentId: string;
+  title: string;
+  folderId: string | null;
+  excerpt: string;
+  score: number;
+}
+
 export interface AIChatResponse {
   userMessage: AIMessage;
   assistantMessage: AIMessage;
+  /**
+   * 답변 근거로 검색된 참고 문서. 관련 문서가 없으면 빈 배열 (일반 대화 답변).
+   * 메시지 이력에는 저장되지 않으므로, 이력 조회로 복원된 과거 메시지에는 없다.
+   */
+  references: AIChatReference[];
 }
 
 export interface AIMessageSlice {
@@ -218,7 +232,9 @@ setMessages((current) => [...olderPage.items, ...current]);
 3. 요청 중에는 중복 전송을 방지한다.
 4. 전송 버튼을 비활성화하고 AI 답변 생성 중 UI를 표시한다.
 5. 성공하면 응답의 `userMessage`, `assistantMessage`를 메시지 목록 끝에 추가한다.
-6. 실패하면 오류 메시지를 표시하고 메시지 기록을 다시 조회한다.
+6. `references`가 비어 있지 않으면 답변 아래에 참고 문서 카드를 표시한다.
+   (references는 이력에 저장되지 않으므로 화면 상태로만 관리한다)
+7. 실패하면 오류 메시지를 표시하고 메시지 기록을 다시 조회한다.
 
 ```ts
 async function handleSendMessage(rawContent: string) {
