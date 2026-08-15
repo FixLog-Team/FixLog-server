@@ -42,9 +42,10 @@ public class AIMessagePersistenceService {
     }
 
     @Transactional
-    public AIMessageEntity complete(UUID conversationId, UUID messageId, String content) {
+    public AIMessageEntity complete(UUID conversationId, UUID messageId, String content,
+                                    java.util.List<com.fixlog.presentation.dto.response.SearchResultDto> references) {
         AIMessageEntity message = loadMessage(conversationId, messageId);
-        message.complete(content);
+        message.complete(content, references);
         return message;
     }
 

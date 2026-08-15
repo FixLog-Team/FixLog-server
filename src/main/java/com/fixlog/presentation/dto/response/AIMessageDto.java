@@ -5,6 +5,7 @@ import com.fixlog.domain.model.AIMessageRole;
 import com.fixlog.domain.model.AIMessageStatus;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record AIMessageDto(
@@ -15,7 +16,8 @@ public record AIMessageDto(
         String content,
         AIMessageStatus status,
         Instant createTime,
-        Instant completeTime
+        Instant completeTime,
+        List<SearchResultDto> references
 ) {
     public static AIMessageDto from(AIMessageEntity entity) {
         return new AIMessageDto(
@@ -26,7 +28,8 @@ public record AIMessageDto(
                 entity.getContent(),
                 entity.getStatus(),
                 entity.getCreateTime(),
-                entity.getCompleteTime()
+                entity.getCompleteTime(),
+                entity.getReferences()
         );
     }
 }

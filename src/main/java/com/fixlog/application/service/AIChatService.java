@@ -140,7 +140,7 @@ public class AIChatService {
                 throw new IllegalStateException("AI 응답 내용이 비어 있습니다.");
             }
             AIMessageEntity completedMessage = persistenceService.complete(
-                    conversationId, assistantMessage.getMessageId(), generated.answer());
+                    conversationId, assistantMessage.getMessageId(), generated.answer(), generated.references());
             return new ChatResult(messages.userMessage(), completedMessage, generated.references());
         } catch (Exception exception) {
             persistenceService.fail(conversationId, assistantMessage.getMessageId());

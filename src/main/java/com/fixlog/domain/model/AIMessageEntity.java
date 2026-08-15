@@ -1,6 +1,9 @@
 package com.fixlog.domain.model;
 
+import com.fixlog.common.config.ReferencesJsonConverter;
+import com.fixlog.presentation.dto.response.SearchResultDto;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -10,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -43,6 +47,10 @@ public class AIMessageEntity {
 
     @Column(name = "complete_time")
     private Instant completeTime;
+
+    @Convert(converter = ReferencesJsonConverter.class)
+    @Column(name = "reference_docs", columnDefinition = "TEXT")
+    private List<SearchResultDto> references;
 
     protected AIMessageEntity() {
     }
@@ -78,10 +86,11 @@ public class AIMessageEntity {
         );
     }
 
-    public void complete(String content) {
+    public void complete(String content, List<SearchResultDto> references) {
         this.content = content;
         this.status = AIMessageStatus.COMPLETED;
         this.completeTime = Instant.now();
+        this.references = references;
     }
 
     public void fail() {
@@ -119,5 +128,9 @@ public class AIMessageEntity {
 
     public Instant getCompleteTime() {
         return completeTime;
+    }
+
+    public List<SearchResultDto> getReferences() {
+        return references != null ? references : List.of();
     }
 }
