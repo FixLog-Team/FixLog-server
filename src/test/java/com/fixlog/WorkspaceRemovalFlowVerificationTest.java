@@ -1,8 +1,10 @@
 package com.fixlog;
 
+import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
@@ -36,6 +38,7 @@ class WorkspaceRemovalFlowVerificationTest {
 
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
+    @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired UserRepository userRepository;
 
     private FolderService folderService;
@@ -45,7 +48,8 @@ class WorkspaceRemovalFlowVerificationTest {
     void setUp() {
         folderService = new FolderService(folderRepository, documentRepository);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {});
+                new DocumentTextExtractor(), new DocumentPdfGenerator(),
+                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50), event -> {});
     }
 
     @AfterEach
