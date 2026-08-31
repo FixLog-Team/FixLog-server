@@ -41,6 +41,11 @@ public class DocumentSearchService {
     }
 
     public List<Document> similaritySearch(String query, int topK) {
+        return similaritySearch(query, topK, SearchRequest.SIMILARITY_THRESHOLD_ACCEPT_ALL);
+    }
+
+    /** 현재 워크스페이스에서 조회 권한이 있는 문서만 대상으로 유사도 검색한다. */
+    public List<Document> similaritySearch(String query, int topK, double similarityThreshold) {
         UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
         PermissionEvaluator.Scope scope = permissionEvaluator.scopeFor(workspaceId);
 
@@ -55,12 +60,12 @@ public class DocumentSearchService {
         if (accessible.isEmpty()) {
             return List.of();
         }
-
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         return vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(query)
                         .topK(topK)
+                        .similarityThreshold(similarityThreshold)
                         .filterExpression(b.and(
                                 b.eq("workspaceId", workspaceId.toString()),
                                 b.in("documentId", accessible.toArray())).build())

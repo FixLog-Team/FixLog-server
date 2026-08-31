@@ -44,21 +44,16 @@ public class VectorStoreConfig {
         return new JdbcTemplate(dataSource);
     }
 
-    /**
-     * 벡터 테이블 생성 여부. pgvector 전용 DDL이라 Postgres가 아닌 환경(H2 테스트)에서는 꺼야 한다.
-     */
-    @Value("${fixlog.vectorstore.initialize-schema:true}")
-    private boolean initializeVectorSchema;
-
     @Bean
     public VectorStore vectorStore(
             @Qualifier("pgVectorJdbcTemplate") JdbcTemplate jdbcTemplate,
-            @Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel) {
+            @Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel,
+            @Value("${fixlog.vectorstore.initialize-schema:true}") boolean initializeSchema) {
         return PgVectorStore.builder(jdbcTemplate, embeddingModel)
                 .vectorTableName("document_embeddings")
                 .dimensions(1536)
                 .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
-                .initializeSchema(initializeVectorSchema)
+                .initializeSchema(initializeSchema)
                 .build();
     }
 }

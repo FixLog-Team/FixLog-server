@@ -1,13 +1,17 @@
 package com.fixlog.application.service;
 
+import com.fixlog.application.repository.DocumentAiSummaryRepository;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.config.AiUsageProperties;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.AiModelTier;
+import com.fixlog.domain.model.DocumentAiSummaryEntity;
 import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.ResourceType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,7 +20,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class DocumentAIService extends AbstractAIService {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentAIService.class);
+
     private final DocumentRepository documentRepository;
+    private final DocumentAiSummaryRepository summaryRepository;
     private final PermissionEvaluator permissionEvaluator;
     private final AiUsageService aiUsageService;
     private final WorkspaceContext workspaceContext;
@@ -24,12 +31,14 @@ public class DocumentAIService extends AbstractAIService {
 
     public DocumentAIService(@Qualifier("googleGenAiChatModel") ChatModel chatModel,
                              DocumentRepository documentRepository,
+                             DocumentAiSummaryRepository summaryRepository,
                              PermissionEvaluator permissionEvaluator,
                              AiUsageService aiUsageService,
                              WorkspaceContext workspaceContext,
                              AiUsageProperties aiUsageProperties) {
         super(ChatClient.builder(chatModel).build());
         this.documentRepository = documentRepository;
+        this.summaryRepository = summaryRepository;
         this.permissionEvaluator = permissionEvaluator;
         this.aiUsageService = aiUsageService;
         this.workspaceContext = workspaceContext;
@@ -47,7 +56,16 @@ public class DocumentAIService extends AbstractAIService {
                 .findByDocumentIdAndUsable(documentId, Integer.valueOf(1))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
 
-        return withUsageTracking(doc.getWorkspaceId(), () -> summarizeDocumentWithUsage(doc.getPlainText()));
+        DocumentAiSummaryEntity cached = summaryRepository.findById(documentId).orElse(null);
+        if (cached != null && cached.matches(doc.getContentHash())) {
+            log.info("요약 캐시 적중: documentId={}", documentId);
+            return cached.getSummary();
+        }
+
+        String summary = withUsageTracking(doc.getWorkspaceId(),
+                () -> summarizeDocumentWithUsage(doc.getPlainText()));
+        saveSummaryCache(cached, doc, summary);
+        return summary;
     }
 
     /** 문서에 매이지 않은 요약. 현재 워크스페이스의 한도를 쓴다. */
@@ -72,6 +90,20 @@ public class DocumentAIService extends AbstractAIService {
         } catch (RuntimeException e) {
             aiUsageService.record(workspaceId, userId, AiModelTier.FREE, model, 0L, 0L, false);
             throw e;
+        }
+    }
+
+    private void saveSummaryCache(DocumentAiSummaryEntity cached, DocumentEntity doc, String summary) {
+        try {
+            if (cached != null) {
+                cached.updateSummary(doc.getContentHash(), summary);
+                summaryRepository.save(cached);
+            } else {
+                summaryRepository.save(new DocumentAiSummaryEntity(
+                        doc.getDocumentId(), doc.getContentHash(), summary));
+            }
+        } catch (Exception e) {
+            log.warn("요약 캐시 저장 실패: documentId={}", doc.getDocumentId(), e);
         }
     }
 }

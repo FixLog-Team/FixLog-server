@@ -38,16 +38,24 @@ public class DocumentVectorStoreService {
 
     /**
      * 문서 저장 트랜잭션 커밋 이후 비동기로 벡터 인덱싱을 수행한다.
-     * 기존 청크를 삭제하고 새 청크를 임베딩하여 pgvector에 저장한다.
+     * 내용이 바뀐 경우에만 기존 청크를 삭제하고 재임베딩한다.
+     * 제목만 바뀐 경우 임베딩 없이 청크 metadata의 title만 갱신한다.
      */
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDocumentSaved(DocumentSavedEvent event) {
         DocumentEntity doc = event.document();
         try {
-            deleteChunks(doc.getDocumentId());
-            int chunkCount = indexDocument(doc);
-            log.info("벡터 인덱싱 완료: documentId={}, 청크 수={}", doc.getDocumentId(), chunkCount);
+            if (event.contentChanged()) {
+                deleteChunks(doc.getDocumentId());
+                int chunkCount = indexDocument(doc);
+                log.info("벡터 인덱싱 완료: documentId={}, 청크 수={}", doc.getDocumentId(), chunkCount);
+            } else if (event.titleChanged()) {
+                updateChunkTitle(doc.getDocumentId(), doc.getTitle());
+                log.info("벡터 인덱싱 스킵(제목만 변경, metadata 갱신): documentId={}", doc.getDocumentId());
+            } else {
+                log.info("벡터 인덱싱 스킵(내용 미변경): documentId={}", doc.getDocumentId());
+            }
         } catch (Exception e) {
             log.error("벡터 인덱싱 실패: documentId={}", doc.getDocumentId(), e);
         }
@@ -89,6 +97,14 @@ public class DocumentVectorStoreService {
 
         vectorStore.add(documents);
         return chunks.size();
+    }
+
+    private void updateChunkTitle(String documentId, String title) {
+        pgVectorJdbcTemplate.update(
+                "UPDATE document_embeddings SET metadata = jsonb_set(metadata, '{title}', to_jsonb(?::text)) " +
+                        "WHERE metadata->>'documentId' = ?",
+                title, documentId
+        );
     }
 
     private void deleteChunks(String documentId) {

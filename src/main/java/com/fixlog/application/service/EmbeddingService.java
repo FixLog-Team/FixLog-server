@@ -1,5 +1,6 @@
 package com.fixlog.application.service;
 
+import com.fixlog.common.ai.TokenUsageLogger;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -15,15 +16,19 @@ import java.util.List;
 public class EmbeddingService {
 
     private final EmbeddingModel embeddingModel;
+    private final TokenUsageLogger tokenUsageLogger;
 
-    public EmbeddingService(@Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel) {
+    public EmbeddingService(@Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel,
+                            TokenUsageLogger tokenUsageLogger) {
         this.embeddingModel = embeddingModel;
+        this.tokenUsageLogger = tokenUsageLogger;
     }
 
     public List<Double> generateEmbedding(String text) {
         try {
             EmbeddingRequest embeddingRequest = new EmbeddingRequest(List.of(text), null);
             EmbeddingResponse embeddingResponse = embeddingModel.call(embeddingRequest);
+            tokenUsageLogger.logEmbedding("embedding", embeddingResponse, 1);
             if (embeddingResponse.getResults() == null || embeddingResponse.getResults().isEmpty()) {
                 throw new BusinessException(Code.UNKNOWN, "임베딩 결과가 비어 있습니다.");
             }
@@ -40,6 +45,7 @@ public class EmbeddingService {
         try {
             EmbeddingRequest embeddingRequest = new EmbeddingRequest(texts, null);
             EmbeddingResponse embeddingResponse = embeddingModel.call(embeddingRequest);
+            tokenUsageLogger.logEmbedding("embedding-batch", embeddingResponse, texts.size());
             if (embeddingResponse.getResults() == null || embeddingResponse.getResults().isEmpty()) {
                 throw new BusinessException(Code.UNKNOWN, "임베딩 결과가 비어 있습니다.");
             }
