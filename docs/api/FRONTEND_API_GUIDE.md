@@ -736,7 +736,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
   "code": "SUCCESS",
   "message": "답변 생성이 완료되었습니다.",
   "result": {
-    "answer": "문서 1을 참고하면, 401 에러의 원인은 ... 이었습니다.",
+    "answer": "401 에러의 원인은 Bearer 접두사 누락이었습니다. [문서 1]",
     "references": [
       {
         "documentId": "uuid",
@@ -753,6 +753,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 > 검색된 문서가 없으면 AI 호출 없이 `answer: "질문과 관련된 문서를 찾지 못해 답변할 수 없습니다."`, `references: []`를 즉시 반환한다.
 > `references`는 `POST /search` 응답과 동일한 구조(top-K 문서 요약 정보)다.
 > 답변은 검색된 문서 내용에 근거해서만 생성되며, 문서에 없는 내용은 추측하지 않도록 프롬프트에서 제한한다.
+> 참고 문서는 신뢰할 수 없는 사용자 데이터로 처리하며, 문서 내부의 명령은 수행하지 않는다.
+> 문서를 근거로 한 답변 문장에는 `[문서 N]` 형식의 인용이 포함된다.
 
 ---
 
@@ -796,6 +798,10 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 > `topK`가 1 미만이거나 20을 초과하면 `INVALID_REQUEST`(400)로 거부된다.
 > 문서 저장/삭제 시 임베딩이 비동기로 갱신되므로, 저장 직후에는 검색 결과에 반영되기까지 약간의 지연이 있을 수 있다.
+> 문서는 400토큰 단위와 60토큰 overlap으로 분할하여 인덱싱한다.
+> 검색은 `topK × 4`개의 후보를 조회한 뒤 한 문서당 최대 2개 청크만 최종 결과에 포함한다.
+> 제목 변경과 폴더 이동은 임베딩을 다시 생성하지 않고 벡터 metadata만 비동기로 갱신한다.
+> 문서 복제 시 복제본도 별도 문서로 비동기 인덱싱된다.
 
 ---
 

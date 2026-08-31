@@ -78,6 +78,8 @@ export interface AIMessage {
   status: AIMessageStatus;
   createTime: string;
   completeTime: string | null;
+  /** ASSISTANT 답변의 근거 문서. USER 또는 근거 없는 답변은 빈 배열. */
+  references: AIChatReference[];
 }
 
 /** 답변 근거로 검색된 참고 문서. POST /search 응답과 동일 구조. */
@@ -94,7 +96,7 @@ export interface AIChatResponse {
   assistantMessage: AIMessage;
   /**
    * 답변 근거로 검색된 참고 문서. 관련 문서가 없으면 빈 배열 (일반 대화 답변).
-   * 메시지 이력에는 저장되지 않으므로, 이력 조회로 복원된 과거 메시지에는 없다.
+   * assistantMessage.references와 동일하며 즉시 응답에서 편리하게 사용할 수 있다.
    */
   references: AIChatReference[];
 }
@@ -232,8 +234,8 @@ setMessages((current) => [...olderPage.items, ...current]);
 3. 요청 중에는 중복 전송을 방지한다.
 4. 전송 버튼을 비활성화하고 AI 답변 생성 중 UI를 표시한다.
 5. 성공하면 응답의 `userMessage`, `assistantMessage`를 메시지 목록 끝에 추가한다.
-6. `references`가 비어 있지 않으면 답변 아래에 참고 문서 카드를 표시한다.
-   (references는 이력에 저장되지 않으므로 화면 상태로만 관리한다)
+6. `assistantMessage.references`가 비어 있지 않으면 답변 아래에 참고 문서 카드를 표시한다.
+   references는 AI 메시지와 함께 저장되므로 이력 조회 후에도 복원할 수 있다.
 7. 실패하면 오류 메시지를 표시하고 메시지 기록을 다시 조회한다.
 
 ```ts
@@ -269,6 +271,16 @@ ASSISTANT FAILED
 ```
 
 따라서 실패 후 메시지를 다시 조회하고 `FAILED` 메시지에 재시도 안내 UI를 표시한다.
+
+## 7.1 RAG 처리 정책
+
+- 문서는 400토큰 단위로 분할하고 이전 청크의 끝 60토큰을 다음 청크에 겹친다.
+- 최종 `topK`의 4배를 검색 후보로 조회한 뒤, 한 문서에서는 최대 2개 청크만 선택한다.
+- 이전 대화가 있더라도 독립적인 질문은 그대로 검색한다.
+- `그거`, `위에서`, `이전 답변`, `it`, `previous`처럼 문맥 의존 표현이 있을 때만 질문 재작성 LLM을 호출한다.
+- 참고 문서는 신뢰할 수 없는 사용자 데이터로 취급하며 문서 내부 명령을 수행하지 않는다.
+- 참고 문서를 근거로 한 답변에는 `[문서 N]` 형식의 인용을 표시한다.
+- 관련 문서가 없으면 AI 채팅은 일반 대화로 폴백하고 references는 빈 배열을 반환한다.
 
 ## 8. React Query 연결 권장안
 
