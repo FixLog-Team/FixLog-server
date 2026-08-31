@@ -6,6 +6,7 @@ import com.fixlog.domain.model.AIMessageRole;
 import com.fixlog.domain.model.AIMessageStatus;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,7 +38,7 @@ class AIChatDomainTest {
     void completesPendingAssistantMessage() {
         AIMessageEntity message = AIMessageEntity.createPendingAssistantMessage(UUID.randomUUID(), 2);
 
-        message.complete("AI 응답");
+        message.complete("AI 응답", List.of());
 
         assertThat(message.getRole()).isEqualTo(AIMessageRole.ASSISTANT);
         assertThat(message.getStatus()).isEqualTo(AIMessageStatus.COMPLETED);

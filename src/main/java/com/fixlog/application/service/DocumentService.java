@@ -214,7 +214,7 @@ public class DocumentService {
                 target.getContentHash(), requireUserId());
         DocumentEntity restored = documentRepository.save(doc);
         snapshot(restored, revisionNo);
-        eventPublisher.publishEvent(new DocumentSavedEvent(restored));
+        eventPublisher.publishEvent(new DocumentSavedEvent(restored, true, true));
         return restored;
     }
 
