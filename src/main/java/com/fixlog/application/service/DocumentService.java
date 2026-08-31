@@ -221,8 +221,11 @@ public class DocumentService {
     @Transactional
     public DocumentEntity updateTitle(String documentId, DocumentTitleRequest req) {
         DocumentEntity doc = loadPermitted(documentId, PermissionAction.EDIT);
+        boolean titleChanged = !java.util.Objects.equals(req.title(), doc.getTitle());
         doc.updateTitle(req.title(), requireUserId());
-        return documentRepository.save(doc);
+        DocumentEntity saved = documentRepository.save(doc);
+        eventPublisher.publishEvent(new DocumentSavedEvent(saved, false, titleChanged));
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -248,7 +251,9 @@ public class DocumentService {
                 ordinal,
                 userId
         );
-        return saveWithOwnership(copy, userId);
+        DocumentEntity saved = saveWithOwnership(copy, userId);
+        eventPublisher.publishEvent(new DocumentSavedEvent(saved, true, false));
+        return saved;
     }
 
     /**
@@ -293,10 +298,13 @@ public class DocumentService {
                     .filter(f -> f.getWorkspaceId().equals(doc.getWorkspaceId()))
                     .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
         }
-
         int ordinal = documentRepository.maxOrdinal(targetFolderId, doc.getWorkspaceId()) + 1;
-        doc.moveTo(targetFolderId, ordinal, requireUserId());
-        return documentRepository.save(doc);
+        boolean folderChanged = !java.util.Objects.equals(targetFolderId, doc.getFolderId());
+        String userId = requireUserId();
+        doc.moveTo(targetFolderId, ordinal, userId);
+        DocumentEntity saved = documentRepository.save(doc);
+        eventPublisher.publishEvent(new DocumentSavedEvent(saved, false, folderChanged));
+        return saved;
     }
 
     @Transactional(readOnly = true)

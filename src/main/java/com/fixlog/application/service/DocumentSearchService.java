@@ -7,9 +7,12 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -25,15 +28,22 @@ public class DocumentSearchService {
     private final DocumentRepository documentRepository;
     private final WorkspaceContext workspaceContext;
     private final PermissionEvaluator permissionEvaluator;
+    private final int candidateMultiplier;
+    private final int maxChunksPerDocument;
 
-    public DocumentSearchService(VectorStore vectorStore,
-                                 DocumentRepository documentRepository,
-                                 WorkspaceContext workspaceContext,
-                                 PermissionEvaluator permissionEvaluator) {
+    public DocumentSearchService(
+            VectorStore vectorStore,
+            DocumentRepository documentRepository,
+            WorkspaceContext workspaceContext,
+            PermissionEvaluator permissionEvaluator,
+            @Value("${fixlog.ai.search.candidate-multiplier:4}") int candidateMultiplier,
+            @Value("${fixlog.ai.search.max-chunks-per-document:2}") int maxChunksPerDocument) {
         this.vectorStore = vectorStore;
         this.documentRepository = documentRepository;
         this.workspaceContext = workspaceContext;
         this.permissionEvaluator = permissionEvaluator;
+        this.candidateMultiplier = Math.max(1, candidateMultiplier);
+        this.maxChunksPerDocument = Math.max(1, maxChunksPerDocument);
     }
 
     public List<SearchResultDto> search(String query, int topK) {
@@ -61,16 +71,35 @@ public class DocumentSearchService {
             return List.of();
         }
         FilterExpressionBuilder b = new FilterExpressionBuilder();
-        return vectorStore.similaritySearch(
+        int candidateCount = Math.max(topK, topK * candidateMultiplier);
+        List<Document> candidates = vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(query)
-                        .topK(topK)
+                        .topK(candidateCount)
                         .similarityThreshold(similarityThreshold)
                         .filterExpression(b.and(
                                 b.eq("workspaceId", workspaceId.toString()),
                                 b.in("documentId", accessible.toArray())).build())
                         .build()
         );
+        return limitChunksPerDocument(candidates, topK);
+    }
+
+    List<Document> limitChunksPerDocument(List<Document> candidates, int topK) {
+        Map<String, Integer> documentCounts = new HashMap<>();
+        return candidates.stream()
+                .filter(document -> hasCapacity(document, documentCounts))
+                .limit(topK)
+                .toList();
+    }
+
+    private boolean hasCapacity(Document document, Map<String, Integer> documentCounts) {
+        String documentId = String.valueOf(document.getMetadata().get("documentId"));
+        int currentCount = documentCounts.getOrDefault(documentId, 0);
+        if (currentCount >= maxChunksPerDocument) return false;
+
+        documentCounts.put(documentId, currentCount + 1);
+        return true;
     }
 
     public List<SearchResultDto> toResults(List<Document> documents) {

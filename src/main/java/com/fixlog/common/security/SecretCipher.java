@@ -26,7 +26,11 @@ public class SecretCipher {
     private final SecretKeySpec key;
     private final SecureRandom random = new SecureRandom();
 
-    public SecretCipher(@Value("${fixlog.encryption.key}") String base64Key) {
+    public SecretCipher(@Value("${fixlog.encryption.key:}") String base64Key) {
+        if (base64Key == null || base64Key.isBlank()) {
+            this.key = null;
+            return;
+        }
         byte[] decoded = Base64.getDecoder().decode(base64Key);
         if (decoded.length != 16 && decoded.length != 24 && decoded.length != 32) {
             throw new IllegalStateException(
@@ -36,6 +40,7 @@ public class SecretCipher {
     }
 
     public String encrypt(String plainText) {
+        requireConfigured();
         try {
             byte[] iv = new byte[IV_LENGTH];
             random.nextBytes(iv);
@@ -55,6 +60,7 @@ public class SecretCipher {
     }
 
     public String decrypt(String encrypted) {
+        requireConfigured();
         try {
             byte[] combined = Base64.getDecoder().decode(encrypted);
             byte[] iv = new byte[IV_LENGTH];
@@ -66,6 +72,13 @@ public class SecretCipher {
             return new String(plain, StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new IllegalStateException("복호화에 실패했습니다.");
+        }
+    }
+
+    private void requireConfigured() {
+        if (key == null) {
+            throw new IllegalStateException(
+                    "ENCRYPTION_KEY가 설정되지 않아 사용자 API Key 기능을 사용할 수 없습니다.");
         }
     }
 }
