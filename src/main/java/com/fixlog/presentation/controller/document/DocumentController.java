@@ -1,5 +1,6 @@
 package com.fixlog.presentation.controller.document;
 
+import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
@@ -10,6 +11,8 @@ import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import com.fixlog.presentation.dto.request.DocumentTitleRequest;
 import com.fixlog.presentation.dto.response.DocumentDuplicateDto;
 import com.fixlog.presentation.dto.response.DocumentDto;
+import com.fixlog.presentation.dto.response.DocumentHistoryDetailDto;
+import com.fixlog.presentation.dto.response.DocumentHistoryPageDto;
 import com.fixlog.presentation.dto.response.DocumentPageDto;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
@@ -29,9 +32,35 @@ import java.util.List;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final DocumentHistoryService documentHistoryService;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(DocumentService documentService,
+                              DocumentHistoryService documentHistoryService) {
         this.documentService = documentService;
+        this.documentHistoryService = documentHistoryService;
+    }
+
+    @GetMapping("/{documentId}/history")
+    public Response listHistory(@PathVariable String documentId,
+                                @RequestParam(defaultValue = "0") int page,
+                                @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return DataResponse.success(
+                DocumentHistoryPageDto.from(documentHistoryService.list(documentId, pageable)));
+    }
+
+    @GetMapping("/{documentId}/history/{historyId}")
+    public Response getHistory(@PathVariable String documentId,
+                               @PathVariable String historyId) {
+        return DataResponse.success(
+                DocumentHistoryDetailDto.from(documentHistoryService.getVersion(documentId, historyId)));
+    }
+
+    @PostMapping("/{documentId}/history/{historyId}/restore")
+    public Response restoreHistory(@PathVariable String documentId,
+                                   @PathVariable String historyId) {
+        return DataResponse.success(
+                DocumentDto.from(documentService.restoreFromHistory(documentId, historyId)));
     }
 
     @PostMapping

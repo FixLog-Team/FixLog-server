@@ -9,6 +9,8 @@ import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.common.security.SecurityUtil;
 import com.fixlog.domain.model.DocumentEntity;
+import com.fixlog.domain.model.DocumentHistoryEntity;
+import com.fixlog.domain.model.DocumentHistorySource;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
@@ -34,17 +36,20 @@ public class DocumentService {
     private final FolderRepository folderRepository;
     private final DocumentTextExtractor textExtractor;
     private final DocumentPdfGenerator pdfGenerator;
+    private final DocumentHistoryService historyService;
     private final ApplicationEventPublisher eventPublisher;
 
     public DocumentService(DocumentRepository documentRepository,
                            FolderRepository folderRepository,
                            DocumentTextExtractor textExtractor,
                            DocumentPdfGenerator pdfGenerator,
+                           DocumentHistoryService historyService,
                            ApplicationEventPublisher eventPublisher) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.textExtractor = textExtractor;
         this.pdfGenerator = pdfGenerator;
+        this.historyService = historyService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -88,8 +93,38 @@ public class DocumentService {
         String hash = hashContent(canonicalJson);
         boolean contentChanged = !hash.equals(doc.getContentHash());
         boolean titleChanged = !java.util.Objects.equals(req.title(), doc.getTitle());
+        // 덮어쓰기 전에 직전 내용을 히스토리로 밀어넣는다. 내용이 그대로면 버전을 만들지 않는다.
+        if (contentChanged) {
+            historyService.archive(doc, DocumentHistorySource.MANUAL);
+        }
         doc.updateContent(req.title(), canonicalJson, plainText, hash, requireUserId());
         DocumentEntity saved = documentRepository.save(doc);
+        eventPublisher.publishEvent(new DocumentSavedEvent(saved, contentChanged, titleChanged));
+        return saved;
+    }
+
+    /**
+     * 과거 버전으로 문서를 되돌린다.
+     * 복원 직전 내용도 히스토리에 남기므로 복원 자체를 다시 되돌릴 수 있다.
+     */
+    @Transactional
+    public DocumentEntity restoreFromHistory(String documentId, String historyId) {
+        DocumentEntity doc = loadOwned(documentId);
+        DocumentHistoryEntity version = historyService.getVersion(documentId, historyId);
+
+        boolean contentChanged = !java.util.Objects.equals(version.getContentHash(), doc.getContentHash());
+        boolean titleChanged = !java.util.Objects.equals(version.getTitle(), doc.getTitle());
+        if (!contentChanged && !titleChanged) {
+            return doc;
+        }
+
+        if (contentChanged) {
+            historyService.archive(doc, DocumentHistorySource.RESTORE);
+        }
+        String plainText = textExtractor.extract(version.getBlocks());
+        doc.updateContent(version.getTitle(), version.getBlocks(), plainText, version.getContentHash(), requireUserId());
+        DocumentEntity saved = documentRepository.save(doc);
+        // 본문이 과거 내용으로 바뀌었으므로 벡터 인덱스도 다시 만들어져야 한다.
         eventPublisher.publishEvent(new DocumentSavedEvent(saved, contentChanged, titleChanged));
         return saved;
     }
