@@ -7,6 +7,7 @@ import com.fixlog.domain.model.WorkspaceEntity;
 import com.fixlog.domain.model.WorkspaceRole;
 import com.fixlog.presentation.dto.request.WorkspaceCreateRequest;
 import com.fixlog.presentation.dto.request.WorkspaceInviteRequest;
+import com.fixlog.presentation.dto.request.WorkspaceRenameRequest;
 import com.fixlog.presentation.dto.request.WorkspaceRoleRequest;
 import com.fixlog.presentation.dto.response.WorkspaceDto;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -33,13 +34,30 @@ public class WorkspaceController {
     @PostMapping
     public Response create(@RequestBody WorkspaceCreateRequest request) {
         WorkspaceEntity workspace = workspaceService.create(request.workspaceName());
-        return DataResponse.success(WorkspaceDto.of(workspace, WorkspaceRole.ADMIN));
+        return DataResponse.success(WorkspaceDto.of(workspace, WorkspaceRole.OWNER));
     }
 
     /** 내가 속한 워크스페이스 목록. 여기서 고른 값을 X-Workspace-Id 헤더로 보낸다. */
     @GetMapping
     public Response myWorkspaces() {
         return DataResponse.success(workspaceService.myWorkspaces());
+    }
+
+    @GetMapping("/{workspaceId}")
+    public Response get(@PathVariable UUID workspaceId) {
+        return DataResponse.success(workspaceService.get(workspaceId));
+    }
+
+    @PatchMapping("/{workspaceId}")
+    public Response rename(@PathVariable UUID workspaceId,
+                           @RequestBody WorkspaceRenameRequest request) {
+        return DataResponse.success(workspaceService.rename(workspaceId, request.name()));
+    }
+
+    @DeleteMapping("/{workspaceId}")
+    public Response delete(@PathVariable UUID workspaceId) {
+        workspaceService.delete(workspaceId);
+        return Response.success("워크스페이스를 삭제했습니다.");
     }
 
     @GetMapping("/{workspaceId}/members")

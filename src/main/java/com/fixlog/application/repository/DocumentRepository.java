@@ -80,4 +80,9 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
 
         long getDocumentCount();
     }
+
+    /** 워크스페이스 삭제 시 내부 문서 일괄 soft-delete. */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE DocumentEntity d SET d.usable = 0 WHERE d.workspaceId = :workspaceId AND d.usable = 1")
+    void softDeleteByWorkspaceId(@Param("workspaceId") UUID workspaceId);
 }
