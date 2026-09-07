@@ -7,6 +7,9 @@ import com.fixlog.domain.model.NodeType;
 import com.fixlog.presentation.dto.request.BaseAccessRequest;
 import com.fixlog.presentation.dto.request.PermissionOverrideRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -25,7 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/permissions")
+@Validated
 public class PermissionController {
+
+    /** 한 번에 내려줄 수 있는 노드 수 상한. 워크스페이스 전체 노드를 한 응답에 담는 것을 막는다. */
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final PermissionAdminService permissionAdminService;
 
@@ -72,8 +79,8 @@ public class PermissionController {
     public Response listUserAccess(@PathVariable String userId,
                                    @RequestParam(required = false) String workspaceId,
                                    @RequestParam(required = false) NodeType nodeType,
-                                   @RequestParam(defaultValue = "0") int page,
-                                   @RequestParam(defaultValue = "20") int size) {
+                                   @RequestParam(defaultValue = "0") @Min(0) int page,
+                                   @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size) {
         return DataResponse.success(
                 permissionAdminService.listUserAccess(userId, workspaceId, nodeType, page, size));
     }
