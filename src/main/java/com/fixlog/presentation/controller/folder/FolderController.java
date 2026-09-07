@@ -23,21 +23,24 @@ public class FolderController {
         this.folderService = folderService;
     }
 
+    // workspaceId를 생략하면 호출자의 개인 워크스페이스를 대상으로 한다.
+
     @PostMapping
-    public Response createFolder(@RequestBody FolderRequest request) {
-        FolderEntity folder = folderService.createFolder(request);
+    public Response createFolder(@RequestParam(required = false) String workspaceId,
+                                 @RequestBody FolderRequest request) {
+        FolderEntity folder = folderService.createFolder(workspaceId, request);
         return DataResponse.success(FolderDto.from(folder));
     }
 
     @GetMapping
-    public Response getRootContents() {
-        FolderContentsDto contents = folderService.getRootContents();
+    public Response getRootContents(@RequestParam(required = false) String workspaceId) {
+        FolderContentsDto contents = folderService.getRootContents(workspaceId);
         return DataResponse.success(contents);
     }
 
     @GetMapping("/tree")
-    public Response getFolderTree() {
-        return DataResponse.success(folderService.getFolderTree());
+    public Response getFolderTree(@RequestParam(required = false) String workspaceId) {
+        return DataResponse.success(folderService.getFolderTree(workspaceId));
     }
 
     @GetMapping("/{folderId}")
@@ -47,8 +50,9 @@ public class FolderController {
     }
 
     @GetMapping("/{folderId}/contents")
-    public Response getFolderContents(@PathVariable String folderId) {
-        FolderContentsDto contents = folderService.getFolderContents(folderId);
+    public Response getFolderContents(@PathVariable String folderId,
+                                      @RequestParam(required = false) String workspaceId) {
+        FolderContentsDto contents = folderService.getFolderContents(workspaceId, folderId);
         return DataResponse.success(contents);
     }
 
@@ -60,8 +64,10 @@ public class FolderController {
     }
 
     @PatchMapping("/reorder")
-    public Response reorderFolders(@RequestBody FolderReorderRequest request) {
-        List<FolderDto> folders = folderService.reorderFolders(request.parentId(), request.folderIds())
+    public Response reorderFolders(@RequestParam(required = false) String workspaceId,
+                                   @RequestBody FolderReorderRequest request) {
+        List<FolderDto> folders = folderService
+                .reorderFolders(workspaceId, request.parentId(), request.folderIds())
                 .stream().map(FolderDto::from).toList();
         return DataResponse.success(folders);
     }

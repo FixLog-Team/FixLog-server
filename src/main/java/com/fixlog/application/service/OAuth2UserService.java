@@ -19,10 +19,14 @@ public class OAuth2UserService implements org.springframework.security.oauth2.cl
 
 	private final UserRepository userRepository;
 	private final UserOauthRepository userOauthRepository;
+	private final WorkspaceService workspaceService;
 
-	public OAuth2UserService(UserRepository userRepository, UserOauthRepository userOauthRepository) {
+	public OAuth2UserService(UserRepository userRepository,
+							 UserOauthRepository userOauthRepository,
+							 WorkspaceService workspaceService) {
 		this.userRepository = userRepository;
 		this.userOauthRepository = userOauthRepository;
+		this.workspaceService = workspaceService;
 	}
 
 	@Override
@@ -37,15 +41,20 @@ public class OAuth2UserService implements org.springframework.security.oauth2.cl
 		String email = (String) attributes.get("email");
 		String name = (String) attributes.get("name");
 
-		userOauthRepository.findByProviderAndProviderId(provider, providerId)
-			.ifPresentOrElse(
-				oauth -> oauth.getUser().updateLoginInfo(name, email),
-				() -> {
-					UserEntity user = userRepository.findByEmail(email)
-						.orElseGet(() -> userRepository.save(new UserEntity(name, email)));
-					userOauthRepository.save(new UserOauthEntity(user, provider, providerId));
-				}
-			);
+		UserEntity user = userOauthRepository.findByProviderAndProviderId(provider, providerId)
+			.map(oauth -> {
+				oauth.getUser().updateLoginInfo(name, email);
+				return oauth.getUser();
+			})
+			.orElseGet(() -> {
+				UserEntity created = userRepository.findByEmail(email)
+					.orElseGet(() -> userRepository.save(new UserEntity(name, email)));
+				userOauthRepository.save(new UserOauthEntity(created, provider, providerId));
+				return created;
+			});
+
+		// 권한 트리는 루트가 없으면 성립하지 않는다. 로그인마다 확인하며, 이미 있으면 그대로 쓴다.
+		workspaceService.ensurePersonalWorkspace(user);
 
 		return new DefaultOAuth2User(
 			Collections.emptyList(),

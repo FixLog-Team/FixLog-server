@@ -2,6 +2,8 @@ package com.fixlog.domain.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -15,11 +17,19 @@ public class DocumentEntity {
     @Column(name = "document_id", length = 100)
     private String documentId;
 
+    @Column(name = "workspace_id", length = 100)
+    private String workspaceId;
+
     @Column(name = "folder_id", length = 100)
     private String folderId;
 
     @Column(name = "title", length = 255, nullable = false)
     private String title;
+
+    /** 기본 접근 정책. NULL은 INHERIT으로 해석한다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "base_access", length = 10)
+    private BaseAccess baseAccess;
 
     @Column(name = "blocks", columnDefinition = "TEXT")
     private String blocks;
@@ -51,12 +61,14 @@ public class DocumentEntity {
     protected DocumentEntity() {
     }
 
-    public DocumentEntity(String documentId, String folderId,
+    public DocumentEntity(String documentId, String workspaceId, String folderId,
                           String title, String blocks, String plainText, String contentHash,
                           Integer ordinal, String createUser) {
         this.documentId = documentId;
+        this.workspaceId = workspaceId;
         this.folderId = folderId;
         this.title = title;
+        this.baseAccess = BaseAccess.INHERIT;
         this.blocks = blocks;
         this.plainText = plainText;
         this.contentHash = contentHash;
@@ -73,6 +85,13 @@ public class DocumentEntity {
         this.blocks = blocks;
         this.plainText = plainText;
         this.contentHash = contentHash;
+        this.updateUser = updateUser;
+        this.updateTime = Instant.now();
+    }
+
+    /** 이 문서에서 상속을 끊거나(ALLOW/DENY) 다시 폴더를 따르게(INHERIT) 한다. */
+    public void changeBaseAccess(BaseAccess baseAccess, String updateUser) {
+        this.baseAccess = baseAccess == null ? BaseAccess.INHERIT : baseAccess;
         this.updateUser = updateUser;
         this.updateTime = Instant.now();
     }
@@ -102,7 +121,11 @@ public class DocumentEntity {
     }
 
     public String getDocumentId() { return documentId; }
+    public String getWorkspaceId() { return workspaceId; }
     public String getFolderId() { return folderId; }
+
+    /** 저장된 값이 없으면 폴더를 따른다. 기존 행 backfill 없이 동작하기 위한 기본값이다. */
+    public BaseAccess getBaseAccess() { return baseAccess == null ? BaseAccess.INHERIT : baseAccess; }
     public String getTitle() { return title; }
     public String getBlocks() { return blocks; }
     public String getPlainText() { return plainText; }

@@ -29,10 +29,12 @@ public class DocumentHistoryService {
 
     private final DocumentRepository documentRepository;
     private final DocumentHistoryRepository historyRepository;
+    private final PermissionResolver permissionResolver;
     private final int retentionLimit;
 
     public DocumentHistoryService(DocumentRepository documentRepository,
                                   DocumentHistoryRepository historyRepository,
+                                  PermissionResolver permissionResolver,
                                   @Value("${fixlog.document.history.retention:50}") int retentionLimit) {
         // 0 이하로 설정되면 저장할 때마다 히스토리가 전부 지워지므로 기동 시점에 막는다.
         if (retentionLimit < 1) {
@@ -41,6 +43,7 @@ public class DocumentHistoryService {
         }
         this.documentRepository = documentRepository;
         this.historyRepository = historyRepository;
+        this.permissionResolver = permissionResolver;
         this.retentionLimit = retentionLimit;
     }
 
@@ -64,13 +67,13 @@ public class DocumentHistoryService {
 
     @Transactional(readOnly = true)
     public Page<DocumentHistorySummary> list(String documentId, Pageable pageable) {
-        requireOwnedDocument(documentId);
+        requireAccessibleDocument(documentId);
         return historyRepository.findByDocumentIdOrderByCreateTimeDesc(documentId, pageable);
     }
 
     @Transactional(readOnly = true)
     public DocumentHistoryEntity getVersion(String documentId, String historyId) {
-        requireOwnedDocument(documentId);
+        requireAccessibleDocument(documentId);
         return historyRepository.findByHistoryIdAndDocumentId(historyId, documentId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서 히스토리를 찾을 수 없습니다."));
     }
@@ -89,13 +92,15 @@ public class DocumentHistoryService {
                 documentId, retentionLimit, expired.size());
     }
 
-    private DocumentEntity requireOwnedDocument(String documentId) {
-        String userId = SecurityUtil.getCurrentUserId();
-        if (userId == null) {
-            throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
-        }
-        return documentRepository
-                .findByDocumentIdAndCreateUserAndUsable(documentId, userId, USABLE)
+    /** 히스토리는 문서에 접근할 수 있는 사용자만 볼 수 있다. 접근 불가 문서는 존재를 알리지 않는다. */
+    private DocumentEntity requireAccessibleDocument(String documentId) {
+        String userId = SecurityUtil.requireCurrentUserId();
+        DocumentEntity document = documentRepository
+                .findByDocumentIdAndUsable(documentId, USABLE)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
+        if (!permissionResolver.snapshot(document.getWorkspaceId(), userId).isAllowed(document)) {
+            throw new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다.");
+        }
+        return document;
     }
 }

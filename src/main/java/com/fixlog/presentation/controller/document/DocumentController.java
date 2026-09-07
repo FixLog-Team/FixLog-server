@@ -63,17 +63,22 @@ public class DocumentController {
                 DocumentDto.from(documentService.restoreFromHistory(documentId, historyId)));
     }
 
+    // workspaceId를 생략하면 호출자의 개인 워크스페이스를 대상으로 한다.
+
     @PostMapping
-    public Response create(@RequestBody DocumentCreateRequest req) {
-        return DataResponse.success(DocumentDto.from(documentService.create(req)));
+    public Response create(@RequestParam(required = false) String workspaceId,
+                           @RequestBody DocumentCreateRequest req) {
+        return DataResponse.success(DocumentDto.from(documentService.create(workspaceId, req)));
     }
 
     @GetMapping
-    public Response list(@RequestParam(required = false) String folderId,
+    public Response list(@RequestParam(required = false) String workspaceId,
+                         @RequestParam(required = false) String folderId,
                          @RequestParam(defaultValue = "0") int page,
                          @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updateTime"));
-        return DataResponse.success(DocumentPageDto.from(documentService.list(folderId, pageable)));
+        return DataResponse.success(
+                DocumentPageDto.from(documentService.list(workspaceId, folderId, pageable)));
     }
 
     @GetMapping("/{documentId}")

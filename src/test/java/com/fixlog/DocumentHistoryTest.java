@@ -4,7 +4,10 @@ import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository.DocumentHistorySummary;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
+import com.fixlog.application.repository.PermissionOverrideRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceMemberRepository;
+import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
@@ -21,7 +24,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -39,6 +41,11 @@ class DocumentHistoryTest {
     @Autowired DocumentRepository documentRepository;
     @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired UserRepository userRepository;
+    @Autowired WorkspaceRepository workspaceRepository;
+    @Autowired WorkspaceMemberRepository memberRepository;
+    @Autowired PermissionOverrideRepository overrideRepository;
+
+    private PermissionFixture fixture;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -47,11 +54,13 @@ class DocumentHistoryTest {
 
     @BeforeEach
     void setUp() {
+        fixture = new PermissionFixture(userRepository, workspaceRepository, memberRepository,
+                overrideRepository, folderRepository, documentRepository);
         documentHistoryService = new DocumentHistoryService(
-                documentRepository, documentHistoryRepository, RETENTION);
+                documentRepository, documentHistoryRepository, fixture.permissionResolver, RETENTION);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
-                documentHistoryService, event -> {});
+                documentHistoryService, fixture.permissionResolver, event -> {});
     }
 
     @AfterEach
@@ -60,9 +69,7 @@ class DocumentHistoryTest {
     }
 
     private void loginAsNewUser(String id) {
-        UserEntity user = userRepository.save(new UserEntity(id, id + "@fixlog.dev"));
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(user, null, List.of()));
+        fixture.loginAsNewUser(id);
     }
 
     private JsonNode blocksOf(String text) {
@@ -75,7 +82,7 @@ class DocumentHistoryTest {
     }
 
     private String createDocument() {
-        return documentService.create(new DocumentCreateRequest(null, "문서")).getDocumentId();
+        return documentService.create(null, new DocumentCreateRequest(null, "문서")).getDocumentId();
     }
 
     private List<DocumentHistorySummary> history(String documentId) {
@@ -157,7 +164,7 @@ class DocumentHistoryTest {
     void 보존_개수를_0이하로_설정하면_기동에_실패한다() {
         // 설정 실수로 히스토리가 통째로 지워지는 것을 기동 시점에 막는다.
         assertThrows(IllegalArgumentException.class,
-                () -> new DocumentHistoryService(documentRepository, documentHistoryRepository, 0));
+                () -> new DocumentHistoryService(documentRepository, documentHistoryRepository, fixture.permissionResolver, 0));
     }
 
     @Test

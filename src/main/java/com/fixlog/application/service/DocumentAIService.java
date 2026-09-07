@@ -22,14 +22,17 @@ public class DocumentAIService extends AbstractAIService {
 
     private final DocumentRepository documentRepository;
     private final DocumentAiSummaryRepository summaryRepository;
+    private final PermissionResolver permissionResolver;
 
     public DocumentAIService(@Qualifier("googleGenAiChatModel") ChatModel chatModel,
                              TokenUsageLogger tokenUsageLogger,
                              DocumentRepository documentRepository,
-                             DocumentAiSummaryRepository summaryRepository) {
+                             DocumentAiSummaryRepository summaryRepository,
+                             PermissionResolver permissionResolver) {
         super(ChatClient.builder(chatModel).build(), tokenUsageLogger);
         this.documentRepository = documentRepository;
         this.summaryRepository = summaryRepository;
+        this.permissionResolver = permissionResolver;
     }
 
     /**
@@ -43,8 +46,12 @@ public class DocumentAIService extends AbstractAIService {
             throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
         }
         DocumentEntity doc = documentRepository
-                .findByDocumentIdAndCreateUserAndUsable(documentId, userId, Integer.valueOf(1))
+                .findByDocumentIdAndUsable(documentId, Integer.valueOf(1))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
+        // 접근 불가 문서는 요약 대상이 될 수 없다. 존재 자체를 알리지 않는다.
+        if (!permissionResolver.snapshot(doc.getWorkspaceId(), userId).isAllowed(doc)) {
+            throw new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다.");
+        }
 
         DocumentAiSummaryEntity cached = summaryRepository.findById(documentId).orElse(null);
         if (cached != null && cached.matches(doc.getContentHash())) {
