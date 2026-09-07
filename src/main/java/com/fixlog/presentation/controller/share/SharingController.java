@@ -1,6 +1,7 @@
 package com.fixlog.presentation.controller.share;
 
 import com.fixlog.application.service.DocumentService;
+import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
@@ -9,6 +10,7 @@ import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.request.ShareRequest;
 import com.fixlog.presentation.dto.response.DocumentDto;
+import com.fixlog.presentation.dto.response.MyPermissionDto;
 import com.fixlog.presentation.dto.response.PermissionDto;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,10 +31,27 @@ public class SharingController {
 
     private final PermissionService permissionService;
     private final DocumentService documentService;
+    private final PermissionEvaluator permissionEvaluator;
 
-    public SharingController(PermissionService permissionService, DocumentService documentService) {
+    public SharingController(PermissionService permissionService, DocumentService documentService,
+                             PermissionEvaluator permissionEvaluator) {
         this.permissionService = permissionService;
         this.documentService = documentService;
+        this.permissionEvaluator = permissionEvaluator;
+    }
+
+    /** 현재 유저가 이 문서에 대해 갖는 유효 권한 + 출처. 프론트 UI 제어(다운로드 버튼 등)에 사용한다. */
+    @GetMapping("/documents/{documentId}/my-permission")
+    public Response myDocumentPermission(@PathVariable String documentId) {
+        return DataResponse.success(
+                MyPermissionDto.of(permissionEvaluator.evaluateWithSource(ResourceType.DOCUMENT, documentId)));
+    }
+
+    /** 현재 유저가 이 폴더에 대해 갖는 유효 권한 + 출처. */
+    @GetMapping("/folders/{folderId}/my-permission")
+    public Response myFolderPermission(@PathVariable String folderId) {
+        return DataResponse.success(
+                MyPermissionDto.of(permissionEvaluator.evaluateWithSource(ResourceType.FOLDER, folderId)));
     }
 
     /** 내가 만들지 않았지만 권한을 받은 문서 (FR-SHR-005). {@code /{documentId}}보다 먼저 선언한다. */

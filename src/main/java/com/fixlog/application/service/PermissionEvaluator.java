@@ -204,6 +204,13 @@ public class PermissionEvaluator {
                 target.ancestorFolderIds(), ancestorFolders);
     }
 
+    /** 현재 로그인 유저의 권한 판정 + 출처 (프론트 UI 제어용). */
+    @Transactional(readOnly = true)
+    public DecisionWithSource evaluateWithSource(ResourceType resourceType, String resourceId) {
+        UUID userId = workspaceContext.requireCurrentUserId();
+        return evaluateForWithSource(userId, resourceType, resourceId);
+    }
+
     /**
      * 관리자가 다른 사용자의 유효 권한을 출처와 함께 조회할 때 사용한다.
      */
