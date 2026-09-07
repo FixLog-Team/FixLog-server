@@ -14,10 +14,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * 주체(사용자·그룹)가 대상(폴더·문서)에 대해 갖는 자격.
+ * 주체(사용자·그룹)가 대상(폴더·문서)에 대해 갖는 접근 의도.
  *
- * <p>공유는 별도 개념이 아니라 이 레코드를 만드는 행위다. 폴더에 부여한 권한은
- * 하위로 상속되며 개별 문서에서 오버라이드할 수 있다.
+ * <p>ALLOW는 접근 허용, DENY는 명시적 차단이다. 상속 체인 어디서든 DENY가 있으면
+ * 더 위의 ALLOW를 무시하고 차단된다.
  */
 @Entity
 @Table(
@@ -53,10 +53,10 @@ public class PermissionEntity {
     private String resourceId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "permission_level", length = 20, nullable = false)
-    private PermissionLevel permissionLevel;
+    @Column(name = "permission_type", length = 10, nullable = false)
+    private PermissionType permissionType;
 
-    /** 레벨과 독립이다. 열람은 되지만 반출은 막는 설정을 표현한다 (FR-PRM-002). */
+    /** 열람은 허용하되 반출은 막는 설정을 표현한다. DENY 레코드에서는 무시된다. */
     @Column(name = "can_download", nullable = false)
     private boolean canDownload;
 
@@ -72,25 +72,34 @@ public class PermissionEntity {
     protected PermissionEntity() {
     }
 
+    /** ALLOW 권한 부여 생성자. */
     public PermissionEntity(UUID workspaceId,
                             PrincipalType principalType, UUID principalId,
                             ResourceType resourceType, String resourceId,
-                            PermissionLevel permissionLevel, boolean canDownload,
+                            boolean canDownload, UUID grantedBy) {
+        this(workspaceId, principalType, principalId, resourceType, resourceId,
+                PermissionType.ALLOW, canDownload, grantedBy);
+    }
+
+    public PermissionEntity(UUID workspaceId,
+                            PrincipalType principalType, UUID principalId,
+                            ResourceType resourceType, String resourceId,
+                            PermissionType permissionType, boolean canDownload,
                             UUID grantedBy) {
         this.workspaceId = workspaceId;
         this.principalType = principalType;
         this.principalId = principalId;
         this.resourceType = resourceType;
         this.resourceId = resourceId;
-        this.permissionLevel = permissionLevel;
+        this.permissionType = permissionType;
         this.canDownload = canDownload;
         this.grantedBy = grantedBy;
         this.createAt = Instant.now();
         this.updateAt = Instant.now();
     }
 
-    public void update(PermissionLevel permissionLevel, boolean canDownload) {
-        this.permissionLevel = permissionLevel;
+    public void update(PermissionType permissionType, boolean canDownload) {
+        this.permissionType = permissionType;
         this.canDownload = canDownload;
         this.updateAt = Instant.now();
     }
@@ -119,8 +128,8 @@ public class PermissionEntity {
         return resourceId;
     }
 
-    public PermissionLevel getPermissionLevel() {
-        return permissionLevel;
+    public PermissionType getPermissionType() {
+        return permissionType;
     }
 
     public boolean isCanDownload() {
