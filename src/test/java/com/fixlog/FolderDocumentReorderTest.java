@@ -12,10 +12,14 @@ import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
+import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
+import com.fixlog.domain.model.AccessEffect;
 import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.domain.model.FolderEntity;
+import com.fixlog.domain.model.NodeType;
 import com.fixlog.domain.model.UserEntity;
+import com.fixlog.domain.model.WorkspaceRole;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.FolderRequest;
@@ -211,5 +215,37 @@ class FolderDocumentReorderTest {
         assertEquals(1, moved.getOrdinal());
         assertEquals(List.of("기존문서", "루트문서"),
                 documentTitles(folderService.getFolderContents(null, folder.getFolderId())));
+    }
+
+    @Test
+    void 접근할_수_없는_문서가_섞이면_재정렬을_거부한다() {
+        UserEntity owner = loginAsNewUser("reorder-owner");
+        String workspaceId = fixture.personalWorkspaceId(owner);
+        FolderEntity folder = folderService.createFolder(null, new FolderRequest(null, "폴더"));
+        DocumentEntity visible = documentService.create(
+                null, new DocumentCreateRequest(folder.getFolderId(), "보이는문서"));
+        DocumentEntity hidden = documentService.create(
+                null, new DocumentCreateRequest(folder.getFolderId(), "차단된문서"));
+
+        UserEntity member = fixture.addMember(workspaceId, "reorder-member", WorkspaceRole.MEMBER);
+        fixture.putOverride(workspaceId, NodeType.DOCUMENT, hidden.getDocumentId(), member, AccessEffect.DENY);
+        PermissionFixture.login(member);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> documentService.reorder(folder.getFolderId(),
+                        List.of(hidden.getDocumentId(), visible.getDocumentId())));
+
+        // 존재 자체를 알리지 않으므로 403이 아니라 404다.
+        assertEquals(Code.NOT_FOUND, ex.getCode());
+    }
+
+    @Test
+    void 재정렬_목록이_비어_있으면_거부한다() {
+        loginAsNewUser("reorder-empty");
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> documentService.reorder(null, List.of()));
+
+        assertEquals(Code.INVALID_REQUEST, ex.getCode());
     }
 }

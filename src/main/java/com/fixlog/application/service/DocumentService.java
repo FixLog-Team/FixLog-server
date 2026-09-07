@@ -30,8 +30,11 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class DocumentService {
@@ -209,11 +212,34 @@ public class DocumentService {
         eventPublisher.publishEvent(new DocumentDeletedEvent(documentId));
     }
 
+    /**
+     * 같은 폴더 안 문서들의 순서를 documentIds 순서대로 다시 매긴다.
+     *
+     * <p>판정 스냅샷은 워크스페이스 단위이므로 한 번만 만들어 목록 전체에 재사용한다.
+     * 문서마다 판정하면 워크스페이스의 폴더 전량과 개별 설정을 문서 수만큼 다시 읽는다.
+     */
     @Transactional
     public List<DocumentEntity> reorder(String folderId, List<String> documentIds) {
+        if (documentIds == null || documentIds.isEmpty()) {
+            throw new BusinessException(Code.INVALID_REQUEST, "정렬할 문서 목록이 비어 있습니다.");
+        }
+
+        String userId = SecurityUtil.requireCurrentUserId();
+        Map<String, DocumentEntity> byId = documentRepository
+                .findByDocumentIdInAndUsable(documentIds, ACTIVE).stream()
+                .collect(Collectors.toMap(DocumentEntity::getDocumentId, Function.identity()));
+
+        // 워크스페이스가 다른 문서가 섞여 있으면 스냅샷 판정에서 걸러진다(PermissionSnapshot.decide).
+        DocumentEntity first = requireFound(byId, documentIds.get(0));
+        PermissionSnapshot snapshot = permissionResolver.snapshot(first.getWorkspaceId(), userId);
+
         List<DocumentEntity> result = new ArrayList<>();
         for (int i = 0; i < documentIds.size(); i++) {
-            DocumentEntity doc = loadAccessible(documentIds.get(i));
+            DocumentEntity doc = requireFound(byId, documentIds.get(i));
+            if (!snapshot.isAllowed(doc)) {
+                // 접근 불가 문서는 존재 자체를 알리지 않는다.
+                throw new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다.");
+            }
             if (!Objects.equals(folderId, doc.getFolderId())) {
                 throw new BusinessException(Code.INVALID_REQUEST,
                         "해당 폴더에 속하지 않은 문서가 포함되어 있습니다.");
@@ -222,6 +248,14 @@ public class DocumentService {
             result.add(documentRepository.save(doc));
         }
         return result;
+    }
+
+    private DocumentEntity requireFound(Map<String, DocumentEntity> byId, String documentId) {
+        DocumentEntity doc = byId.get(documentId);
+        if (doc == null) {
+            throw new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다.");
+        }
+        return doc;
     }
 
     @Transactional
