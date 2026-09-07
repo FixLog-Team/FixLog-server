@@ -1,6 +1,10 @@
 package com.fixlog.application.service;
 
+import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.FolderRepository;
+import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.common.code.Code;
@@ -28,15 +32,27 @@ public class WorkspaceService {
     private final WorkspaceMemberRepository memberRepository;
     private final UserRepository userRepository;
     private final WorkspaceContext workspaceContext;
+    private final FolderRepository folderRepository;
+    private final DocumentRepository documentRepository;
+    private final PermissionRepository permissionRepository;
+    private final WorkspaceInvitationRepository invitationRepository;
 
     public WorkspaceService(WorkspaceRepository workspaceRepository,
                             WorkspaceMemberRepository memberRepository,
                             UserRepository userRepository,
-                            WorkspaceContext workspaceContext) {
+                            WorkspaceContext workspaceContext,
+                            FolderRepository folderRepository,
+                            DocumentRepository documentRepository,
+                            PermissionRepository permissionRepository,
+                            WorkspaceInvitationRepository invitationRepository) {
         this.workspaceRepository = workspaceRepository;
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
         this.workspaceContext = workspaceContext;
+        this.folderRepository = folderRepository;
+        this.documentRepository = documentRepository;
+        this.permissionRepository = permissionRepository;
+        this.invitationRepository = invitationRepository;
     }
 
     /**
@@ -185,6 +201,50 @@ public class WorkspaceService {
             requireNotLastAdmin(workspaceId, "마지막 관리자는 워크스페이스를 나갈 수 없습니다.");
         }
         memberRepository.delete(me);
+    }
+
+    /** 워크스페이스 단건 조회. 구성원만 가능하며 비구성원에게는 존재를 알리지 않는다. */
+    @Transactional(readOnly = true)
+    public WorkspaceDto get(UUID workspaceId) {
+        WorkspaceMemberEntity me = requireMembership(workspaceId);
+        WorkspaceEntity workspace = workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
+        return WorkspaceDto.of(workspace, me.getRole());
+    }
+
+    /** 워크스페이스 이름 변경 (Admin/Owner). */
+    @Transactional
+    public WorkspaceDto rename(UUID workspaceId, String newName) {
+        if (newName == null || newName.isBlank()) {
+            throw new BusinessException(Code.INVALID_REQUEST, "워크스페이스 이름은 필수입니다.");
+        }
+        WorkspaceMemberEntity me = requireAdmin(workspaceId);
+        WorkspaceEntity workspace = workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
+        workspace.rename(newName.trim());
+        workspaceRepository.save(workspace);
+        return WorkspaceDto.of(workspace, me.getRole());
+    }
+
+    /**
+     * 워크스페이스 삭제 (Owner 전용, 개인 워크스페이스 불가).
+     * 내부 폴더·문서 soft-delete, 구성원·초대·권한 hard-delete.
+     */
+    @Transactional
+    public void delete(UUID workspaceId) {
+        requireOwner(workspaceId);
+        WorkspaceEntity workspace = workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
+        if (workspace.isPersonal()) {
+            throw new BusinessException(Code.INVALID_REQUEST, "개인 워크스페이스는 삭제할 수 없습니다.");
+        }
+
+        folderRepository.softDeleteByWorkspaceId(workspaceId);
+        documentRepository.softDeleteByWorkspaceId(workspaceId);
+        permissionRepository.deleteByWorkspaceId(workspaceId);
+        invitationRepository.deleteByWorkspaceId(workspaceId);
+        memberRepository.deleteByWorkspaceId(workspaceId);
+        workspaceRepository.delete(workspace);
     }
 
     /** 요청자의 멤버십. 없으면 워크스페이스의 존재 자체를 알리지 않는다. */
