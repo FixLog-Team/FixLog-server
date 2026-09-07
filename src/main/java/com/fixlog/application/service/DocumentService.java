@@ -29,6 +29,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -222,6 +223,10 @@ public class DocumentService {
     public List<DocumentEntity> reorder(String folderId, List<String> documentIds) {
         if (documentIds == null || documentIds.isEmpty()) {
             throw new BusinessException(Code.INVALID_REQUEST, "정렬할 문서 목록이 비어 있습니다.");
+        }
+        // 같은 문서가 두 번 들어오면 순번이 덮여 구멍이 생긴다. 폴더 재정렬과 같은 기준으로 막는다.
+        if (new LinkedHashSet<>(documentIds).size() != documentIds.size()) {
+            throw new BusinessException(Code.INVALID_REQUEST, "문서 목록에 중복된 항목이 있습니다.");
         }
 
         String userId = SecurityUtil.requireCurrentUserId();

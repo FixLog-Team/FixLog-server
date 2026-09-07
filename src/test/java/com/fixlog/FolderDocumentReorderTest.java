@@ -248,4 +248,24 @@ class FolderDocumentReorderTest {
 
         assertEquals(Code.INVALID_REQUEST, ex.getCode());
     }
+
+    @Test
+    void 재정렬_목록에_같은_문서가_두_번_들어오면_거부한다() {
+        loginAsNewUser("reorder-dup");
+        FolderEntity folder = folderService.createFolder(null, new FolderRequest(null, "폴더"));
+        DocumentEntity d1 = documentService.create(
+                null, new DocumentCreateRequest(folder.getFolderId(), "1번"));
+        DocumentEntity d2 = documentService.create(
+                null, new DocumentCreateRequest(folder.getFolderId(), "2번"));
+
+        // 중복을 허용하면 d1의 순번이 덮여 순번에 구멍이 생긴다. 폴더 재정렬과 같은 기준이다.
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> documentService.reorder(folder.getFolderId(),
+                        List.of(d1.getDocumentId(), d1.getDocumentId(), d2.getDocumentId())));
+
+        assertEquals(Code.INVALID_REQUEST, ex.getCode());
+        assertEquals(List.of("1번", "2번"),
+                documentTitles(folderService.getFolderContents(null, folder.getFolderId())),
+                "거부된 요청은 순서를 바꾸지 않아야 한다");
+    }
 }

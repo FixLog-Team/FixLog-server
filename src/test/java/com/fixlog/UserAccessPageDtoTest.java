@@ -66,10 +66,12 @@ class UserAccessPageDtoTest {
     }
 
     @Test
-    void size가_0이면_빈_페이지를_돌려준다() {
+    void size가_0이면_페이지를_나눌_수_없으므로_hasNext도_false다() {
         UserAccessPageDto page = UserAccessPageDto.of(rows(3), 0, 0);
 
         assertTrue(page.items().isEmpty());
         assertEquals(0, page.totalPages());
+        // totalPages가 0인데 hasNext가 true면 응답이 앞뒤가 맞지 않는다.
+        assertFalse(page.hasNext());
     }
 }

@@ -15,14 +15,15 @@ public record UserAccessPageDto(
         // 요청 검증과 별개로, 잘라내는 쪽에서도 범위를 벗어나지 않도록 막는다.
         int from = (int) Math.clamp((long) page * size, 0L, all.size());
         int to = (int) Math.clamp((long) from + size, 0L, all.size());
-        int totalPages = size <= 0 ? 0 : (int) Math.ceil((double) all.size() / size);
+        boolean isPageable = size > 0;
         return new UserAccessPageDto(
                 all.subList(from, to),
                 page,
                 size,
                 all.size(),
-                totalPages,
-                to < all.size()
+                isPageable ? (int) Math.ceil((double) all.size() / size) : 0,
+                // size가 0이면 페이지를 나눌 수 없으므로 다음 페이지도 없다고 본다.
+                isPageable && to < all.size()
         );
     }
 }
