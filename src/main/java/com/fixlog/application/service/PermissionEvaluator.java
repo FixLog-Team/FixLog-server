@@ -16,7 +16,8 @@ import com.fixlog.domain.model.GroupEntity;
 import com.fixlog.domain.model.GroupMemberEntity;
 import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.PermissionEntity;
-import com.fixlog.domain.model.PermissionLevel;
+import com.fixlog.domain.model.PermissionSource;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.WorkspaceMemberEntity;
@@ -32,29 +33,25 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
  * 접근 판정의 단일 지점 (FR-PRM-003).
  *
- * <p>리포지토리 쿼리에 권한 조건을 넣지 않는 이유가 여기 있다. 조건이 쿼리마다 흩어지면
- * 새 쿼리에서 한 번만 빠뜨려도 권한 우회가 되기 때문이다. 판정은 전부 이 클래스를 지난다.
- *
  * <p>판정 순서 (FR-PRM-004):
  * <ol>
  *   <li>워크스페이스 구성원인가 → 아니면 {@code NOT_FOUND}</li>
- *   <li>워크스페이스 관리자인가 → 전 권한 허용 (FR-PRM-010)</li>
- *   <li>대상에 직접 부여된 권한</li>
- *   <li>조상 폴더에서 상속된 권한 (가까운 조상이 먼 조상을 이긴다)</li>
- *   <li>해당 없음 → {@code FORBIDDEN}</li>
+ *   <li>워크스페이스 OWNER/ADMIN인가 → 전 권한 허용</li>
+ *   <li>대상에 직접 부여된 권한 (USER &gt; GROUP): DENY면 즉시 차단, ALLOW면 허용</li>
+ *   <li>조상 폴더 순회 (가까운→먼, inheritFromParent=false 폴더에서 체인 중단)</li>
+ *   <li>Base Access 확인 (가장 가까운 독립 폴더의 baseAccess)</li>
+ *   <li>워크스페이스 기본 → ALLOW (기획서: 기본은 All Workspace Users → Allow)</li>
  * </ol>
- *
- * <p>보안 정책(2단계)은 워크스페이스 정책이 들어오는 시점에 이 앞에 붙는다.
  */
 @Component
 public class PermissionEvaluator {
 
-    /** 빈 IN 절을 만들지 않기 위한 자리표시자. 실제 어떤 값과도 일치하지 않는다. */
     private static final UUID NO_GROUP = new UUID(0L, 0L);
     private static final String NO_ANCESTOR = "";
 
@@ -89,47 +86,33 @@ public class PermissionEvaluator {
     }
 
     /**
-     * 판정 결과. {@code canDownload}가 레벨과 따로 있는 이유는
-     * "열람은 되지만 반출은 금지"를 표현해야 하기 때문이다 (FR-PRM-002).
+     * 판정 결과.
+     *
+     * <p>{@code allowed}가 false인 채로 반환되는 경우는 없다 — 접근 불가이면 예외가 먼저 던져진다.
+     * {@code canDownload}는 ALLOW 상태에서만 의미 있다.
      */
-    public record Decision(PermissionLevel level, boolean canDownload, boolean workspaceAdmin) {
-
-        public boolean allows(PermissionAction action) {
-            return level.allows(action);
-        }
+    public record Decision(boolean allowed, boolean canDownload, boolean workspaceAdmin) {
     }
 
     /**
-     * 행위를 허용하지 않으면 예외를 던진다. 호출부는 성공 경로만 신경 쓰면 된다.
-     *
-     * <p>허용과 거부를 모두 감사 로그에 남긴다. 판정이 전부 이 지점을 지나므로 기록 지점도
-     * 여기 하나면 된다 — 서비스마다 흩어 두면 새 경로에서 빠뜨리게 된다 (FR-AUD-001).
+     * 행위를 허용하지 않으면 예외를 던진다.
+     * 허용과 거부를 모두 감사 로그에 남긴다.
      */
     @Transactional(readOnly = true)
     public Decision require(ResourceType resourceType, String resourceId, PermissionAction action) {
         return audited(resourceType, resourceId, auditActionOf(action), () -> {
-            // 정책이 먼저다. 개별 권한은 물론 관리자 특권보다도 위다 (FR-SEC-002)
             requirePolicyAllows(resourceType, resourceId, action);
-            Decision decision = evaluate(resourceType, resourceId);
-            if (!decision.allows(action)) {
-                throw new BusinessException(Code.FORBIDDEN, "이 작업을 수행할 권한이 없습니다.");
-            }
-            return decision;
+            return evaluate(resourceType, resourceId);
         });
     }
 
-    /** 다운로드는 레벨과 분리된 플래그로 판정한다. */
     @Transactional(readOnly = true)
     public Decision requireDownload(ResourceType resourceType, String resourceId) {
         return audited(resourceType, resourceId, AuditAction.DOWNLOAD, () -> {
             if (!policyOf(resourceType, resourceId).isAllowDownload()) {
-                throw new BusinessException(Code.FORBIDDEN,
-                        "워크스페이스 정책에서 다운로드가 금지되어 있습니다.");
+                throw new BusinessException(Code.FORBIDDEN, "워크스페이스 정책에서 다운로드가 금지되어 있습니다.");
             }
             Decision decision = evaluate(resourceType, resourceId);
-            if (!decision.allows(PermissionAction.VIEW)) {
-                throw new BusinessException(Code.FORBIDDEN, "이 작업을 수행할 권한이 없습니다.");
-            }
             if (!decision.canDownload()) {
                 throw new BusinessException(Code.FORBIDDEN, "이 문서를 다운로드할 권한이 없습니다.");
             }
@@ -137,18 +120,12 @@ public class PermissionEvaluator {
         });
     }
 
-    /**
-     * 워크스페이스 정책은 개별 권한 위에 있다. 권한이 허용해도 정책이 금지하면 금지된다.
-     * 관리자에게도 적용된다 — 정책은 관리자가 스스로에게 건 제약이기 때문이다.
-     */
     private void requirePolicyAllows(ResourceType resourceType, String resourceId, PermissionAction action) {
         if (action == PermissionAction.SHARE && !policyOf(resourceType, resourceId).isAllowSharing()) {
-            throw new BusinessException(Code.FORBIDDEN,
-                    "워크스페이스 정책에서 공유가 금지되어 있습니다.");
+            throw new BusinessException(Code.FORBIDDEN, "워크스페이스 정책에서 공유가 금지되어 있습니다.");
         }
     }
 
-    /** 정책 행이 없으면 기본값으로 본다. */
     private com.fixlog.domain.model.SecurityPolicyEntity policyOf(ResourceType resourceType, String resourceId) {
         UUID workspaceId = workspaceIdQuietly(resourceType, resourceId);
         if (workspaceId == null) {
@@ -158,9 +135,8 @@ public class PermissionEvaluator {
                 .orElseGet(() -> new com.fixlog.domain.model.SecurityPolicyEntity(workspaceId));
     }
 
-    /** 판정을 감싸 허용·거부를 남긴다. 거부는 본 트랜잭션이 롤백되므로 별도 트랜잭션에 쓴다. */
     private Decision audited(ResourceType resourceType, String resourceId,
-                             AuditAction auditAction, java.util.function.Supplier<Decision> judgement) {
+                             AuditAction auditAction, Supplier<Decision> judgement) {
         UUID actorId = workspaceContext.requireCurrentUserId();
         try {
             Decision decision = judgement.get();
@@ -174,7 +150,6 @@ public class PermissionEvaluator {
         }
     }
 
-    /** 리소스가 없으면 남길 워크스페이스도 없다. 기록을 위해 예외를 새로 던지지는 않는다. */
     private UUID workspaceIdQuietly(ResourceType resourceType, String resourceId) {
         try {
             return loadTarget(resourceType, resourceId).workspaceId();
@@ -195,47 +170,78 @@ public class PermissionEvaluator {
     @Transactional(readOnly = true)
     public Decision evaluate(ResourceType resourceType, String resourceId) {
         UUID userId = workspaceContext.requireCurrentUserId();
+        return evaluateFor(userId, resourceType, resourceId);
+    }
+
+    /**
+     * 관리자가 다른 사용자의 권한을 조회할 때 사용한다.
+     * SecurityContext를 우회해 {@code targetUserId}를 직접 받는다.
+     */
+    @Transactional(readOnly = true)
+    public Decision evaluateFor(UUID targetUserId, ResourceType resourceType, String resourceId) {
         Target target = loadTarget(resourceType, resourceId);
 
-        // 1. 구성원이 아니면 리소스의 존재 자체를 알리지 않는다 (FR-PRM-008)
         WorkspaceMemberEntity membership = workspaceMemberRepository
-                .findByWorkspaceIdAndUserId(target.workspaceId(), userId)
+                .findByWorkspaceIdAndUserId(target.workspaceId(), targetUserId)
                 .orElseThrow(() -> notFound(resourceType));
 
-        // 2. 관리자는 워크스페이스 안의 모든 리소스에 접근한다 (FR-PRM-010)
-        if (membership.isAdmin()) {
+        if (membership.isAdminOrOwner()) {
             return adminDecision();
         }
 
-        List<UUID> groupIds = groupIdsOf(userId, target.workspaceId());
+        List<UUID> groupIds = groupIdsOf(targetUserId, target.workspaceId());
         List<PermissionEntity> candidates = permissionRepository.findCandidates(
                 target.workspaceId(),
                 resourceType,
                 resourceId,
                 target.ancestorFolderIds().isEmpty() ? List.of(NO_ANCESTOR) : target.ancestorFolderIds(),
-                userId,
+                targetUserId,
                 groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
 
-        return resolve(candidates, resourceType, resourceId, target.ancestorFolderIds())
-                .orElseThrow(() -> new BusinessException(Code.FORBIDDEN, "이 리소스에 접근할 권한이 없습니다."));
+        List<FolderEntity> ancestorFolders = loadAncestorFolders(target.ancestorFolderIds());
+
+        return resolveWithDeny(candidates, resourceType, resourceId,
+                target.ancestorFolderIds(), ancestorFolders);
     }
 
     /**
-     * 워크스페이스 하나에 대한 판정 재료를 한 번에 적재한다.
-     *
-     * <p>목록 조회는 대상이 여러 개다. 대상마다 판정 쿼리를 돌리면 N+1이 되고, 반대로 판정을
-     * 건너뛰면 같은 워크스페이스의 모든 문서가 목록에 노출된다. 재료만 미리 모으고
-     * <b>판정 규칙 자체는 단건과 같은 {@link #resolve} 하나를 쓴다.</b>
+     * 관리자가 다른 사용자의 유효 권한을 출처와 함께 조회할 때 사용한다.
      */
+    @Transactional(readOnly = true)
+    public DecisionWithSource evaluateForWithSource(UUID targetUserId, ResourceType resourceType, String resourceId) {
+        Target target = loadTarget(resourceType, resourceId);
+
+        WorkspaceMemberEntity membership = workspaceMemberRepository
+                .findByWorkspaceIdAndUserId(target.workspaceId(), targetUserId)
+                .orElseThrow(() -> notFound(resourceType));
+
+        if (membership.isAdminOrOwner()) {
+            return new DecisionWithSource(adminDecision(), PermissionSource.DIRECT, "관리자 특권");
+        }
+
+        List<UUID> groupIds = groupIdsOf(targetUserId, target.workspaceId());
+        List<PermissionEntity> candidates = permissionRepository.findCandidates(
+                target.workspaceId(),
+                resourceType,
+                resourceId,
+                target.ancestorFolderIds().isEmpty() ? List.of(NO_ANCESTOR) : target.ancestorFolderIds(),
+                targetUserId,
+                groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
+
+        List<FolderEntity> ancestorFolders = loadAncestorFolders(target.ancestorFolderIds());
+
+        return resolveWithSource(candidates, resourceType, resourceId,
+                target.ancestorFolderIds(), ancestorFolders);
+    }
+
+    public record DecisionWithSource(Decision decision, PermissionSource source, String sourceDetail) {
+    }
+
     @Transactional(readOnly = true)
     public Scope scopeFor(UUID workspaceId) {
         return buildScope(workspaceId, true);
     }
 
-    /**
-     * 관리자 특권을 무시하고 <b>부여된 권한 레코드만</b>으로 판정하는 범위.
-     * "나와 공유됨"처럼 실제로 공유받은 것을 묻는 자리에 쓴다. 관리자에게도 공유는 공유다.
-     */
     @Transactional(readOnly = true)
     public Scope explicitScopeFor(UUID workspaceId) {
         return buildScope(workspaceId, false);
@@ -247,7 +253,7 @@ public class PermissionEvaluator {
                 .findByWorkspaceIdAndUserId(workspaceId, userId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
 
-        if (honorAdmin && membership.isAdmin()) {
+        if (honorAdmin && membership.isAdminOrOwner()) {
             return new Scope(true, List.of(), Map.of());
         }
 
@@ -255,129 +261,306 @@ public class PermissionEvaluator {
         List<PermissionEntity> permissions = permissionRepository.findForPrincipals(
                 workspaceId, userId, groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
 
-        Map<String, String> folderPaths = folderRepository
+        Map<String, FolderAccessInfo> folderInfo = folderRepository
                 .findByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1)).stream()
-                .collect(Collectors.toMap(FolderEntity::getFolderId, FolderEntity::getPath));
+                .collect(Collectors.toMap(
+                        FolderEntity::getFolderId,
+                        f -> new FolderAccessInfo(f.getPath(), f.isInheritFromParent(), f.getBaseAccess())));
 
-        return new Scope(false, permissions, folderPaths);
+        return new Scope(false, permissions, folderInfo);
     }
 
-    /** 한 워크스페이스 안에서 여러 대상을 판정하기 위한 재료 묶음. */
+    /** 폴더의 경로·상속·기본접근 정보를 경량으로 담는다. */
+    public record FolderAccessInfo(String path, boolean inheritFromParent, PermissionType baseAccess) {
+    }
+
     public final class Scope {
 
         private final boolean workspaceAdmin;
         private final List<PermissionEntity> permissions;
-        private final Map<String, String> folderPaths;
+        private final Map<String, FolderAccessInfo> folderInfo;
 
         private Scope(boolean workspaceAdmin,
                       List<PermissionEntity> permissions,
-                      Map<String, String> folderPaths) {
+                      Map<String, FolderAccessInfo> folderInfo) {
             this.workspaceAdmin = workspaceAdmin;
             this.permissions = permissions;
-            this.folderPaths = folderPaths;
+            this.folderInfo = folderInfo;
         }
 
         public Optional<Decision> decisionForDocument(String documentId, String folderId) {
             if (workspaceAdmin) {
                 return Optional.of(adminDecision());
             }
-            return resolve(permissions, ResourceType.DOCUMENT, documentId, ancestorsOf(folderId));
+            return optionalResolve(permissions, ResourceType.DOCUMENT, documentId, ancestorsOf(folderId));
         }
 
         public Optional<Decision> decisionForFolder(String folderId) {
             if (workspaceAdmin) {
                 return Optional.of(adminDecision());
             }
-            List<String> segments = segmentsOf(folderPaths.get(folderId));
-            // 자기 자신은 직접 권한으로 따로 보므로 조상에서 뺀다
-            return resolve(permissions, ResourceType.FOLDER, folderId,
+            List<String> segments = segmentsOf(folderInfo.containsKey(folderId)
+                    ? folderInfo.get(folderId).path() : null);
+            return optionalResolve(permissions, ResourceType.FOLDER, folderId,
                     segments.subList(0, Math.max(0, segments.size() - 1)));
         }
 
         public boolean canViewDocument(String documentId, String folderId) {
             return decisionForDocument(documentId, folderId)
-                    .filter(d -> d.allows(PermissionAction.VIEW)).isPresent();
+                    .filter(Decision::allowed).isPresent();
         }
 
         public boolean canViewFolder(String folderId) {
             return decisionForFolder(folderId)
-                    .filter(d -> d.allows(PermissionAction.VIEW)).isPresent();
+                    .filter(Decision::allowed).isPresent();
         }
 
-        /** 루트 문서는 상속받을 조상이 없다. */
         private List<String> ancestorsOf(String folderId) {
-            return folderId == null ? List.of() : segmentsOf(folderPaths.get(folderId));
+            return folderId == null ? List.of()
+                    : segmentsOf(folderInfo.containsKey(folderId) ? folderInfo.get(folderId).path() : null);
         }
 
         private List<String> segmentsOf(String path) {
-            if (path == null) {
-                return List.of();
-            }
+            if (path == null) return List.of();
             return java.util.Arrays.stream(path.split("/")).filter(s -> !s.isBlank()).toList();
+        }
+
+        /** DENY 시 예외 대신 빈 Optional을 반환한다. Scope 목록 조회에서는 예외 없이 필터링한다. */
+        private Optional<Decision> optionalResolve(List<PermissionEntity> candidates,
+                                                   ResourceType resourceType,
+                                                   String resourceId,
+                                                   List<String> ancestorFolderIds) {
+            try {
+                return optionalResolveWithInfo(candidates, resourceType, resourceId, ancestorFolderIds);
+            } catch (BusinessException e) {
+                return Optional.empty();
+            }
+        }
+
+        private Optional<Decision> optionalResolveWithInfo(List<PermissionEntity> candidates,
+                                                           ResourceType resourceType,
+                                                           String resourceId,
+                                                           List<String> ancestorFolderIds) {
+            List<String> lookupOrder = new ArrayList<>();
+            lookupOrder.add(key(resourceType, resourceId));
+
+            List<String> nearestFirst = new ArrayList<>(ancestorFolderIds);
+            Collections.reverse(nearestFirst);
+
+            for (String folderId : nearestFirst) {
+                lookupOrder.add(key(ResourceType.FOLDER, folderId));
+                FolderAccessInfo info = folderInfo.get(folderId);
+                if (info != null && !info.inheritFromParent()) {
+                    break;
+                }
+            }
+
+            var byTarget = candidates.stream()
+                    .collect(Collectors.groupingBy(p -> key(p.getResourceType(), p.getResourceId())));
+
+            for (String target : lookupOrder) {
+                List<PermissionEntity> atTarget = byTarget.get(target);
+                if (atTarget == null || atTarget.isEmpty()) continue;
+
+                Optional<PermissionEntity> userPerm = findForType(atTarget, PrincipalType.USER);
+                if (userPerm.isPresent()) {
+                    PermissionEntity p = userPerm.get();
+                    if (p.getPermissionType() == PermissionType.DENY) return Optional.empty();
+                    return Optional.of(new Decision(true, p.isCanDownload(), false));
+                }
+                Optional<PermissionEntity> groupPerm = strongest(atTarget, PrincipalType.GROUP);
+                if (groupPerm.isPresent()) {
+                    PermissionEntity p = groupPerm.get();
+                    if (p.getPermissionType() == PermissionType.DENY) return Optional.empty();
+                    return Optional.of(new Decision(true, p.isCanDownload(), false));
+                }
+            }
+
+            // Base Access 및 워크스페이스 기본 처리
+            String closestFolderWithBaseAccess = nearestFirst.stream()
+                    .filter(id -> {
+                        FolderAccessInfo info = folderInfo.get(id);
+                        return info != null && !info.inheritFromParent();
+                    })
+                    .findFirst()
+                    .orElse(null);
+
+            if (closestFolderWithBaseAccess != null) {
+                FolderAccessInfo info = folderInfo.get(closestFolderWithBaseAccess);
+                if (info != null && info.baseAccess() == PermissionType.DENY) return Optional.empty();
+            }
+
+            return Optional.of(new Decision(true, true, false));
         }
     }
 
     private Decision adminDecision() {
-        return new Decision(PermissionLevel.OWNER, true, true);
+        return new Decision(true, true, true);
     }
 
     /**
-     * 가까운 대상이 먼 조상을 이기고, 같은 대상 안에서는 USER가 GROUP을 이긴다
-     * (FR-PRM-005, FR-PRM-006).
+     * 새 판정 로직: Direct DENY→FORBIDDEN, Direct ALLOW→허용,
+     * Inherit 순회(inheritFromParent 끊기 처리), Base Access, 워크스페이스 기본 ALLOW.
      */
-    private Optional<Decision> resolve(List<PermissionEntity> candidates,
-                                       ResourceType resourceType,
-                                       String resourceId,
-                                       List<String> ancestorFolderIds) {
-        // 대상 자신 → 가장 가까운 조상 → ... → 루트 순서
+    private Decision resolveWithDeny(List<PermissionEntity> candidates,
+                                     ResourceType resourceType, String resourceId,
+                                     List<String> ancestorFolderIds,
+                                     List<FolderEntity> ancestorFolders) {
         List<String> lookupOrder = new ArrayList<>();
         lookupOrder.add(key(resourceType, resourceId));
+
         List<String> nearestFirst = new ArrayList<>(ancestorFolderIds);
         Collections.reverse(nearestFirst);
-        nearestFirst.forEach(folderId -> lookupOrder.add(key(ResourceType.FOLDER, folderId)));
+
+        Map<String, FolderEntity> folderById = ancestorFolders.stream()
+                .collect(Collectors.toMap(FolderEntity::getFolderId, f -> f));
+
+        // 상속 체인: inheritFromParent=false인 폴더까지만 순회
+        List<String> inheritChain = new ArrayList<>();
+        String baseAccessFolderId = null;
+        for (String folderId : nearestFirst) {
+            inheritChain.add(folderId);
+            FolderEntity folder = folderById.get(folderId);
+            if (folder != null && !folder.isInheritFromParent()) {
+                baseAccessFolderId = folderId;
+                break;
+            }
+        }
+        inheritChain.forEach(id -> lookupOrder.add(key(ResourceType.FOLDER, id)));
 
         var byTarget = candidates.stream()
                 .collect(Collectors.groupingBy(p -> key(p.getResourceType(), p.getResourceId())));
 
         for (String target : lookupOrder) {
             List<PermissionEntity> atTarget = byTarget.get(target);
-            if (atTarget == null || atTarget.isEmpty()) {
-                continue;
+            if (atTarget == null || atTarget.isEmpty()) continue;
+
+            Optional<PermissionEntity> userPerm = findForType(atTarget, PrincipalType.USER);
+            if (userPerm.isPresent()) {
+                return toDecision(userPerm.get());
             }
-            Optional<PermissionEntity> user = strongest(atTarget, PrincipalType.USER);
-            if (user.isPresent()) {
-                return user.map(this::toDecision);
-            }
-            Optional<PermissionEntity> group = strongest(atTarget, PrincipalType.GROUP);
-            if (group.isPresent()) {
-                return group.map(this::toDecision);
+            Optional<PermissionEntity> groupPerm = strongest(atTarget, PrincipalType.GROUP);
+            if (groupPerm.isPresent()) {
+                return toDecision(groupPerm.get());
             }
         }
-        return Optional.empty();
+
+        // Base Access 또는 워크스페이스 기본
+        if (baseAccessFolderId != null) {
+            FolderEntity folder = folderById.get(baseAccessFolderId);
+            if (folder != null && folder.getBaseAccess() == PermissionType.DENY) {
+                throw new BusinessException(Code.FORBIDDEN, "이 폴더에 대한 기본 접근이 차단되어 있습니다.");
+            }
+        }
+
+        // 워크스페이스 기본 = ALLOW
+        return new Decision(true, true, false);
     }
 
-    /** 같은 대상에 같은 종류의 주체가 여럿이면(그룹 여러 개) 가장 강한 것을 따른다. */
-    private Optional<PermissionEntity> strongest(List<PermissionEntity> permissions, PrincipalType type) {
-        return permissions.stream()
-                .filter(p -> p.getPrincipalType() == type)
-                .max(Comparator.comparing(p -> p.getPermissionLevel().ordinal()));
+    /** 출처 추적 포함 판정. */
+    private DecisionWithSource resolveWithSource(List<PermissionEntity> candidates,
+                                                 ResourceType resourceType, String resourceId,
+                                                 List<String> ancestorFolderIds,
+                                                 List<FolderEntity> ancestorFolders) {
+        List<String> lookupOrder = new ArrayList<>();
+        lookupOrder.add(key(resourceType, resourceId));
+
+        List<String> nearestFirst = new ArrayList<>(ancestorFolderIds);
+        Collections.reverse(nearestFirst);
+
+        Map<String, FolderEntity> folderById = ancestorFolders.stream()
+                .collect(Collectors.toMap(FolderEntity::getFolderId, f -> f));
+
+        List<String> inheritChain = new ArrayList<>();
+        String baseAccessFolderId = null;
+        for (String folderId : nearestFirst) {
+            inheritChain.add(folderId);
+            FolderEntity folder = folderById.get(folderId);
+            if (folder != null && !folder.isInheritFromParent()) {
+                baseAccessFolderId = folderId;
+                break;
+            }
+        }
+        inheritChain.forEach(id -> lookupOrder.add(key(ResourceType.FOLDER, id)));
+
+        var byTarget = candidates.stream()
+                .collect(Collectors.groupingBy(p -> key(p.getResourceType(), p.getResourceId())));
+
+        String directKey = key(resourceType, resourceId);
+
+        for (String target : lookupOrder) {
+            List<PermissionEntity> atTarget = byTarget.get(target);
+            if (atTarget == null || atTarget.isEmpty()) continue;
+
+            boolean isDirect = target.equals(directKey);
+            PermissionSource source = isDirect ? PermissionSource.DIRECT : PermissionSource.INHERITED;
+            String detail = isDirect ? "직접 부여"
+                    : "폴더 '" + target.split(":")[1] + "'에서 상속";
+
+            Optional<PermissionEntity> userPerm = findForType(atTarget, PrincipalType.USER);
+            if (userPerm.isPresent()) {
+                PermissionEntity p = userPerm.get();
+                if (p.getPermissionType() == PermissionType.DENY) {
+                    return new DecisionWithSource(new Decision(false, false, false), source, detail);
+                }
+                return new DecisionWithSource(new Decision(true, p.isCanDownload(), false), source, detail);
+            }
+            Optional<PermissionEntity> groupPerm = strongest(atTarget, PrincipalType.GROUP);
+            if (groupPerm.isPresent()) {
+                PermissionEntity p = groupPerm.get();
+                if (p.getPermissionType() == PermissionType.DENY) {
+                    return new DecisionWithSource(new Decision(false, false, false), source, detail);
+                }
+                return new DecisionWithSource(new Decision(true, p.isCanDownload(), false), source, detail);
+            }
+        }
+
+        if (baseAccessFolderId != null) {
+            FolderEntity folder = folderById.get(baseAccessFolderId);
+            if (folder != null && folder.getBaseAccess() == PermissionType.DENY) {
+                return new DecisionWithSource(new Decision(false, false, false),
+                        PermissionSource.INHERITED, "폴더 기본 접근 차단");
+            }
+        }
+
+        return new DecisionWithSource(new Decision(true, true, false),
+                PermissionSource.WORKSPACE_DEFAULT, "워크스페이스 기본 허용");
     }
 
     private Decision toDecision(PermissionEntity permission) {
-        return new Decision(permission.getPermissionLevel(), permission.isCanDownload(), false);
+        if (permission.getPermissionType() == PermissionType.DENY) {
+            throw new BusinessException(Code.FORBIDDEN, "접근이 명시적으로 차단되었습니다.");
+        }
+        return new Decision(true, permission.isCanDownload(), false);
+    }
+
+    private Optional<PermissionEntity> findForType(List<PermissionEntity> permissions, PrincipalType type) {
+        return permissions.stream()
+                .filter(p -> p.getPrincipalType() == type)
+                .findFirst();
+    }
+
+    private Optional<PermissionEntity> strongest(List<PermissionEntity> permissions, PrincipalType type) {
+        // DENY가 있으면 최우선, 없으면 ALLOW 하나를 반환
+        List<PermissionEntity> ofType = permissions.stream()
+                .filter(p -> p.getPrincipalType() == type)
+                .collect(Collectors.toList());
+        if (ofType.isEmpty()) return Optional.empty();
+        return ofType.stream()
+                .filter(p -> p.getPermissionType() == PermissionType.DENY)
+                .findFirst()
+                .or(() -> ofType.stream().findFirst());
     }
 
     private String key(ResourceType type, String id) {
         return type.name() + ":" + id;
     }
 
-    /** 대상이 속한 워크스페이스. 권한 레코드를 만들 때 대상과 같은 워크스페이스에 달기 위한 것이다. */
     @Transactional(readOnly = true)
     public UUID workspaceIdOf(ResourceType resourceType, String resourceId) {
         return loadTarget(resourceType, resourceId).workspaceId();
     }
 
-    /** 대상이 속한 워크스페이스와, 상속 판정에 쓸 조상 폴더 ID들(루트→가까운 순). */
     private record Target(UUID workspaceId, List<String> ancestorFolderIds) {
     }
 
@@ -387,7 +570,6 @@ public class PermissionEvaluator {
                 FolderEntity folder = folderRepository.findById(resourceId)
                         .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
                         .orElseThrow(() -> notFound(resourceType));
-                // 자기 자신은 "직접 권한"으로 따로 보므로 조상에서 제외한다
                 List<String> segments = folder.pathSegments();
                 yield new Target(folder.getWorkspaceId(),
                         segments.subList(0, Math.max(0, segments.size() - 1)));
@@ -401,24 +583,23 @@ public class PermissionEvaluator {
         };
     }
 
-    /** 루트 문서는 상속받을 조상이 없다. */
     private List<String> ancestorsOfFolder(String folderId) {
-        if (folderId == null) {
-            return List.of();
-        }
+        if (folderId == null) return List.of();
         return folderRepository.findById(folderId)
                 .map(FolderEntity::pathSegments)
                 .orElse(List.of());
+    }
+
+    private List<FolderEntity> loadAncestorFolders(List<String> folderIds) {
+        if (folderIds.isEmpty()) return List.of();
+        return folderRepository.findAllById(folderIds);
     }
 
     private List<UUID> groupIdsOf(UUID userId, UUID workspaceId) {
         Set<UUID> memberOf = groupMemberRepository.findByUserId(userId).stream()
                 .map(GroupMemberEntity::getGroupId)
                 .collect(Collectors.toSet());
-        if (memberOf.isEmpty()) {
-            return List.of();
-        }
-        // 그룹은 워크스페이스를 넘지 않는다. 다른 워크스페이스의 그룹이 판정에 섞이지 않게 거른다.
+        if (memberOf.isEmpty()) return List.of();
         return groupRepository.findAllById(memberOf).stream()
                 .filter(group -> group.getWorkspaceId().equals(workspaceId))
                 .map(GroupEntity::getGroupId)

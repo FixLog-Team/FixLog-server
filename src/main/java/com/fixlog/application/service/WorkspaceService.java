@@ -49,12 +49,12 @@ public class WorkspaceService {
                 .orElseGet(() -> {
                     WorkspaceEntity workspace = workspaceRepository.save(WorkspaceEntity.personalFor(user));
                     memberRepository.save(new WorkspaceMemberEntity(
-                            workspace.getWorkspaceId(), user.getUserId(), WorkspaceRole.ADMIN));
+                            workspace.getWorkspaceId(), user.getUserId(), WorkspaceRole.OWNER));
                     return workspace;
                 });
     }
 
-    /** 누구나 워크스페이스를 만들 수 있고, 만든 사람이 관리자가 된다 (FR-WS-001). */
+    /** 누구나 워크스페이스를 만들 수 있고, 만든 사람이 Owner가 된다 (FR-WS-001). */
     @Transactional
     public WorkspaceEntity create(String workspaceName) {
         if (workspaceName == null || workspaceName.isBlank()) {
@@ -64,7 +64,7 @@ public class WorkspaceService {
 
         WorkspaceEntity workspace = workspaceRepository.save(WorkspaceEntity.shared(workspaceName.trim()));
         memberRepository.save(new WorkspaceMemberEntity(
-                workspace.getWorkspaceId(), userId, WorkspaceRole.ADMIN));
+                workspace.getWorkspaceId(), userId, WorkspaceRole.OWNER));
         return workspace;
     }
 
@@ -124,16 +124,28 @@ public class WorkspaceService {
         return WorkspaceMemberDto.of(member, invitee);
     }
 
-    /** 역할 변경 (FR-WS-006). 마지막 관리자는 강등할 수 없다 (FR-WS-008). */
+    /**
+     * 역할 변경 (FR-WS-006).
+     * OWNER 역할 부여/해제는 현재 OWNER만 할 수 있다. 마지막 OWNER는 강등할 수 없다.
+     */
     @Transactional
     public WorkspaceMemberDto changeRole(UUID workspaceId, UUID targetUserId, WorkspaceRole newRole) {
         requireCollaborativeWorkspace(workspaceId);
-        requireAdmin(workspaceId);
 
         WorkspaceMemberEntity target = memberRepository.findByWorkspaceIdAndUserId(workspaceId, targetUserId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "구성원을 찾을 수 없습니다."));
 
-        if (target.isAdmin() && newRole != WorkspaceRole.ADMIN) {
+        boolean ownerInvolved = newRole == WorkspaceRole.OWNER || target.isOwner();
+        if (ownerInvolved) {
+            requireOwner(workspaceId);
+        } else {
+            requireAdmin(workspaceId);
+        }
+
+        if (target.isOwner() && newRole != WorkspaceRole.OWNER) {
+            requireNotLastOwner(workspaceId, "마지막 Owner는 강등할 수 없습니다.");
+        }
+        if (target.isAdminOrOwner() && newRole == WorkspaceRole.MEMBER) {
             requireNotLastAdmin(workspaceId, "마지막 관리자는 강등할 수 없습니다.");
         }
 
@@ -142,7 +154,7 @@ public class WorkspaceService {
         return WorkspaceMemberDto.of(target, userRepository.findById(targetUserId).orElse(null));
     }
 
-    /** 관리자가 구성원을 제거한다 (FR-WS-007). */
+    /** Admin/Owner가 구성원을 제거한다 (FR-WS-007). */
     @Transactional
     public void removeMember(UUID workspaceId, UUID targetUserId) {
         requireCollaborativeWorkspace(workspaceId);
@@ -151,7 +163,10 @@ public class WorkspaceService {
         WorkspaceMemberEntity target = memberRepository.findByWorkspaceIdAndUserId(workspaceId, targetUserId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "구성원을 찾을 수 없습니다."));
 
-        if (target.isAdmin()) {
+        if (target.isOwner()) {
+            requireNotLastOwner(workspaceId, "마지막 Owner는 제거할 수 없습니다.");
+        }
+        if (target.isAdminOrOwner()) {
             requireNotLastAdmin(workspaceId, "마지막 관리자는 제거할 수 없습니다.");
         }
         memberRepository.delete(target);
@@ -163,7 +178,10 @@ public class WorkspaceService {
         requireCollaborativeWorkspace(workspaceId);
         WorkspaceMemberEntity me = requireMembership(workspaceId);
 
-        if (me.isAdmin()) {
+        if (me.isOwner()) {
+            requireNotLastOwner(workspaceId, "마지막 Owner는 워크스페이스를 나갈 수 없습니다.");
+        }
+        if (me.isAdminOrOwner()) {
             requireNotLastAdmin(workspaceId, "마지막 관리자는 워크스페이스를 나갈 수 없습니다.");
         }
         memberRepository.delete(me);
@@ -178,8 +196,16 @@ public class WorkspaceService {
 
     public WorkspaceMemberEntity requireAdmin(UUID workspaceId) {
         WorkspaceMemberEntity member = requireMembership(workspaceId);
-        if (!member.isAdmin()) {
+        if (!member.isAdminOrOwner()) {
             throw new BusinessException(Code.FORBIDDEN, "워크스페이스 관리자만 수행할 수 있습니다.");
+        }
+        return member;
+    }
+
+    public WorkspaceMemberEntity requireOwner(UUID workspaceId) {
+        WorkspaceMemberEntity member = requireMembership(workspaceId);
+        if (!member.isOwner()) {
+            throw new BusinessException(Code.FORBIDDEN, "워크스페이스 Owner만 수행할 수 있습니다.");
         }
         return member;
     }
@@ -199,9 +225,16 @@ public class WorkspaceService {
         return workspace;
     }
 
-    /** 관리자 없는 워크스페이스가 생기지 않게 막는다 (FR-WS-008). */
     private void requireNotLastAdmin(UUID workspaceId, String message) {
-        if (memberRepository.countByWorkspaceIdAndRole(workspaceId, WorkspaceRole.ADMIN) <= 1) {
+        long adminCount = memberRepository.countByWorkspaceIdAndRole(workspaceId, WorkspaceRole.ADMIN)
+                + memberRepository.countByWorkspaceIdAndRole(workspaceId, WorkspaceRole.OWNER);
+        if (adminCount <= 1) {
+            throw new BusinessException(Code.INVALID_REQUEST, message);
+        }
+    }
+
+    private void requireNotLastOwner(UUID workspaceId, String message) {
+        if (memberRepository.countByWorkspaceIdAndRole(workspaceId, WorkspaceRole.OWNER) <= 1) {
             throw new BusinessException(Code.INVALID_REQUEST, message);
         }
     }

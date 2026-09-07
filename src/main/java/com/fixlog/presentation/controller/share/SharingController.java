@@ -79,9 +79,9 @@ public class SharingController {
 
         PermissionEntity saved = request.principalId() != null
                 ? permissionService.share(resourceType, resourceId, principalType,
-                        request.principalId(), request.level(), request.allowsDownload())
+                        request.principalId(), request.resolvedPermissionType(), request.allowsDownload())
                 : permissionService.shareWithEmail(resourceType, resourceId,
-                        request.email(), request.level(), request.allowsDownload());
+                        request.email(), request.resolvedPermissionType(), request.allowsDownload());
 
         return PermissionDto.of(saved, null);
     }

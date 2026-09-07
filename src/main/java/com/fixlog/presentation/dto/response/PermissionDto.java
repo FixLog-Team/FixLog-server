@@ -1,7 +1,7 @@
 package com.fixlog.presentation.dto.response;
 
 import com.fixlog.domain.model.PermissionEntity;
-import com.fixlog.domain.model.PermissionLevel;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.PrincipalType;
 
 import java.time.Instant;
@@ -12,7 +12,7 @@ public record PermissionDto(
         PrincipalType principalType,
         UUID principalId,
         String principalName,
-        PermissionLevel level,
+        PermissionType permissionType,
         boolean canDownload,
         Instant createAt
 ) {
@@ -22,7 +22,7 @@ public record PermissionDto(
                 entity.getPrincipalType(),
                 entity.getPrincipalId(),
                 principalName,
-                entity.getPermissionLevel(),
+                entity.getPermissionType(),
                 entity.isCanDownload(),
                 entity.getCreateAt()
         );
