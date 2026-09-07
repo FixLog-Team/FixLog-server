@@ -1,10 +1,12 @@
 package com.fixlog.presentation.controller.admin;
 
 import com.fixlog.application.service.AdminConsoleService;
+import com.fixlog.application.service.EffectivePermissionService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
 import com.fixlog.domain.model.AuditAction;
 import com.fixlog.domain.model.AuditResult;
+import com.fixlog.domain.model.ResourceType;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,9 +27,12 @@ import java.util.UUID;
 public class AdminConsoleController {
 
     private final AdminConsoleService adminConsoleService;
+    private final EffectivePermissionService effectivePermissionService;
 
-    public AdminConsoleController(AdminConsoleService adminConsoleService) {
+    public AdminConsoleController(AdminConsoleService adminConsoleService,
+                                  EffectivePermissionService effectivePermissionService) {
         this.adminConsoleService = adminConsoleService;
+        this.effectivePermissionService = effectivePermissionService;
     }
 
     @GetMapping("/permissions")
@@ -56,5 +61,29 @@ public class AdminConsoleController {
     @GetMapping("/stats")
     public Response stats(@PathVariable UUID workspaceId) {
         return DataResponse.success(adminConsoleService.stats(workspaceId));
+    }
+
+    @GetMapping("/users")
+    public Response listUsers(@PathVariable UUID workspaceId) {
+        return DataResponse.success(adminConsoleService.listUsers(workspaceId));
+    }
+
+    @GetMapping("/users/{userId}")
+    public Response getUser(@PathVariable UUID workspaceId, @PathVariable UUID userId) {
+        return DataResponse.success(adminConsoleService.getUser(workspaceId, userId));
+    }
+
+    @GetMapping("/users/{userId}/access")
+    public Response userAccess(@PathVariable UUID workspaceId, @PathVariable UUID userId) {
+        return DataResponse.success(effectivePermissionService.computeForUser(workspaceId, userId));
+    }
+
+    @GetMapping("/permissions/effective")
+    public Response effectivePermission(@PathVariable UUID workspaceId,
+                                        @RequestParam UUID userId,
+                                        @RequestParam ResourceType resourceType,
+                                        @RequestParam String resourceId) {
+        return DataResponse.success(
+                effectivePermissionService.computeSingle(workspaceId, userId, resourceType, resourceId));
     }
 }
