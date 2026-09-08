@@ -4,7 +4,6 @@ import tools.jackson.databind.JsonNode;
 import com.fixlog.application.event.DocumentDeletedEvent;
 import com.fixlog.application.event.DocumentSavedEvent;
 import com.fixlog.application.repository.DocumentRepository;
-import com.fixlog.application.repository.DocumentRevisionRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
@@ -12,7 +11,6 @@ import com.fixlog.common.security.SecurityUtil;
 import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.domain.model.DocumentHistoryEntity;
 import com.fixlog.domain.model.DocumentHistorySource;
-import com.fixlog.domain.model.DocumentRevisionEntity;
 import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
@@ -53,7 +51,6 @@ public class DocumentService {
     private final WorkspaceContext workspaceContext;
     private final PermissionEvaluator permissionEvaluator;
     private final PermissionService permissionService;
-    private final DocumentRevisionRepository revisionRepository;
     private final SecurityPolicyService securityPolicyService;
 
     public DocumentService(DocumentRepository documentRepository,
@@ -65,7 +62,6 @@ public class DocumentService {
                            WorkspaceContext workspaceContext,
                            PermissionEvaluator permissionEvaluator,
                            PermissionService permissionService,
-                           DocumentRevisionRepository revisionRepository,
                            SecurityPolicyService securityPolicyService) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
@@ -76,7 +72,6 @@ public class DocumentService {
         this.workspaceContext = workspaceContext;
         this.permissionEvaluator = permissionEvaluator;
         this.permissionService = permissionService;
-        this.revisionRepository = revisionRepository;
         this.securityPolicyService = securityPolicyService;
     }
 
@@ -170,7 +165,6 @@ public class DocumentService {
         }
         doc.updateContent(req.title(), canonicalJson, plainText, hash, requireUserId());
         DocumentEntity saved = documentRepository.save(doc);
-        snapshot(saved, null);
         eventPublisher.publishEvent(new DocumentSavedEvent(saved, contentChanged, titleChanged));
         return saved;
     }
@@ -181,7 +175,7 @@ public class DocumentService {
      */
     @Transactional
     public DocumentEntity restoreFromHistory(String documentId, String historyId) {
-        DocumentEntity doc = loadOwned(documentId);
+        DocumentEntity doc = loadPermitted(documentId, PermissionAction.EDIT);
         DocumentHistoryEntity version = historyService.getVersion(documentId, historyId);
 
         boolean contentChanged = !java.util.Objects.equals(version.getContentHash(), doc.getContentHash());
@@ -199,58 +193,6 @@ public class DocumentService {
         // 본문이 과거 내용으로 바뀌었으므로 벡터 인덱스도 다시 만들어져야 한다.
         eventPublisher.publishEvent(new DocumentSavedEvent(saved, contentChanged, titleChanged));
         return saved;
-    }
-
-    /**
-     * 저장 시점을 리비전으로 남긴다 (FR-REV-001).
-     *
-     * <p>직전 리비전과 내용이 같으면 만들지 않는다. 자동저장이 내용 변경 없이 반복되면
-     * 의미 없는 리비전만 쌓이기 때문이다 (FR-REV-002).
-     */
-    private void snapshot(DocumentEntity document, Integer restoredFromNo) {
-        DocumentRevisionEntity latest = revisionRepository
-                .findTopByDocumentIdOrderByRevisionNoDesc(document.getDocumentId()).orElse(null);
-
-        if (latest != null && restoredFromNo == null
-                && latest.getContentHash() != null
-                && latest.getContentHash().equals(document.getContentHash())) {
-            return;
-        }
-        int nextNo = latest == null ? 1 : latest.getRevisionNo() + 1;
-        revisionRepository.save(new DocumentRevisionEntity(document, nextNo, restoredFromNo));
-    }
-
-    @Transactional(readOnly = true)
-    public List<DocumentRevisionEntity> revisions(String documentId) {
-        permissionEvaluator.require(ResourceType.DOCUMENT, documentId, PermissionAction.VIEW);
-        return revisionRepository.findByDocumentIdOrderByRevisionNoDesc(documentId);
-    }
-
-    @Transactional(readOnly = true)
-    public DocumentRevisionEntity revision(String documentId, int revisionNo) {
-        permissionEvaluator.require(ResourceType.DOCUMENT, documentId, PermissionAction.VIEW);
-        return revisionRepository.findByDocumentIdAndRevisionNo(documentId, revisionNo)
-                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "리비전을 찾을 수 없습니다."));
-    }
-
-    /**
-     * 특정 리비전의 내용으로 되돌린다 (FR-REV-006).
-     *
-     * <p>되돌린 결과도 새 리비전으로 쌓는다. 과거를 지우지 않으므로 롤백을 다시 되돌릴 수 있다.
-     */
-    @Transactional
-    public DocumentEntity restore(String documentId, int revisionNo) {
-        DocumentEntity doc = loadPermitted(documentId, PermissionAction.EDIT);
-        DocumentRevisionEntity target = revisionRepository
-                .findByDocumentIdAndRevisionNo(documentId, revisionNo)
-                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "리비전을 찾을 수 없습니다."));
-
-        doc.updateContent(target.getTitle(), target.getBlocks(), target.getPlainText(),
-                target.getContentHash(), requireUserId());
-        DocumentEntity restored = documentRepository.save(doc);
-        snapshot(restored, revisionNo);
-        eventPublisher.publishEvent(new DocumentSavedEvent(restored, true, true));
-        return restored;
     }
 
     @Transactional

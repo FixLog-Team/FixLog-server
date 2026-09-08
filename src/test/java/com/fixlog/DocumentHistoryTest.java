@@ -1,18 +1,33 @@
 package com.fixlog;
 
+import com.fixlog.application.repository.AuditLogRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository.DocumentHistorySummary;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
+import com.fixlog.application.repository.GroupMemberRepository;
+import com.fixlog.application.repository.GroupRepository;
+import com.fixlog.application.repository.PermissionRepository;
+import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
+import com.fixlog.application.repository.WorkspaceMemberRepository;
+import com.fixlog.application.repository.WorkspaceRepository;
+import com.fixlog.application.service.AuditService;
 import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
+import com.fixlog.application.service.PermissionEvaluator;
+import com.fixlog.application.service.PermissionService;
+import com.fixlog.application.service.SecurityPolicyService;
+import com.fixlog.application.service.WorkspaceContext;
+import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.domain.model.DocumentHistorySource;
 import com.fixlog.domain.model.UserEntity;
+import com.fixlog.domain.model.WorkspaceEntity;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import org.junit.jupiter.api.AfterEach;
@@ -21,8 +36,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -39,30 +57,59 @@ class DocumentHistoryTest {
     @Autowired DocumentRepository documentRepository;
     @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired UserRepository userRepository;
+    @Autowired WorkspaceRepository workspaceRepository;
+    @Autowired WorkspaceMemberRepository workspaceMemberRepository;
+    @Autowired PermissionRepository permissionRepository;
+    @Autowired SecurityPolicyRepository policyRepository;
+    @Autowired AuditLogRepository auditLogRepository;
+    @Autowired GroupRepository groupRepository;
+    @Autowired GroupMemberRepository groupMemberRepository;
+    @Autowired WorkspaceInvitationRepository invitationRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private DocumentService documentService;
     private DocumentHistoryService documentHistoryService;
+    private WorkspaceService workspaceService;
 
     @BeforeEach
     void setUp() {
+        WorkspaceContext workspaceContext =
+                new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
+        workspaceService = new WorkspaceService(
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, invitationRepository);
+        PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
+                permissionRepository, workspaceMemberRepository, groupMemberRepository,
+                groupRepository, folderRepository, documentRepository, workspaceContext,
+                new AuditService(auditLogRepository), policyRepository);
+        PermissionService permissionService = new PermissionService(
+                permissionRepository, workspaceMemberRepository, groupRepository,
+                userRepository, permissionEvaluator, workspaceContext);
+        SecurityPolicyService securityPolicyService =
+                new SecurityPolicyService(policyRepository, workspaceService);
         documentHistoryService = new DocumentHistoryService(
                 documentRepository, documentHistoryRepository, RETENTION);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
-                documentHistoryService, event -> {});
+                documentHistoryService, event -> {}, workspaceContext,
+                permissionEvaluator, permissionService, securityPolicyService);
     }
 
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        RequestContextHolder.resetRequestAttributes();
     }
 
     private void loginAsNewUser(String id) {
         UserEntity user = userRepository.save(new UserEntity(id, id + "@fixlog.dev"));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(user, null, List.of()));
+        WorkspaceEntity personal = workspaceService.ensurePersonalWorkspace(user);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(WorkspaceContext.HEADER_NAME, personal.getWorkspaceId().toString());
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
     private JsonNode blocksOf(String text) {

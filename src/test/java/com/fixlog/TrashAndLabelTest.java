@@ -1,9 +1,9 @@
 package com.fixlog;
 
 import com.fixlog.application.repository.AuditLogRepository;
+import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
-import com.fixlog.application.repository.DocumentRevisionRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
@@ -11,9 +11,11 @@ import com.fixlog.application.repository.LabelRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.AuditService;
+import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
@@ -30,7 +32,7 @@ import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.domain.model.FolderEntity;
 import com.fixlog.domain.model.LabelEntity;
-import com.fixlog.domain.model.PermissionLevel;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
 import com.fixlog.domain.model.WorkspaceEntity;
@@ -71,11 +73,12 @@ class TrashAndLabelTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
-    @Autowired DocumentRevisionRepository revisionRepository;
+    @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired LabelRepository labelRepository;
     @Autowired DocumentLabelRepository documentLabelRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
+    @Autowired WorkspaceInvitationRepository invitationRepository;
 
     private WorkspaceService workspaceService;
     private PermissionService permissionService;
@@ -94,7 +97,8 @@ class TrashAndLabelTest {
         WorkspaceContext workspaceContext =
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
-                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, invitationRepository);
         AuditService auditService = new AuditService(auditLogRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
@@ -106,9 +110,10 @@ class TrashAndLabelTest {
         folderService = new FolderService(folderRepository, documentRepository,
                 workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {},
-                workspaceContext, evaluator, permissionService, revisionRepository, securityPolicyService);
-        trashService = new TrashService(documentRepository, folderRepository, revisionRepository,
+                new DocumentTextExtractor(), new DocumentPdfGenerator(),
+                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50),
+                event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService);
+        trashService = new TrashService(documentRepository, folderRepository, documentHistoryRepository,
                 documentLabelRepository, permissionRepository, workspaceMemberRepository,
                 workspaceContext, auditService);
         labelService = new LabelService(labelRepository, documentLabelRepository,
@@ -252,7 +257,7 @@ class TrashAndLabelTest {
         trashService.purge(ResourceType.DOCUMENT, docId);
 
         assertTrue(documentRepository.findById(docId).isEmpty());
-        assertTrue(revisionRepository.findByDocumentIdOrderByRevisionNoDesc(docId).isEmpty());
+        assertEquals(0L, documentHistoryRepository.countByDocumentId(docId));
         assertTrue(documentLabelRepository.findByDocumentId(docId).isEmpty());
     }
 
@@ -313,7 +318,7 @@ class TrashAndLabelTest {
     void 읽기_권한만_있으면_라벨을_붙일_수_없다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionLevel.VIEWER, true);
+                "mate@fixlog.dev", PermissionType.ALLOW, true);
 
         loginAs(mate);
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,

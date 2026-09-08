@@ -7,11 +7,11 @@ import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.FolderService;
 import com.fixlog.application.repository.AuditLogRepository;
-import com.fixlog.application.repository.DocumentRevisionRepository;
 import com.fixlog.application.service.AuditService;
 import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
@@ -25,7 +25,7 @@ import com.fixlog.domain.model.GroupEntity;
 import com.fixlog.domain.model.GroupMemberEntity;
 import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.PermissionEntity;
-import com.fixlog.domain.model.PermissionLevel;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
@@ -58,9 +58,9 @@ class PermissionEvaluatorTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
-    @Autowired DocumentRevisionRepository revisionRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
+    @Autowired WorkspaceInvitationRepository invitationRepository;
 
     private WorkspaceService workspaceService;
     private PermissionEvaluator evaluator;
@@ -75,7 +75,8 @@ class PermissionEvaluatorTest {
         WorkspaceContext workspaceContext =
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
-                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, invitationRepository);
         evaluator = new PermissionEvaluator(permissionRepository, workspaceMemberRepository,
                 groupMemberRepository, groupRepository, folderRepository, documentRepository,
                 workspaceContext, new AuditService(auditLogRepository), policyRepository);
@@ -127,14 +128,14 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     }
 
     private void grantUser(ResourceType type, String id, UUID userId,
-                           PermissionLevel level, boolean canDownload) {
+                           PermissionType permissionType, boolean canDownload) {
         permissionRepository.save(new PermissionEntity(workspace.getWorkspaceId(),
-                PrincipalType.USER, userId, type, id, level, canDownload, admin.getUserId()));
+                PrincipalType.USER, userId, type, id, permissionType, canDownload, admin.getUserId()));
     }
 
-    private void grantGroup(ResourceType type, String id, UUID groupId, PermissionLevel level) {
+    private void grantGroup(ResourceType type, String id, UUID groupId, PermissionType permissionType) {
         permissionRepository.save(new PermissionEntity(workspace.getWorkspaceId(),
-                PrincipalType.GROUP, groupId, type, id, level, true, admin.getUserId()));
+                PrincipalType.GROUP, groupId, type, id, permissionType, true, admin.getUserId()));
     }
 
     // ---------- 관리자와 기본 거부 ----------
@@ -147,9 +148,8 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         PermissionEvaluator.Decision decision = evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId());
 
         assertTrue(decision.workspaceAdmin());
-        assertEquals(PermissionLevel.OWNER, decision.level());
+        assertTrue(decision.allowed());
         assertTrue(decision.canDownload());
-        assertTrue(decision.allows(PermissionAction.DELETE));
     }
 
     @Test
@@ -176,32 +176,27 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     // ---------- 레벨 ----------
 
     @Test
-    void 레벨에_따라_허용되는_행위가_갈린다() {
+    void ALLOW_권한이_있으면_접근된다() {
         DocumentEntity doc = document("문서", null);
         grantUser(ResourceType.DOCUMENT, doc.getDocumentId(), member.getUserId(),
-                PermissionLevel.EDITOR, true);
+                PermissionType.ALLOW, true);
 
         PermissionEvaluator.Decision decision = evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId());
 
-        assertTrue(decision.allows(PermissionAction.VIEW));
-        assertTrue(decision.allows(PermissionAction.EDIT));
-        assertFalse(decision.allows(PermissionAction.SHARE), "EDITOR는 공유 설정을 못 한다");
-        assertFalse(decision.allows(PermissionAction.DELETE));
-
-        assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
-                () -> evaluator.require(ResourceType.DOCUMENT, doc.getDocumentId(), PermissionAction.SHARE))
-                .getCode());
+        assertTrue(decision.allowed());
+        assertTrue(decision.canDownload());
+        assertFalse(decision.workspaceAdmin());
     }
 
     @Test
-    void 다운로드는_레벨과_별도로_막힌다() {
+    void 다운로드는_별도_플래그로_막힌다() {
         DocumentEntity doc = document("문서", null);
         grantUser(ResourceType.DOCUMENT, doc.getDocumentId(), member.getUserId(),
-                PermissionLevel.EDITOR, false);
+                PermissionType.ALLOW, false);
 
-        // 편집까지 되는 사람인데도 반출만 막힌다
+        // 접근은 허용되지만 반출만 막힌다
         assertTrue(evaluator.require(ResourceType.DOCUMENT, doc.getDocumentId(), PermissionAction.EDIT)
-                .allows(PermissionAction.EDIT));
+                .allowed());
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
                 () -> evaluator.requireDownload(ResourceType.DOCUMENT, doc.getDocumentId())).getCode());
     }
@@ -213,10 +208,9 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         FolderEntity parent = folder("스터디", null);
         DocumentEntity doc = document("1주차", parent);
         grantUser(ResourceType.FOLDER, parent.getFolderId(), member.getUserId(),
-                PermissionLevel.EDITOR, true);
+                PermissionType.ALLOW, true);
 
-        assertEquals(PermissionLevel.EDITOR,
-                evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId()).level());
+        assertTrue(evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId()).allowed());
     }
 
     @Test
@@ -224,14 +218,13 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         FolderEntity parent = folder("스터디", null);
         DocumentEntity doc = document("1주차", parent);
         grantUser(ResourceType.FOLDER, parent.getFolderId(), member.getUserId(),
-                PermissionLevel.EDITOR, true);
+                PermissionType.ALLOW, true);
         grantUser(ResourceType.DOCUMENT, doc.getDocumentId(), member.getUserId(),
-                PermissionLevel.VIEWER, true);
+                PermissionType.DENY, true);
 
-        PermissionEvaluator.Decision decision = evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId());
-
-        assertEquals(PermissionLevel.VIEWER, decision.level(), "오버라이드는 상속을 이긴다");
-        assertFalse(decision.allows(PermissionAction.EDIT));
+        // 문서에 DENY가 직접 부여되면 폴더의 ALLOW 상속보다 우선해 차단된다
+        assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
+                () -> evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId())).getCode());
     }
 
     @Test
@@ -240,12 +233,13 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         FolderEntity child = folder("하위", root);
         DocumentEntity doc = document("문서", child);
         grantUser(ResourceType.FOLDER, root.getFolderId(), member.getUserId(),
-                PermissionLevel.OWNER, true);
+                PermissionType.ALLOW, true);
         grantUser(ResourceType.FOLDER, child.getFolderId(), member.getUserId(),
-                PermissionLevel.VIEWER, true);
+                PermissionType.DENY, true);
 
-        assertEquals(PermissionLevel.VIEWER,
-                evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId()).level());
+        // 가까운 조상(child)의 DENY가 먼 조상(root)의 ALLOW를 이긴다
+        assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
+                () -> evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId())).getCode());
     }
 
     @Test
@@ -253,12 +247,13 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         FolderEntity root = folder("루트", null);
         FolderEntity child = folder("하위", root);
         grantUser(ResourceType.FOLDER, root.getFolderId(), member.getUserId(),
-                PermissionLevel.OWNER, true);
+                PermissionType.ALLOW, true);
         grantUser(ResourceType.FOLDER, child.getFolderId(), member.getUserId(),
-                PermissionLevel.VIEWER, true);
+                PermissionType.DENY, true);
 
-        assertEquals(PermissionLevel.VIEWER,
-                evaluator.evaluate(ResourceType.FOLDER, child.getFolderId()).level());
+        // 폴더 자신의 DENY가 조상의 ALLOW보다 우선해 차단된다
+        assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
+                () -> evaluator.evaluate(ResourceType.FOLDER, child.getFolderId())).getCode());
     }
 
     // ---------- 주체 우선순위 ----------
@@ -269,12 +264,13 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         GroupEntity group = groupRepository.save(new GroupEntity(workspace.getWorkspaceId(), "백엔드"));
         groupMemberRepository.save(new GroupMemberEntity(group.getGroupId(), member.getUserId()));
 
-        grantGroup(ResourceType.DOCUMENT, doc.getDocumentId(), group.getGroupId(), PermissionLevel.OWNER);
+        grantGroup(ResourceType.DOCUMENT, doc.getDocumentId(), group.getGroupId(), PermissionType.ALLOW);
         grantUser(ResourceType.DOCUMENT, doc.getDocumentId(), member.getUserId(),
-                PermissionLevel.VIEWER, true);
+                PermissionType.DENY, true);
 
-        assertEquals(PermissionLevel.VIEWER,
-                evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId()).level());
+        // 그룹은 ALLOW이지만 사용자 직접 DENY가 우선한다
+        assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
+                () -> evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId())).getCode());
     }
 
     @Test
@@ -282,17 +278,16 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         DocumentEntity doc = document("문서", null);
         GroupEntity group = groupRepository.save(new GroupEntity(workspace.getWorkspaceId(), "백엔드"));
         groupMemberRepository.save(new GroupMemberEntity(group.getGroupId(), member.getUserId()));
-        grantGroup(ResourceType.DOCUMENT, doc.getDocumentId(), group.getGroupId(), PermissionLevel.EDITOR);
+        grantGroup(ResourceType.DOCUMENT, doc.getDocumentId(), group.getGroupId(), PermissionType.ALLOW);
 
-        assertEquals(PermissionLevel.EDITOR,
-                evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId()).level());
+        assertTrue(evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId()).allowed());
     }
 
     @Test
     void 속하지_않은_그룹의_권한은_적용되지_않는다() {
         DocumentEntity doc = document("문서", null);
         GroupEntity group = groupRepository.save(new GroupEntity(workspace.getWorkspaceId(), "다른 파트"));
-        grantGroup(ResourceType.DOCUMENT, doc.getDocumentId(), group.getGroupId(), PermissionLevel.OWNER);
+        grantGroup(ResourceType.DOCUMENT, doc.getDocumentId(), group.getGroupId(), PermissionType.ALLOW);
 
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
                 () -> evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId())).getCode());
@@ -308,10 +303,9 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         FolderEntity moving = folder("이동할 폴더", granted);
         DocumentEntity doc = document("문서", moving);
         grantUser(ResourceType.FOLDER, granted.getFolderId(), member.getUserId(),
-                PermissionLevel.EDITOR, true);
+                PermissionType.ALLOW, true);
 
-        assertEquals(PermissionLevel.EDITOR,
-                evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId()).level());
+        assertTrue(evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId()).allowed());
 
         loginAs(admin);
         folderService.moveFolder(moving.getFolderId(), other.getFolderId());
