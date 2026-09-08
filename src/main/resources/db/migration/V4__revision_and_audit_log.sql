@@ -1,4 +1,32 @@
--- 감사 로그. append-only로 수정·삭제 경로 자체를 두지 않는다.
+-- 문서 리비전과 감사 로그.
+--
+-- 둘 다 append-only다. 리비전은 롤백조차 기존 행을 건드리지 않고 새 행을 쌓고,
+-- 감사 로그는 수정·삭제 경로 자체를 두지 않는다.
+
+CREATE TABLE document_revision
+(
+    id               uuid         NOT NULL DEFAULT gen_random_uuid(),
+    document_id      varchar(100) NOT NULL,
+    workspace_id     uuid         NOT NULL,
+    -- 문서 안에서 1부터 증가한다
+    revision_no      int          NOT NULL,
+    title            varchar(255) NOT NULL,
+    blocks           text,
+    plain_text       text,
+    content_hash     varchar(64),
+    -- 어느 리비전에서 되돌린 결과인지. 일반 저장이면 NULL
+    restored_from_no int,
+    create_user      varchar(100),
+    create_at        timestamp(6),
+    PRIMARY KEY (id),
+    CONSTRAINT uq_document_revision_no UNIQUE (document_id, revision_no),
+    CONSTRAINT fk_revision_document FOREIGN KEY (document_id) REFERENCES apj_document (document_id),
+    CONSTRAINT fk_revision_workspace FOREIGN KEY (workspace_id) REFERENCES workspace (workspace_id)
+);
+COMMENT ON TABLE document_revision IS '문서 본문의 시점 스냅샷 (불변)';
+
+-- 목록은 항상 최신순이다
+CREATE INDEX idx_revision_document ON document_revision (document_id, revision_no DESC);
 
 CREATE TABLE audit_log
 (
