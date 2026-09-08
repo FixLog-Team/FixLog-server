@@ -29,6 +29,8 @@ public interface DocumentHistoryRepository extends JpaRepository<DocumentHistory
             """)
     List<String> findHistoryIdsNewestFirst(@Param("documentId") String documentId);
 
+    void deleteByDocumentId(String documentId);
+
     /** 목록 조회 전용 프로젝션 */
     interface DocumentHistorySummary {
         String getHistoryId();

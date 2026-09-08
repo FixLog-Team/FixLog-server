@@ -90,12 +90,8 @@ public class DocumentHistoryService {
     }
 
     private DocumentEntity requireOwnedDocument(String documentId) {
-        String userId = SecurityUtil.getCurrentUserId();
-        if (userId == null) {
-            throw new BusinessException(Code.UNAUTHORIZED, "인증 정보가 없습니다.");
-        }
         return documentRepository
-                .findByDocumentIdAndCreateUserAndUsable(documentId, userId, USABLE)
+                .findByDocumentIdAndUsable(documentId, USABLE)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
     }
 }
