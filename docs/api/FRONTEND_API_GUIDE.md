@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-07-15
+> 최종 업데이트: 2026-09-08
 > Base URL (개발): `http://localhost:8080/fixlog`
 
 ---
@@ -19,10 +19,9 @@
 10. [문서 히스토리 API](#10-문서-히스토리-api)
 11. [휴지통 API](#11-휴지통-api)
 12. [라벨 API](#12-라벨-api)
-13. [AI 사용량 · API Key](#13-ai-사용량--api-key)
-14. [관리자 콘솔 API](#14-관리자-콘솔-api)
-15. [보안 정책 API](#15-보안-정책-api)
-16. [에러 처리](#16-에러-처리)
+13. [관리자 콘솔 API](#13-관리자-콘솔-api)
+14. [보안 정책 API](#14-보안-정책-api)
+15. [에러 처리](#15-에러-처리)
 
 ---
 
@@ -206,7 +205,6 @@ Google OAuth 로그인 시작 (페이지 이동)
 ## 4. 문서 API
 
 > 모든 엔드포인트 **인증 필요**
-> 문서는 로그인한 사용자 본인 소유 문서만 접근 가능
 
 ### POST /api/documents
 문서 생성 (빈 문서)
@@ -493,9 +491,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 > `result`는 **루트 폴더 배열**이다. 각 노드의 `children`은 같은 형태로 중첩된다.
 > 형제 노드는 `ordinal` 오름차순(동률이면 생성순)으로 정렬되어 내려온다.
 > `documentCount`는 **직속 문서 수**다. 하위 폴더 안의 문서는 합산하지 않는다.
-> 즉 `Parent(2)` + `Parent/Child(1)`이면 Parent의 `documentCount`는 3이 아니라 2다. 폴더를 열었을 때 보이는 개수와 일치시키기 위함이다.
-> 루트에 바로 놓인 문서(`folderId`가 `null`)는 어떤 폴더의 `documentCount`에도 포함되지 않는다. 루트 문서 목록은 `GET /api/folders`로 받는다.
-> 트리에는 폴더만 담긴다. 문서 목록은 포함되지 않는다.
+> 루트에 바로 놓인 문서(`folderId`가 `null`)는 어떤 폴더의 `documentCount`에도 포함되지 않는다.
 
 ---
 
@@ -525,7 +521,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### PUT /api/folders/{folderId}
-폴더 이름 변경 (이동은 `PATCH .../move`, 순서 변경은 `PATCH /reorder` 사용)
+폴더 이름 변경
 
 **Request Body**
 ```json
@@ -533,8 +529,6 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
   "folderName": "변경된 폴더명"
 }
 ```
-
-> 폴더 이동(부모 변경)과 순서 변경은 이 엔드포인트에서 처리하지 않는다. `parentId`나 `ordinal`을 보내도 무시된다.
 
 **Response**: `FolderDto`
 
@@ -553,7 +547,6 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 > `parentId`가 `null`이면 루트 폴더들이 대상이다.
 > `folderIds`는 **해당 부모의 활성 폴더 전체**를 새 순서대로 빠짐없이 담아야 한다.
-> 일부만 보내거나, 중복이 있거나, 다른 부모의 폴더가 섞이면 `INVALID_REQUEST`로 거부된다.
 
 **Response**: `FolderDto[]` (새 순서대로, `ordinal`은 0부터 재부여됨)
 
@@ -571,7 +564,6 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 > `parentId`를 `null`로 보내면 루트로 이동한다.
 > 자기 자신 또는 자신의 하위 폴더로 이동하면 `INVALID_REQUEST`로 거부된다(순환 방지).
-> 이동한 폴더는 새 부모의 **맨 뒤** 순번을 새로 받는다.
 
 **Response**: `FolderDto`
 
@@ -615,7 +607,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
   "result": {
     "summary": "요약된 내용",
     "tags": ["태그1", "태그2"],
-    "embedding": [0.123, -0.456, ...]
+    "embedding": [0.123, -0.456]
   }
 }
 ```
@@ -643,13 +635,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 ### POST /ai/documents/{documentId}/summarize
 문서 ID 기반 요약. 서버가 DB에서 문서 원문(`plainText`)을 조회해 요약한다.
-본인 소유 + 삭제되지 않은(`usable=1`) 문서만 대상이며, 요청 body는 없다.
-
-**Path Variable**
-
-| 이름 | 타입 | 설명 |
-|---|---|---|
-| documentId | String | 요약할 문서 ID |
+권한 있는 문서만 대상이며, 요청 body는 없다.
 
 **Response**
 ```json
@@ -659,15 +645,6 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
   "result": "요약된 텍스트"
 }
 ```
-
-**에러**
-
-| 상황 | code | HTTP |
-|---|---|---|
-| 미인증 | UNAUTHORIZED | 401 |
-| 문서 없음 / 타인 소유 / 삭제됨 | NOT_FOUND | 404 |
-
-> `POST /ai/summarize`와 달리 클라이언트가 원문을 직접 전송할 필요가 없고, 소유권 검증이 서버에서 자동 수행된다.
 
 ---
 
@@ -690,12 +667,11 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 > **이 응답은 제안일 뿐 문서에 저장되지 않습니다.** 라벨로 붙이려면 사용자가 고른 것만
 > `POST /api/documents/{documentId}/labels`로 보냅니다 (→ [라벨 API](#12-라벨-api)).
-> 서버가 "제안 상태"를 들고 있지 않으므로, 수락 전 목록은 화면에서 관리합니다.
 
 ---
 
 ### POST /ai/embedding
-임베딩 벡터 생성 (OpenAI Embedding 모델 사용)
+임베딩 벡터 생성
 
 **Request Body**
 ```json
@@ -707,14 +683,14 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 {
   "code": "SUCCESS",
   "message": "임베딩 생성이 완료되었습니다.",
-  "result": [0.123, -0.456, 0.789, ...]
+  "result": [0.123, -0.456, 0.789]
 }
 ```
 
 ---
 
 ### POST /ai/ask
-질문 기반 AI 답변 생성 (RAG). 본인 소유 문서 중 질문과 유사한 문서를 검색해 그 내용을 근거로 답변을 생성하고, 참고한 문서 정보를 함께 반환한다.
+질문 기반 AI 답변 생성 (RAG). 접근 가능한 문서 중 질문과 유사한 문서를 검색해 그 내용을 근거로 답변을 생성하고, 참고한 문서 정보를 함께 반환한다.
 
 **Request Body**
 
@@ -750,10 +726,6 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 }
 ```
 
-> 검색된 문서가 없으면 AI 호출 없이 `answer: "질문과 관련된 문서를 찾지 못해 답변할 수 없습니다."`, `references: []`를 즉시 반환한다.
-> `references`는 `POST /search` 응답과 동일한 구조(top-K 문서 요약 정보)다.
-> 답변은 검색된 문서 내용에 근거해서만 생성되며, 문서에 없는 내용은 추측하지 않도록 프롬프트에서 제한한다.
-
 ---
 
 ## 7. 검색 API
@@ -761,7 +733,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 > 모든 엔드포인트 **인증 필요**
 
 ### POST /search
-의미 기반(semantic) 문서 검색. 검색 문장을 임베딩한 뒤 벡터 유사도로 본인 소유 문서 중 상위 N개를 반환한다.
+의미 기반(semantic) 문서 검색. 검색 문장을 임베딩한 뒤 벡터 유사도로 접근 가능한 문서 중 상위 N개를 반환한다.
 
 **Request Body**
 
@@ -794,15 +766,11 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 }
 ```
 
-> `topK`가 1 미만이거나 20을 초과하면 `INVALID_REQUEST`(400)로 거부된다.
-> 문서 저장/삭제 시 임베딩이 비동기로 갱신되므로, 저장 직후에는 검색 결과에 반영되기까지 약간의 지연이 있을 수 있다.
-
 ---
 
 ## 8. 워크스페이스 API
 
 ### GET /api/workspaces
-
 내가 속한 워크스페이스 목록. 여기서 고른 `workspaceId`를 `X-Workspace-Id` 헤더로 보냅니다.
 
 ```json
@@ -817,7 +785,10 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 가입하면 개인 워크스페이스가 자동으로 생깁니다. 역할은 워크스페이스마다 다릅니다.
 
+---
+
 ### POST /api/workspaces
+워크스페이스 생성
 
 ```json
 { "workspaceName": "OS 스터디" }
@@ -825,13 +796,56 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 만든 사람이 `ADMIN`이 됩니다.
 
-### GET /api/workspaces/{workspaceId}/members
+---
 
+### GET /api/workspaces/{workspaceId}
+워크스페이스 단건 조회. 구성원만 가능, 비구성원은 `NOT_FOUND`.
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "result": {
+    "workspaceId": "...",
+    "workspaceName": "OS 스터디",
+    "personal": false,
+    "role": "MEMBER"
+  }
+}
+```
+
+---
+
+### PATCH /api/workspaces/{workspaceId}
+워크스페이스 이름 변경. **Admin만.**
+
+```json
+{ "name": "새 워크스페이스 이름" }
+```
+
+**Response**: `WorkspaceDto`
+
+---
+
+### DELETE /api/workspaces/{workspaceId}
+워크스페이스 삭제. **Admin만. 개인 워크스페이스는 삭제 불가.**
+
+내부 폴더·문서 소프트 삭제, 구성원·초대·권한은 하드 삭제됩니다.
+
+**Response**
+```json
+{ "code": "SUCCESS", "message": "워크스페이스를 삭제했습니다." }
+```
+
+---
+
+### GET /api/workspaces/{workspaceId}/members
 구성원 목록 (`userId`, `userName`, `email`, `role`, `joinedAt`).
 
-### POST /api/workspaces/{workspaceId}/members
+---
 
-이미 가입한 사용자를 이메일로 초대합니다. **관리자만.**
+### POST /api/workspaces/{workspaceId}/members
+이미 가입한 사용자를 이메일로 초대합니다. **Admin만.**
 
 ```json
 { "email": "friend@fixlog.dev" }
@@ -843,20 +857,60 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 | 이미 속한 사용자 | `INVALID_REQUEST` |
 | 개인 워크스페이스 | `INVALID_REQUEST` |
 
-### PATCH /api/workspaces/{workspaceId}/members/{userId}
+---
 
-역할 변경. **관리자만.** `{ "role": "ADMIN" }`
+### PATCH /api/workspaces/{workspaceId}/members/{userId}
+역할 변경. **Admin만.** `{ "role": "ADMIN" }`
+
+---
 
 ### DELETE /api/workspaces/{workspaceId}/members/{userId}
+구성원 제거. **Admin만.**
 
-구성원 제거. **관리자만.**
+---
 
 ### POST /api/workspaces/{workspaceId}/leave
-
 스스로 나가기.
 
 > **마지막 관리자는 강등·제거·탈퇴할 수 없습니다** (`INVALID_REQUEST`).
-> 관리자 없는 워크스페이스가 생기지 않게 하기 위함입니다.
+
+---
+
+### 초대 링크 흐름
+
+관리자가 `POST .../admin/invitations`로 초대하면 서버가 이메일로 토큰을 전송합니다.
+수신자는 이메일 링크를 클릭해 수락/거절합니다 — 인증된 사용자만 수락할 수 있습니다.
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `GET` | `/api/workspaces/{workspaceId}/admin/invitations` | 초대 목록 (Admin) |
+| `POST` | `/api/workspaces/{workspaceId}/admin/invitations` | 초대 발송 (Admin) |
+| `DELETE` | `/api/workspaces/{workspaceId}/admin/invitations/{invitationId}` | 초대 취소 (Admin) |
+| `POST` | `/api/workspaces/invitations/{token}/accept` | 초대 수락 (인증 필요) |
+| `POST` | `/api/workspaces/invitations/{token}/decline` | 초대 거절 |
+
+초대 발송 Body:
+```json
+{ "email": "friend@fixlog.dev", "role": "MEMBER" }
+```
+
+> `role`을 생략하면 `MEMBER`로 초대됩니다.
+
+초대 응답 (`InvitationDto`):
+```json
+{
+  "id": "uuid",
+  "workspaceId": "uuid",
+  "email": "friend@fixlog.dev",
+  "role": "MEMBER",
+  "status": "PENDING",
+  "expiresAt": "2026-09-15T00:00:00Z",
+  "createAt": "2026-09-08T00:00:00Z",
+  "invitedByName": "홍길동"
+}
+```
+
+---
 
 ### 그룹
 
@@ -865,12 +919,12 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 | 메서드 | 경로 | 비고 |
 |---|---|---|
 | `GET` | `/api/workspaces/{workspaceId}/groups` | 구성원이면 조회 가능 |
-| `POST` | `/api/workspaces/{workspaceId}/groups` | 관리자만. `{ "groupName": "백엔드 파트" }` |
-| `PATCH` | `/api/workspaces/{workspaceId}/groups/{groupId}` | 관리자만 |
-| `DELETE` | `/api/workspaces/{workspaceId}/groups/{groupId}` | 관리자만 |
+| `POST` | `/api/workspaces/{workspaceId}/groups` | Admin만. `{ "groupName": "백엔드 파트" }` |
+| `PATCH` | `/api/workspaces/{workspaceId}/groups/{groupId}` | Admin만 |
+| `DELETE` | `/api/workspaces/{workspaceId}/groups/{groupId}` | Admin만 |
 | `GET` | `/api/workspaces/{workspaceId}/groups/{groupId}/members` | |
-| `POST` | `/api/workspaces/{workspaceId}/groups/{groupId}/members` | 관리자만. `{ "userId": "..." }` |
-| `DELETE` | `/api/workspaces/{workspaceId}/groups/{groupId}/members/{userId}` | 관리자만 |
+| `POST` | `/api/workspaces/{workspaceId}/groups/{groupId}/members` | Admin만. `{ "userId": "..." }` |
+| `DELETE` | `/api/workspaces/{workspaceId}/groups/{groupId}/members/{userId}` | Admin만 |
 
 ---
 
@@ -878,41 +932,78 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 **공유는 권한을 부여하는 일입니다.** 폴더와 문서가 같은 규칙을 씁니다.
 
-### 권한 레벨
+### 권한 모델
 
-| 레벨 | 조회 | 편집 | 공유 설정 | 삭제 |
-|---|---|---|---|---|
-| `OWNER` | O | O | O | O |
-| `EDITOR` | O | O | X | X |
-| `VIEWER` | O | X | X | X |
+권한 타입은 `ALLOW` / `DENY` 두 가지입니다. 다운로드는 타입과 별개로 `canDownload`로 제어합니다.
 
-**다운로드는 레벨과 별개입니다.** `canDownload`로 따로 정합니다 — "열람은 되지만 반출은 금지"를
-표현하기 위해서입니다.
+| permissionType | 접근 |
+|---|---|
+| `ALLOW` | 조회·편집 허용 |
+| `DENY` | 명시적 차단 (상속된 ALLOW보다 우선) |
+
+**우선순위**: 직접 부여된 권한 > 가까운 폴더 상속 > 먼 폴더 상속
+사용자에게 직접 부여된 권한은 그룹 권한보다 우선합니다.
+
+---
+
+### GET /api/documents/{documentId}/my-permission
+내가 이 문서에 대해 갖는 유효 권한과 출처. 다운로드 버튼·편집 버튼 표시 여부 결정에 사용합니다.
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "result": {
+    "access": true,
+    "canDownload": true,
+    "source": "DIRECT",
+    "sourceDetail": "직접 부여"
+  }
+}
+```
+
+| source | 설명 |
+|---|---|
+| `DIRECT` | 이 리소스에 직접 부여됨 |
+| `INHERITED` | 상위 폴더에서 상속됨 |
+| `WORKSPACE_DEFAULT` | 워크스페이스 기본값 (Admin) |
+
+---
+
+### GET /api/folders/{folderId}/my-permission
+내가 이 폴더에 대해 갖는 유효 권한. 응답 형식은 위와 동일.
+
+---
 
 ### POST /api/documents/{documentId}/permissions
+문서 권한 부여. 이메일로 사용자에게 줄 때:
 
 ```json
-{ "email": "friend@fixlog.dev", "level": "VIEWER", "canDownload": false }
+{ "email": "friend@fixlog.dev", "permissionType": "ALLOW", "canDownload": false }
 ```
 
-그룹에 줄 때는 이렇게 보냅니다.
+그룹에 줄 때:
 
 ```json
-{ "principalType": "GROUP", "principalId": "{groupId}", "level": "EDITOR" }
+{ "principalType": "GROUP", "principalId": "{groupId}", "permissionType": "ALLOW" }
 ```
 
-- **공유 설정은 `OWNER`만** 할 수 있습니다 (`FORBIDDEN`).
+- **공유 설정은 소유자(리소스 생성자)와 워크스페이스 Admin만** 가능합니다 (`FORBIDDEN`).
 - 대상은 **같은 워크스페이스의 구성원·그룹**만 가능합니다 (`NOT_FOUND`).
 - 같은 대상에 다시 보내면 **덮어씁니다.** 중복 레코드는 생기지 않습니다.
-- `canDownload`를 생략하면 `true`입니다.
+- `permissionType`을 생략하면 `ALLOW`, `canDownload`를 생략하면 `true`입니다.
+
+---
 
 ### GET /api/documents/{documentId}/permissions
+누구에게 공유돼 있는지. 소유자와 Admin만 볼 수 있습니다.
 
-누구에게 공유돼 있는지. 공유를 설정할 수 있는 사람만 볼 수 있습니다.
+---
 
 ### DELETE /api/documents/{documentId}/permissions/{permissionId}
-
 공유 회수. 대상자의 접근이 즉시 끊깁니다.
+
+---
 
 ### 폴더 공유
 
@@ -927,41 +1018,52 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 **폴더 권한은 하위 폴더·문서로 상속됩니다.** 폴더를 공유하면 그 안의 문서까지 열립니다.
 문서에 직접 준 권한이 상속보다 우선하고, 가까운 폴더가 먼 폴더를 이깁니다.
 
-### GET /api/documents/shared-with-me
+---
 
+### GET /api/documents/shared-with-me
 내가 만들지 않았지만 권한을 받은 문서.
 
 ---
 
 ## 10. 문서 히스토리 API
 
-저장할 때마다 리비전이 쌓입니다. **내용이 직전과 같으면 만들지 않습니다** — 자동저장이
-의미 없는 리비전을 쌓지 않게 하기 위함입니다.
+저장할 때마다 히스토리가 쌓입니다. **내용이 직전과 같으면 만들지 않습니다** — 자동저장이
+의미 없는 히스토리를 쌓지 않게 하기 위함입니다.
 
-### GET /api/documents/{documentId}/revisions
-
-최신순. 본문은 빼고 언제 누가 저장했는지만 내려갑니다.
+### GET /api/documents/{documentId}/history
+히스토리 목록. 최신순. 본문은 빼고 언제 누가 저장했는지만 내려갑니다.
 
 ```json
 {
   "result": [
-    { "revisionNo": 3, "title": "...", "restoredFromNo": 1, "createUser": "...", "createAt": "..." },
-    { "revisionNo": 2, "title": "...", "restoredFromNo": null, "createUser": "...", "createAt": "..." }
+    {
+      "historyId": "uuid",
+      "title": "...",
+      "source": "SAVE",
+      "restoredFromId": null,
+      "createUser": "user-uuid",
+      "createAt": "2026-09-08T07:00:00Z"
+    }
   ]
 }
 ```
 
-`restoredFromNo`가 있으면 되돌리기로 만들어진 리비전입니다.
+| source | 설명 |
+|---|---|
+| `SAVE` | 일반 저장 |
+| `RESTORE` | 되돌리기로 만들어진 히스토리 |
 
-### GET /api/documents/{documentId}/revisions/{revisionNo}
+---
 
+### GET /api/documents/{documentId}/history/{historyId}
 본문까지 포함한 상세.
 
-### POST /api/documents/{documentId}/revisions/{revisionNo}/restore
+---
 
+### POST /api/documents/{documentId}/history/{historyId}/restore
 해당 시점으로 되돌립니다. **편집 권한이 필요합니다.**
 
-> **되돌린 결과도 새 리비전으로 쌓입니다.** 과거를 지우지 않으므로 되돌리기를 다시
+> **되돌린 결과도 새 히스토리로 쌓입니다.** 과거를 지우지 않으므로 되돌리기를 다시
 > 되돌릴 수 있습니다.
 
 ---
@@ -971,30 +1073,36 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 삭제는 지우는 것이 아니라 휴지통으로 보내는 것입니다.
 
 ### GET /api/trash
-
 폴더와 문서를 한 목록에 섞어 최근 삭제순으로 돌려줍니다.
 
 ```json
 {
   "result": [
-    { "resourceType": "DOCUMENT", "resourceId": "...", "name": "지운 문서", "deletedBy": "...", "deletedAt": "..." }
+    {
+      "resourceType": "DOCUMENT",
+      "resourceId": "...",
+      "name": "지운 문서",
+      "deletedBy": "user-uuid",
+      "deletedAt": "2026-09-08T07:00:00Z"
+    }
   ]
 }
 ```
 
-> **지운 본인과 워크스페이스 관리자만** 보고 되돌릴 수 있습니다. 삭제된 항목은 조상 폴더가
-> 함께 지워져 경로가 끊긴 상태라 일반 권한 판정이 성립하지 않기 때문입니다.
+> **지운 본인과 워크스페이스 Admin만** 보고 되돌릴 수 있습니다.
+
+---
 
 ### POST /api/trash/{resourceType}/{resourceId}/restore
-
 `resourceType`은 `DOCUMENT` 또는 `FOLDER`.
 
 **부모 폴더가 아직 휴지통에 있으면 루트로 복원됩니다.** 삭제된 폴더 안으로 되살리면
 트리에서 보이지 않는 항목이 되기 때문입니다.
 
-### DELETE /api/trash/{resourceType}/{resourceId}
+---
 
-영구 삭제. 문서는 본문·리비전·라벨·권한이 함께 사라집니다. **되돌릴 수 없습니다.**
+### DELETE /api/trash/{resourceType}/{resourceId}
+영구 삭제. 문서는 본문·히스토리·라벨·권한이 함께 사라집니다. **되돌릴 수 없습니다.**
 
 ---
 
@@ -1009,7 +1117,6 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 | `DELETE` | `/api/documents/{documentId}/labels/{labelId}` | 편집 권한 필요 |
 
 같은 이름의 라벨은 워크스페이스에서 하나로 공유되며, 없는 이름을 붙이면 그때 만들어집니다.
-별도의 "라벨 만들기" 단계는 없습니다.
 
 ### AI 태그를 라벨로 붙이기
 
@@ -1023,57 +1130,14 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
    POST /api/documents/{documentId}/labels  { "labelName": "Spring Boot" }
 ```
 
-**AI 결과는 항상 제안이고 사용자가 수락해야 반영된다**는 원칙을 이 분담으로 지킵니다.
-서버에 "제안됨/수락됨" 상태를 두지 않는 이유는, 수락되지 않은 제안은 아무 데도 남을 필요가
-없기 때문입니다. 사용자가 화면을 떠나면 그냥 사라지는 것이 맞습니다.
-
 ---
 
-## 13. AI 사용량 · API Key
+## 13. 관리자 콘솔 API
 
-### GET /api/users/me/ai-keys
-
-등록한 키 목록. **원문은 절대 내려가지 않고** 마지막 네 자리만 보입니다.
-
-```json
-{ "result": [ { "keyId": "...", "provider": "openai", "maskedKey": "****1234" } ] }
-```
-
-### POST /api/users/me/ai-keys
-
-```json
-{ "provider": "openai", "apiKey": "sk-..." }
-```
-
-같은 제공자에 다시 등록하면 교체됩니다.
-
-### DELETE /api/users/me/ai-keys/{keyId}
-
-### GET /api/workspaces/{workspaceId}/ai-usage
-
-이번 달 사용량과 남은 무료 한도.
-
-```json
-{
-  "result": {
-    "freeTokensUsed": 12000,
-    "freeTokenLimit": 200000,
-    "freeTokensRemaining": 188000,
-    "totalCalls": 34,
-    "totalCost": 0.0123
-  }
-}
-```
-
-무료 한도는 **워크스페이스당 월 토큰 수**입니다. 초과하면 무료 모델 호출이 `FORBIDDEN`으로
-막힙니다. **실패한 호출은 한도를 깎지 않습니다.**
-
----
-
-## 14. 관리자 콘솔 API
-
-전부 **워크스페이스 관리자만** 호출할 수 있습니다 (`FORBIDDEN`).
+전부 **워크스페이스 Admin만** 호출할 수 있습니다 (`FORBIDDEN`).
 경로에 워크스페이스가 항상 들어가며, 워크스페이스를 가로지르는 조회는 제공하지 않습니다.
+
+### 현황 조회
 
 | 메서드 | 경로 | 내용 |
 |---|---|---|
@@ -1081,6 +1145,11 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 | `GET` | `/api/workspaces/{id}/admin/shares` | 공유 현황. 생성자 소유 권한은 빠집니다 |
 | `GET` | `/api/workspaces/{id}/admin/audit-logs` | 감사 로그 |
 | `GET` | `/api/workspaces/{id}/admin/stats` | 문서·폴더 총량, 휴지통 현황, 사용자별 분포 |
+| `GET` | `/api/workspaces/{id}/admin/users` | 구성원 상세 목록 |
+| `GET` | `/api/workspaces/{id}/admin/users/{userId}` | 특정 구성원 상세 |
+| `GET` | `/api/workspaces/{id}/admin/users/{userId}/access` | 해당 사용자가 접근 가능한 리소스 목록 |
+
+---
 
 ### 감사 로그 필터
 
@@ -1094,12 +1163,87 @@ GET /api/workspaces/{id}/admin/audit-logs?actorUserId=...&action=VIEW&result=DEN
 | `action` | `VIEW` `DOWNLOAD` `EDIT` `DELETE` `SHARE` `RESTORE` |
 | `result` | `ALLOWED` `DENIED` |
 
-**거부된 접근도 남습니다.** 누가 무엇을 열려다 막혔는지가 조사에 필요하기 때문입니다.
-`viaAdmin`이 `true`면 관리자 특권으로 접근한 것이고, 권한을 받아서 본 것과 구분됩니다.
+**거부된 접근도 남습니다.** `viaAdmin`이 `true`면 관리자 특권으로 접근한 것입니다.
 
 ---
 
-## 15. 보안 정책 API
+### 유효 권한 조회
+
+```
+GET /api/workspaces/{id}/admin/permissions/effective
+    ?userId={userId}&resourceType=DOCUMENT&resourceId={documentId}
+```
+
+특정 사용자가 특정 리소스에 대해 갖는 유효 권한을 계산해서 반환합니다.
+
+---
+
+### 리소스별 권한 목록
+
+```
+GET /api/workspaces/{id}/admin/permissions/resources/{resourceType}/{resourceId}
+```
+
+특정 리소스에 설정된 모든 권한 레코드 목록.
+
+---
+
+### 권한 직접 부여·수정·회수 (Admin)
+
+Admin은 공유 설정 없이도 직접 권한을 조작할 수 있습니다.
+
+**POST** `/api/workspaces/{id}/admin/permissions`
+```json
+{
+  "resourceType": "DOCUMENT",
+  "resourceId": "doc-uuid",
+  "principalType": "USER",
+  "principalId": "user-uuid",
+  "permissionType": "ALLOW",
+  "canDownload": true
+}
+```
+
+**PUT** `/api/workspaces/{id}/admin/permissions/{permissionId}`
+```json
+{ "permissionType": "DENY", "canDownload": false }
+```
+
+**DELETE** `/api/workspaces/{id}/admin/permissions/{permissionId}`
+
+---
+
+### 폴더 상속 설정
+
+```
+PATCH /api/workspaces/{id}/admin/permissions/resources/folders/{folderId}/settings
+```
+
+```json
+{
+  "inheritFromParent": true,
+  "baseAccess": "ALLOW"
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `inheritFromParent` | `true`면 부모 폴더의 권한을 상속합니다 (기본값 `true`) |
+| `baseAccess` | 직접 부여된 권한이 없는 워크스페이스 구성원에게 적용되는 기본 접근. `ALLOW` 또는 `DENY` (기본값 `ALLOW`) |
+
+---
+
+### 초대 관리 (Admin)
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| `GET` | `/api/workspaces/{id}/admin/invitations` | 초대 목록 (PENDING/ACCEPTED/DECLINED/EXPIRED) |
+| `POST` | `/api/workspaces/{id}/admin/invitations` | 초대 발송. `{ "email": "...", "role": "MEMBER" }` |
+| `DELETE` | `/api/workspaces/{id}/admin/invitations/{invitationId}` | 초대 취소 |
+
+---
+
+## 14. 보안 정책 API
 
 ### GET /api/workspaces/{workspaceId}/security-policy
 
@@ -1117,23 +1261,24 @@ GET /api/workspaces/{id}/admin/audit-logs?actorUserId=...&action=VIEW&result=DEN
 }
 ```
 
+---
+
 ### PATCH /api/workspaces/{workspaceId}/security-policy
 
-**관리자만.** 넘기지 않은 항목은 그대로 둡니다.
+**Admin만.** 넘기지 않은 항목은 그대로 둡니다.
 
 ```json
 { "allowDownload": false, "enforceWatermark": true }
 ```
 
 > **정책은 개별 권한보다 위에 있습니다.** 문서에 `canDownload: true` 권한이 있어도
-> 정책이 다운로드를 막으면 막힙니다. **관리자에게도 적용됩니다** — 정책은 관리자가
-> 스스로에게 건 제약이기 때문입니다.
+> 정책이 다운로드를 막으면 막힙니다. **Admin에게도 적용됩니다.**
 
 `enforceWatermark`가 켜지면 PDF에 내려받는 사람이 각인됩니다.
 
 ---
 
-## 16. 에러 처리
+## 15. 에러 처리
 
 ### 401 처리 흐름 (토큰 재발급)
 
@@ -1153,12 +1298,11 @@ API 호출
 | 문서/폴더 없거나 워크스페이스 구성원이 아님 | `NOT_FOUND` | 404 |
 | 구성원이지만 해당 작업 권한이 없음 | `FORBIDDEN` | 403 |
 | 정책이 다운로드·공유를 금지 | `FORBIDDEN` | 403 |
-| 무료 AI 한도 초과 | `FORBIDDEN` | 403 |
 | blocks 유효성 실패 (type 오류, 크기 초과 등) | `INVALID_REQUEST` | 400 |
 | title 빈 값 | `INVALID_REQUEST` | 400 |
 | content 빈 값 / 50,000자 초과 (AI API) | `INVALID_REQUEST` | 400 |
-| question 빈 값 / 2,000자 초과, query 빈 값 / topK 범위(1~20) 초과 | `INVALID_REQUEST` | 400 |
-| AI 서비스 오류 (요약/태그/임베딩/답변 생성 실패) | `UNKNOWN` | 500 |
+| question 빈 값 / 2,000자 초과, topK 범위(1~20) 초과 | `INVALID_REQUEST` | 400 |
+| AI 서비스 오류 | `UNKNOWN` | 500 |
 
 ### blocks 유효성 규칙
 
