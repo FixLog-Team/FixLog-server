@@ -5,6 +5,7 @@ import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.common.security.SecurityUtil;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.UserEntity;
 import com.fixlog.domain.model.WorkspaceEntity;
 import org.springframework.stereotype.Component;
@@ -57,6 +58,20 @@ public class WorkspaceContext {
             throw new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다.");
         }
         return workspaceId;
+    }
+
+    /**
+     * 워크스페이스의 기본 접근 정책. 상속 체인이 루트까지 올라갔을 때 적용된다.
+     *
+     * <p>워크스페이스를 찾지 못하면 DENY다. 판정에서 불확실은 곧 누출이므로 닫는 방향으로 확정한다.
+     */
+    public PermissionType baseAccessOf(UUID workspaceId) {
+        if (workspaceId == null) {
+            return PermissionType.DENY;
+        }
+        return workspaceRepository.findById(workspaceId)
+                .map(WorkspaceEntity::getBaseAccess)
+                .orElse(PermissionType.DENY);
     }
 
     public WorkspaceEntity personalWorkspace(UUID userId) {

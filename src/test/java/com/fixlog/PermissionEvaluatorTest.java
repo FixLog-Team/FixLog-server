@@ -162,6 +162,54 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         assertEquals(Code.FORBIDDEN, e.getCode(), "구성원이지만 권한이 없으면 FORBIDDEN이다");
     }
 
+    // 기본 정책이 코드에 박혀 있으면 워크스페이스마다 노출 범위를 고를 수 없다.
+    // 판정의 마지막 단계가 데이터(workspace.base_access)를 따르는지 고정한다.
+    @Test
+    void 워크스페이스_기본이_ALLOW면_권한_없는_구성원도_접근한다() {
+        DocumentEntity doc = document("문서", null);
+        changeWorkspaceBaseAccess(PermissionType.ALLOW);
+
+        PermissionEvaluator.Decision decision = evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId());
+
+        assertTrue(decision.allowed());
+        assertFalse(decision.workspaceAdmin(), "관리자 특권이 아니라 기본 정책으로 열린 것이다");
+    }
+
+    @Test
+    void 기본이_ALLOW여도_명시적_DENY가_우선한다() {
+        DocumentEntity doc = document("문서", null);
+        changeWorkspaceBaseAccess(PermissionType.ALLOW);
+        grantUser(ResourceType.DOCUMENT, doc.getDocumentId(), member.getUserId(),
+                PermissionType.DENY, false);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> evaluator.evaluate(ResourceType.DOCUMENT, doc.getDocumentId()));
+
+        assertEquals(Code.FORBIDDEN, e.getCode());
+    }
+
+    @Test
+    void 새_협업_워크스페이스는_기본이_DENY다() {
+        assertEquals(PermissionType.DENY,
+                workspaceRepository.findById(workspace.getWorkspaceId()).orElseThrow().getBaseAccess(),
+                "명시적으로 부여한 것만 열리는 쪽이 기본이어야 한다");
+    }
+
+    @Test
+    void 개인_워크스페이스는_기본이_ALLOW다() {
+        UserEntity solo = signUp("solo");
+
+        assertEquals(PermissionType.ALLOW,
+                workspaceRepository.findByPersonalOwnerId(solo.getUserId()).orElseThrow().getBaseAccess(),
+                "혼자 쓰는 공간을 기본 차단할 이유가 없다");
+    }
+
+    private void changeWorkspaceBaseAccess(PermissionType baseAccess) {
+        WorkspaceEntity entity = workspaceRepository.findById(workspace.getWorkspaceId()).orElseThrow();
+        entity.changeBaseAccess(baseAccess);
+        workspaceRepository.saveAndFlush(entity);
+    }
+
     @Test
     void 비구성원에게는_문서가_존재하지_않는다() {
         DocumentEntity doc = document("문서", null);

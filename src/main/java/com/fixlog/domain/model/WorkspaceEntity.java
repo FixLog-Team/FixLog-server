@@ -1,7 +1,11 @@
 package com.fixlog.domain.model;
 
+import com.fixlog.common.code.Code;
+import com.fixlog.common.exception.BusinessException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -33,6 +37,17 @@ public class WorkspaceEntity {
     @Column(name = "personal_owner_id", columnDefinition = "uuid")
     private UUID personalOwnerId;
 
+    /**
+     * 상속 체인이 루트까지 올라갔을 때 적용할 기본 접근. 권한 트리의 종착점이다.
+     *
+     * <p>새 워크스페이스는 DENY로 시작한다. 권한 도구에서 불확실은 곧 누출이므로,
+     * 명시적으로 부여한 것만 열리는 쪽을 기본으로 둔다. 전원 공개로 쓰려면
+     * {@link #changeBaseAccess}로 ALLOW로 바꾼다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "base_access", length = 10, nullable = false)
+    private PermissionType baseAccess = PermissionType.DENY;
+
     @Column(name = "create_at", updatable = false)
     private Instant createAt;
 
@@ -50,7 +65,11 @@ public class WorkspaceEntity {
     }
 
     public static WorkspaceEntity personalFor(UserEntity owner) {
-        return new WorkspaceEntity(owner.getUserName() + "의 워크스페이스", owner.getUserId());
+        WorkspaceEntity workspace =
+                new WorkspaceEntity(owner.getUserName() + "의 워크스페이스", owner.getUserId());
+        // 개인 워크스페이스는 소유자 혼자 쓰므로 기본을 막아둘 이유가 없다.
+        workspace.baseAccess = PermissionType.ALLOW;
+        return workspace;
     }
 
     public static WorkspaceEntity shared(String workspaceName) {
@@ -62,8 +81,21 @@ public class WorkspaceEntity {
         this.updateAt = Instant.now();
     }
 
+    /** 구성원이 별도 설정 없이 접근할 수 있는지 바꾼다. */
+    public void changeBaseAccess(PermissionType baseAccess) {
+        if (baseAccess == null) {
+            throw new BusinessException(Code.INVALID_REQUEST, "기본 접근 정책은 필수입니다.");
+        }
+        this.baseAccess = baseAccess;
+        this.updateAt = Instant.now();
+    }
+
     public boolean isPersonal() {
         return personalOwnerId != null;
+    }
+
+    public PermissionType getBaseAccess() {
+        return baseAccess == null ? PermissionType.DENY : baseAccess;
     }
 
     public UUID getWorkspaceId() {

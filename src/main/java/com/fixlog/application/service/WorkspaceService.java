@@ -9,6 +9,7 @@ import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.UserEntity;
 import com.fixlog.domain.model.WorkspaceEntity;
 import com.fixlog.domain.model.WorkspaceMemberEntity;
@@ -222,6 +223,23 @@ public class WorkspaceService {
         WorkspaceEntity workspace = workspaceRepository.findById(workspaceId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
         workspace.rename(newName.trim());
+        workspaceRepository.save(workspace);
+        return WorkspaceDto.of(workspace, me.getRole());
+    }
+
+    /**
+     * 기본 접근 정책 변경. 상속 체인이 루트까지 올라갔을 때 적용되는 값이다.
+     *
+     * <p>DENY로 두면 명시적으로 부여한 권한만 열리고, ALLOW로 두면 구성원 전원이
+     * 별도 설정 없이 접근한다. 워크스페이스 전체의 노출 범위를 한 번에 바꾸는 설정이라
+     * 관리자만 변경할 수 있다.
+     */
+    @Transactional
+    public WorkspaceDto changeBaseAccess(UUID workspaceId, PermissionType baseAccess) {
+        WorkspaceMemberEntity me = requireAdmin(workspaceId);
+        WorkspaceEntity workspace = workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
+        workspace.changeBaseAccess(baseAccess);
         workspaceRepository.save(workspace);
         return WorkspaceDto.of(workspace, me.getRole());
     }
