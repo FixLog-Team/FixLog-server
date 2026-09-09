@@ -29,9 +29,11 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 워크스페이스 관리자 콘솔 (FR-ADM-001~007).
@@ -99,16 +101,27 @@ public class AdminConsoleService {
 
     /** 감사 로그 필터 조회 (FR-ADM-004, FR-AUD-005). */
     @Transactional(readOnly = true)
-    public List<AuditLogDto> auditLogs(UUID workspaceId, UUID actorUserId, AuditAction action,
-                                       AuditResult result, Instant from, Instant to) {
+    public List<AuditLogDto> auditLogs(UUID workspaceId, UUID actorUserId, UUID targetUserId,
+                                       AuditAction action, AuditResult result,
+                                       Instant from, Instant to) {
         workspaceService.requireAdmin(workspaceId);
-        List<AuditLogEntity> logs = auditLogRepository.search(workspaceId, actorUserId, action, result, from, to);
+        List<AuditLogEntity> logs = auditLogRepository.search(
+                workspaceId, actorUserId, targetUserId,
+                action != null ? action.name() : null,
+                result != null ? result.name() : null,
+                from, to);
 
+        // 행위자와 대상을 함께 이름으로 바꾼다. 같은 사람이 양쪽에 나올 수 있어 한 번에 조회한다.
         Map<UUID, String> userNames = userNames(logs.stream()
-                .map(AuditLogEntity::getActorUserId).distinct().toList());
+                .flatMap(entry -> Stream.of(entry.getActorUserId(), entry.getTargetPrincipalId()))
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList());
 
         return logs.stream()
-                .map(entry -> AuditLogDto.of(entry, userNames.get(entry.getActorUserId())))
+                .map(entry -> AuditLogDto.of(entry,
+                        userNames.get(entry.getActorUserId()),
+                        userNames.get(entry.getTargetPrincipalId())))
                 .toList();
     }
 

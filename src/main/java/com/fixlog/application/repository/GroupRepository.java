@@ -15,4 +15,8 @@ public interface GroupRepository extends JpaRepository<GroupEntity, UUID> {
     Optional<GroupEntity> findByGroupIdAndWorkspaceId(UUID groupId, UUID workspaceId);
 
     boolean existsByWorkspaceIdAndGroupName(UUID workspaceId, String groupName);
+
+    List<GroupEntity> findByWorkspaceId(UUID workspaceId);
+
+    void deleteByWorkspaceId(UUID workspaceId);
 }

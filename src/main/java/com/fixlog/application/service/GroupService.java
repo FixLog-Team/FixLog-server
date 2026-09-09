@@ -6,9 +6,12 @@ import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
+import com.fixlog.domain.model.AuditAction;
 import com.fixlog.domain.model.GroupEntity;
 import com.fixlog.domain.model.GroupMemberEntity;
+import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.UserEntity;
+import com.fixlog.domain.model.WorkspaceMemberEntity;
 import com.fixlog.presentation.dto.response.GroupMemberDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,17 +36,20 @@ public class GroupService {
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final UserRepository userRepository;
     private final WorkspaceService workspaceService;
+    private final AuditService auditService;
 
     public GroupService(GroupRepository groupRepository,
                         GroupMemberRepository groupMemberRepository,
                         WorkspaceMemberRepository workspaceMemberRepository,
                         UserRepository userRepository,
-                        WorkspaceService workspaceService) {
+                        WorkspaceService workspaceService,
+                        AuditService auditService) {
         this.groupRepository = groupRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.userRepository = userRepository;
         this.workspaceService = workspaceService;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -105,7 +111,7 @@ public class GroupService {
 
     @Transactional
     public void addMember(UUID workspaceId, UUID groupId, UUID userId) {
-        workspaceService.requireAdmin(workspaceId);
+        WorkspaceMemberEntity admin = workspaceService.requireAdmin(workspaceId);
         requireGroup(workspaceId, groupId);
 
         // 그룹은 워크스페이스 경계를 넘지 않는다. 워크스페이스 구성원만 그룹에 들어갈 수 있다.
@@ -116,16 +122,25 @@ public class GroupService {
             throw new BusinessException(Code.INVALID_REQUEST, "이미 그룹에 속한 사용자입니다.");
         }
         groupMemberRepository.save(new GroupMemberEntity(groupId, userId));
+
+        // 그룹에 걸린 권한이 그대로 따라가므로 권한 변경으로 남긴다.
+        auditService.recordChange(workspaceId, admin.getUserId(),
+                AuditAction.GROUP_MEMBER_CHANGE, null, null,
+                PrincipalType.USER, userId, "그룹 합류 (groupId=" + groupId + ")");
     }
 
     @Transactional
     public void removeMember(UUID workspaceId, UUID groupId, UUID userId) {
-        workspaceService.requireAdmin(workspaceId);
+        WorkspaceMemberEntity admin = workspaceService.requireAdmin(workspaceId);
         requireGroup(workspaceId, groupId);
 
         GroupMemberEntity member = groupMemberRepository.findByGroupIdAndUserId(groupId, userId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "그룹 구성원을 찾을 수 없습니다."));
         groupMemberRepository.delete(member);
+
+        auditService.recordChange(workspaceId, admin.getUserId(),
+                AuditAction.GROUP_MEMBER_CHANGE, null, null,
+                PrincipalType.USER, userId, "그룹 탈퇴 (groupId=" + groupId + ")");
     }
 
     private GroupEntity requireGroup(UUID workspaceId, UUID groupId) {

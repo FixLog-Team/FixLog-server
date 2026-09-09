@@ -48,6 +48,7 @@ public class AdminConsoleController {
     @GetMapping("/audit-logs")
     public Response auditLogs(@PathVariable UUID workspaceId,
                               @RequestParam(required = false) UUID actorUserId,
+                              @RequestParam(required = false) UUID targetUserId,
                               @RequestParam(required = false) AuditAction action,
                               @RequestParam(required = false) AuditResult result,
                               @RequestParam(required = false)
@@ -55,7 +56,7 @@ public class AdminConsoleController {
                               @RequestParam(required = false)
                               @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
         return DataResponse.success(
-                adminConsoleService.auditLogs(workspaceId, actorUserId, action, result, from, to));
+                adminConsoleService.auditLogs(workspaceId, actorUserId, targetUserId, action, result, from, to));
     }
 
     @GetMapping("/stats")

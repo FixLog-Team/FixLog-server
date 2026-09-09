@@ -6,6 +6,7 @@ import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
+import com.fixlog.domain.model.AuditAction;
 import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.PermissionEntity;
 import com.fixlog.domain.model.PermissionType;
@@ -31,24 +32,30 @@ public class PermissionService {
     private final UserRepository userRepository;
     private final PermissionEvaluator permissionEvaluator;
     private final WorkspaceContext workspaceContext;
+    private final AuditService auditService;
 
     public PermissionService(PermissionRepository permissionRepository,
                              WorkspaceMemberRepository workspaceMemberRepository,
                              GroupRepository groupRepository,
                              UserRepository userRepository,
                              PermissionEvaluator permissionEvaluator,
-                             WorkspaceContext workspaceContext) {
+                             WorkspaceContext workspaceContext,
+                             AuditService auditService) {
         this.permissionRepository = permissionRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.groupRepository = groupRepository;
         this.userRepository = userRepository;
         this.permissionEvaluator = permissionEvaluator;
         this.workspaceContext = workspaceContext;
+        this.auditService = auditService;
     }
 
     /**
      * 만든 사람에게 접근 권한을 준다 (FR-PRM-011).
      * 권한 판정을 거치지 않는 유일한 부여 경로이므로 생성 직후에만 호출한다.
+     *
+     * <p>여기서 주는 소유 권한은 감사에 남기지 않는다. 문서를 만들 때마다 1건씩 쌓여
+     * 정작 봐야 할 "누가 누구에게 열어줬나"를 덮기 때문이다.
      */
     @Transactional
     public PermissionEntity grantCreatorOwnership(UUID workspaceId, ResourceType resourceType,
@@ -73,7 +80,7 @@ public class PermissionService {
 
         requirePrincipalInWorkspace(workspaceId, principalType, principalId);
 
-        return permissionRepository
+        PermissionEntity saved = permissionRepository
                 .findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
                         resourceType, resourceId, principalType, principalId)
                 .map(existing -> {
@@ -83,6 +90,11 @@ public class PermissionService {
                 .orElseGet(() -> permissionRepository.save(new PermissionEntity(
                         workspaceId, principalType, principalId,
                         resourceType, resourceId, permissionType, canDownload, granter)));
+
+        auditService.recordChange(workspaceId, granter, AuditAction.PERMISSION_GRANT,
+                resourceType, resourceId, principalType, principalId,
+                permissionType + (canDownload ? " (다운로드 허용)" : " (다운로드 불가)"));
+        return saved;
     }
 
     /** 공유 회수 (FR-SHR-004). */
@@ -95,6 +107,12 @@ public class PermissionService {
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "권한을 찾을 수 없습니다."));
 
         permissionRepository.delete(permission);
+
+        auditService.recordChange(permission.getWorkspaceId(),
+                workspaceContext.requireCurrentUserId(), AuditAction.PERMISSION_REVOKE,
+                resourceType, resourceId,
+                permission.getPrincipalType(), permission.getPrincipalId(),
+                "회수됨 (" + permission.getPermissionType() + ")");
     }
 
     /** 이 리소스가 누구에게 공유돼 있는지. 공유를 설정할 수 있는 사람만 볼 수 있다. */

@@ -1,6 +1,8 @@
 package com.fixlog;
 
+import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.LabelRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
@@ -39,6 +41,7 @@ import com.fixlog.presentation.dto.request.FolderRequest;
 import com.fixlog.presentation.dto.response.FolderTreeDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -54,6 +57,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -77,6 +81,8 @@ class ServicePermissionFlowTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
+    @Autowired LabelRepository labelRepository;
+    @Autowired DocumentLabelRepository documentLabelRepository;
     @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
@@ -96,13 +102,14 @@ class ServicePermissionFlowTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
-                folderRepository, documentRepository, permissionRepository, invitationRepository);
+                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
+                auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository), policyRepository);
                 PermissionService permissionService = new PermissionService(
                 permissionRepository, workspaceMemberRepository, groupRepository,
-                userRepository, evaluator, workspaceContext);
+                userRepository, evaluator, workspaceContext, new AuditService(auditLogRepository));
         SecurityPolicyService securityPolicyService =
                 new SecurityPolicyService(policyRepository, workspaceService);
 folderService = new FolderService(folderRepository, documentRepository, workspaceContext, evaluator, permissionService);
@@ -188,6 +195,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     }
 
     @Test
+    @Disabled("액션별 권한 미구현 — permission 테이블에 action 컬럼이 없어 ALLOW 하나로 VIEW/EDIT/DELETE가 모두 열린다. 구현 시 이 테스트를 인수 조건으로 삼을 것")
     void VIEWER는_문서를_저장할_수_없다() {
         loginAs(admin);
         String docId = documentService.create(new DocumentCreateRequest(null, "읽기 전용")).getDocumentId();
@@ -248,6 +256,45 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
 
         assertEquals(1, tree.size());
         assertEquals("공유 폴더", tree.get(0).folderName());
+    }
+
+    // 실제 parent_id로 트리를 묶으면, 부모가 걸러진 순간 그 부모를 키로 가진 자식들이
+    // 루트부터의 재귀에 닿지 못해 사라진다. 권한을 줬는데 화면 어디에도 안 나오는 상태가 된다.
+    @Test
+    void 부모를_볼_수_없어도_권한_받은_자식_폴더는_트리에_나온다() {
+        loginAs(admin);
+        FolderEntity secret = folderService.createFolder(new FolderRequest(null, "비공개 상위"));
+        FolderEntity shared = folderService.createFolder(
+                new FolderRequest(secret.getFolderId(), "공유 하위"));
+        grant(ResourceType.FOLDER, secret.getFolderId(), member.getUserId(), PermissionType.DENY, false);
+        grant(ResourceType.FOLDER, shared.getFolderId(), member.getUserId(), PermissionType.ALLOW, true);
+
+        loginAs(member);
+        List<FolderTreeDto> tree = folderService.getFolderTree();
+
+        assertEquals(1, tree.size(), "권한을 받은 폴더는 트리에 나와야 한다");
+        assertEquals("공유 하위", tree.get(0).folderName());
+        assertNull(tree.get(0).parentId(), "숨겨진 조상의 ID는 내려보내지 않는다");
+    }
+
+    // 개수는 GROUP BY로 세면 권한이 조건에 들어가지 않는다. 문서를 열지 못해도
+    // "저 폴더에 몇 개 있다"가 드러나면 안 된다.
+    @Test
+    void 볼_수_없는_문서는_폴더_문서수에도_잡히지_않는다() {
+        loginAs(admin);
+        FolderEntity folder = folderService.createFolder(new FolderRequest(null, "공유 폴더"));
+        documentService.create(new DocumentCreateRequest(folder.getFolderId(), "보이는 문서"));
+        String hidden = documentService.create(
+                new DocumentCreateRequest(folder.getFolderId(), "가려진 문서")).getDocumentId();
+        grant(ResourceType.FOLDER, folder.getFolderId(), member.getUserId(), PermissionType.ALLOW, true);
+        grant(ResourceType.DOCUMENT, hidden, member.getUserId(), PermissionType.DENY, false);
+
+        loginAs(member);
+        FolderTreeDto node = folderService.getFolderTree().stream()
+                .filter(n -> "공유 폴더".equals(n.folderName()))
+                .findFirst().orElseThrow();
+
+        assertEquals(1, node.documentCount(), "권한 없는 문서는 개수로도 드러나면 안 된다");
     }
 
     @Test

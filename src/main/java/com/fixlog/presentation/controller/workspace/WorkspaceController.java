@@ -5,11 +5,13 @@ import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
 import com.fixlog.domain.model.WorkspaceEntity;
 import com.fixlog.domain.model.WorkspaceRole;
+import com.fixlog.presentation.dto.request.WorkspaceBaseAccessRequest;
 import com.fixlog.presentation.dto.request.WorkspaceCreateRequest;
 import com.fixlog.presentation.dto.request.WorkspaceInviteRequest;
 import com.fixlog.presentation.dto.request.WorkspaceRenameRequest;
 import com.fixlog.presentation.dto.request.WorkspaceRoleRequest;
 import com.fixlog.presentation.dto.response.WorkspaceDto;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -52,6 +54,16 @@ public class WorkspaceController {
     public Response rename(@PathVariable UUID workspaceId,
                            @RequestBody WorkspaceRenameRequest request) {
         return DataResponse.success(workspaceService.rename(workspaceId, request.name()));
+    }
+
+    /**
+     * 기본 접근 정책 변경. 워크스페이스 전체의 노출 범위를 한 번에 바꾸므로 관리자만 호출할 수 있다.
+     */
+    @PatchMapping("/{workspaceId}/base-access")
+    public Response changeBaseAccess(@PathVariable UUID workspaceId,
+                                     @Valid @RequestBody WorkspaceBaseAccessRequest request) {
+        return DataResponse.success(
+                workspaceService.changeBaseAccess(workspaceId, request.baseAccess()));
     }
 
     @DeleteMapping("/{workspaceId}")

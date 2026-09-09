@@ -117,8 +117,12 @@ public class FolderService {
     }
 
     /**
-     * 사이드바용 전체 폴더 트리. 폴더 전량과 폴더별 문서 수를 각각 한 번씩 조회한 뒤 메모리에서 엮는다.
+     * 사이드바용 전체 폴더 트리. 폴더 전량과 문서 전량을 각각 한 번씩 조회한 뒤 메모리에서 엮는다.
      * 볼 수 없는 폴더는 트리에서 빠진다.
+     *
+     * <p>부모를 볼 수 없고 자식만 권한을 받은 경우, 자식을 트리 루트로 끌어올린다.
+     * 실제 parent_id로 묶으면 사라진 부모를 키로 갖게 되어 루트부터의 재귀가 닿지 못하고,
+     * 권한을 부여받은 폴더가 화면 어디에도 나타나지 않는다.
      */
     @Transactional(readOnly = true)
     public List<FolderTreeDto> getFolderTree() {
@@ -129,27 +133,51 @@ public class FolderService {
                 .findByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1)).stream()
                 .filter(folder -> scope.canViewFolder(folder.getFolderId()))
                 .toList();
+        Set<String> visibleFolderIds = folders.stream()
+                .map(FolderEntity::getFolderId)
+                .collect(Collectors.toSet());
 
-        Map<String, Long> documentCounts = documentRepository.countDocumentsByFolder(workspaceId).stream()
-                .collect(Collectors.toMap(
-                        DocumentRepository.FolderDocumentCount::getFolderId,
-                        DocumentRepository.FolderDocumentCount::getDocumentCount));
+        Map<String, Long> documentCounts = visibleDocumentCounts(workspaceId, scope);
 
         // 루트 폴더는 parentId가 null이므로 groupingBy에 넣을 수 없다. 빈 문자열을 루트 키로 쓴다.
         Map<String, List<FolderEntity>> childrenByParent = folders.stream()
-                .collect(Collectors.groupingBy(f -> f.getParentId() == null ? ROOT_KEY : f.getParentId()));
+                .collect(Collectors.groupingBy(f -> treePositionOf(f.getParentId(), visibleFolderIds)));
 
         return buildNodes(ROOT_KEY, childrenByParent, documentCounts);
+    }
+
+    /**
+     * 폴더별 직속 문서 수. 볼 수 없는 문서는 세지 않는다.
+     *
+     * <p>GROUP BY로 세면 접근 권한이 조건에 들어가지 않아, 문서를 열지 못하는 사용자에게도
+     * "저 폴더에 몇 개 있다"가 개수로 드러난다. 판정을 통과한 문서만 메모리에서 집계한다.
+     */
+    private Map<String, Long> visibleDocumentCounts(UUID workspaceId, PermissionEvaluator.Scope scope) {
+        return documentRepository
+                .findByWorkspaceIdAndUsableOrderByOrdinalAscCreateTimeAsc(workspaceId, Integer.valueOf(1))
+                .stream()
+                // 루트 문서(folderId is null)는 어떤 폴더의 개수에도 포함되지 않는다.
+                .filter(document -> document.getFolderId() != null)
+                .filter(document -> scope.canViewDocument(document.getDocumentId(), document.getFolderId()))
+                .collect(Collectors.groupingBy(DocumentEntity::getFolderId, Collectors.counting()));
+    }
+
+    /** 트리에서 이 노드가 매달릴 위치. 부모가 보이지 않으면 루트로 승격된다. */
+    private String treePositionOf(String parentId, Set<String> visibleFolderIds) {
+        return parentId == null || !visibleFolderIds.contains(parentId) ? ROOT_KEY : parentId;
     }
 
     private List<FolderTreeDto> buildNodes(String parentKey,
                                            Map<String, List<FolderEntity>> childrenByParent,
                                            Map<String, Long> documentCounts) {
+        // 숨겨진 조상의 ID를 내보내지 않기 위해, 실제 parent_id가 아니라 트리에서의 위치를 내려보낸다.
+        String reportedParentId = ROOT_KEY.equals(parentKey) ? null : parentKey;
+
         return childrenByParent.getOrDefault(parentKey, List.of()).stream()
                 .sorted(TREE_ORDER)
                 .map(folder -> new FolderTreeDto(
                         folder.getFolderId(),
-                        folder.getParentId(),
+                        reportedParentId,
                         folder.getFolderName(),
                         folder.getOrdinal(),
                         documentCounts.getOrDefault(folder.getFolderId(), 0L),

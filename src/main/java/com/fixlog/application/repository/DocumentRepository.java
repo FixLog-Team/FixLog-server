@@ -51,13 +51,9 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
     Page<DocumentEntity> findByWorkspaceIdAndFolderIdAndUsable(
             UUID workspaceId, String folderId, Integer usable, Pageable pageable);
 
-    /** 폴더별 직속 문서 수. 루트 문서(folderId is null)는 집계에서 제외된다. */
-    @Query("""
-            select d.folderId as folderId, count(d) as documentCount from DocumentEntity d
-            where d.workspaceId = :workspaceId and d.usable = 1 and d.folderId is not null
-            group by d.folderId
-            """)
-    List<FolderDocumentCount> countDocumentsByFolder(@Param("workspaceId") UUID workspaceId);
+    // 폴더별 문서 수를 GROUP BY로 세지 않는다. 집계 조건에 접근 권한이 들어가지 않아,
+    // 문서를 열지 못하는 사용자에게도 개수로 존재가 드러난다.
+    // 판정을 통과한 문서만 세는 방식은 FolderService.visibleDocumentCounts 참고.
 
     long countByWorkspaceIdAndUsable(UUID workspaceId, Integer usable);
 
@@ -71,12 +67,6 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
 
     interface UserDocumentCount {
         String getUserId();
-
-        long getDocumentCount();
-    }
-
-    interface FolderDocumentCount {
-        String getFolderId();
 
         long getDocumentCount();
     }

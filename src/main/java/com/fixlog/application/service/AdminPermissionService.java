@@ -7,6 +7,7 @@ import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.UserRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
+import com.fixlog.domain.model.AuditAction;
 import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.domain.model.FolderEntity;
 import com.fixlog.domain.model.PermissionEntity;
@@ -38,19 +39,22 @@ public class AdminPermissionService {
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
     private final WorkspaceService workspaceService;
+    private final AuditService auditService;
 
     public AdminPermissionService(PermissionRepository permissionRepository,
                                   FolderRepository folderRepository,
                                   DocumentRepository documentRepository,
                                   UserRepository userRepository,
                                   GroupRepository groupRepository,
-                                  WorkspaceService workspaceService) {
+                                  WorkspaceService workspaceService,
+                                  AuditService auditService) {
         this.permissionRepository = permissionRepository;
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
         this.groupRepository = groupRepository;
         this.workspaceService = workspaceService;
+        this.auditService = auditService;
     }
 
     /** 리소스 권한 목록 + 폴더 상속 설정. */
@@ -75,12 +79,18 @@ public class AdminPermissionService {
     @Transactional
     public void updateFolderSettings(UUID workspaceId, String folderId,
                                      boolean inheritFromParent, PermissionType baseAccess) {
-        workspaceService.requireAdmin(workspaceId);
+        WorkspaceMemberEntity admin = workspaceService.requireAdmin(workspaceId);
         FolderEntity folder = folderRepository.findById(folderId)
                 .filter(f -> f.getWorkspaceId().equals(workspaceId))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
+        String before = "inherit=" + folder.isInheritFromParent() + ", base=" + folder.getBaseAccess();
         folder.configureInheritance(inheritFromParent, baseAccess);
         folderRepository.save(folder);
+
+        auditService.recordChange(workspaceId, admin.getUserId(),
+                AuditAction.ACCESS_POLICY_CHANGE, ResourceType.FOLDER, folderId,
+                null, null,
+                before + " → inherit=" + inheritFromParent + ", base=" + baseAccess);
     }
 
     /** Admin이 직접 권한을 부여한다. 주체·대상이 같은 워크스페이스인지 확인한다. */
@@ -104,6 +114,10 @@ public class AdminPermissionService {
                         workspaceId, principalType, principalId,
                         resourceType, resourceId, permissionType, canDownload, granter)));
 
+        auditService.recordChange(workspaceId, granter, AuditAction.PERMISSION_GRANT,
+                resourceType, resourceId, principalType, principalId,
+                permissionType + (canDownload ? " (다운로드 허용)" : " (다운로드 불가)"));
+
         return AdminPermissionDto.of(saved, principalNameOf(saved), resourceNameOf(resourceType, resourceId));
     }
 
@@ -111,12 +125,22 @@ public class AdminPermissionService {
     @Transactional
     public AdminPermissionDto updatePermission(UUID workspaceId, UUID permissionId,
                                                PermissionType permissionType, boolean canDownload) {
-        workspaceService.requireAdmin(workspaceId);
+        WorkspaceMemberEntity admin = workspaceService.requireAdmin(workspaceId);
         PermissionEntity permission = permissionRepository.findById(permissionId)
                 .filter(p -> p.getWorkspaceId().equals(workspaceId))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "권한을 찾을 수 없습니다."));
+        String before = permission.getPermissionType()
+                + (permission.isCanDownload() ? " (다운로드 허용)" : " (다운로드 불가)");
         permission.update(permissionType, canDownload);
         permissionRepository.save(permission);
+
+        auditService.recordChange(workspaceId, admin.getUserId(),
+                AuditAction.PERMISSION_GRANT,
+                permission.getResourceType(), permission.getResourceId(),
+                permission.getPrincipalType(), permission.getPrincipalId(),
+                before + " → " + permissionType
+                        + (canDownload ? " (다운로드 허용)" : " (다운로드 불가)"));
+
         return AdminPermissionDto.of(permission,
                 principalNameOf(permission),
                 resourceNameOf(permission.getResourceType(), permission.getResourceId()));
@@ -125,11 +149,17 @@ public class AdminPermissionService {
     /** 권한을 삭제한다. */
     @Transactional
     public void deletePermission(UUID workspaceId, UUID permissionId) {
-        workspaceService.requireAdmin(workspaceId);
+        WorkspaceMemberEntity admin = workspaceService.requireAdmin(workspaceId);
         PermissionEntity permission = permissionRepository.findById(permissionId)
                 .filter(p -> p.getWorkspaceId().equals(workspaceId))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "권한을 찾을 수 없습니다."));
         permissionRepository.delete(permission);
+
+        auditService.recordChange(workspaceId, admin.getUserId(),
+                AuditAction.PERMISSION_REVOKE,
+                permission.getResourceType(), permission.getResourceId(),
+                permission.getPrincipalType(), permission.getPrincipalId(),
+                "회수됨 (" + permission.getPermissionType() + ")");
     }
 
     private void requireResourceInWorkspace(UUID workspaceId, ResourceType resourceType, String resourceId) {

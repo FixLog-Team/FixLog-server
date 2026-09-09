@@ -2,7 +2,9 @@ package com.fixlog;
 
 import com.fixlog.application.repository.AuditLogRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository;
+import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.LabelRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
@@ -26,9 +28,12 @@ import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.domain.model.AuditAction;
 import com.fixlog.domain.model.AuditLogEntity;
 import com.fixlog.domain.model.AuditResult;
+import com.fixlog.domain.model.PermissionType;
+import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
 import com.fixlog.domain.model.WorkspaceEntity;
+import com.fixlog.domain.model.WorkspaceRole;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import org.junit.jupiter.api.AfterEach;
@@ -49,6 +54,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** 감사 로그(FR-AUD-*). */
@@ -65,6 +71,8 @@ class RevisionAndAuditTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
+    @Autowired LabelRepository labelRepository;
+    @Autowired DocumentLabelRepository documentLabelRepository;
     @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
@@ -85,13 +93,14 @@ class RevisionAndAuditTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
-                folderRepository, documentRepository, permissionRepository, invitationRepository);
+                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
+                auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext,
                 new AuditService(auditLogRepository), policyRepository);
         permissionService = new PermissionService(permissionRepository, workspaceMemberRepository,
-                groupRepository, userRepository, evaluator, workspaceContext);
+                groupRepository, userRepository, evaluator, workspaceContext, new AuditService(auditLogRepository));
         SecurityPolicyService securityPolicyService =
                 new SecurityPolicyService(policyRepository, workspaceService);
         FolderService folderService = new FolderService(folderRepository, documentRepository,
@@ -220,5 +229,77 @@ class RevisionAndAuditTest {
         AuditLogEntity log = auditLogRepository
                 .findByResourceTypeAndResourceIdOrderByCreateAtDesc(ResourceType.DOCUMENT, docId).get(0);
         assertFalse(log.isViaAdmin());
+    }
+
+    // ---------- 권한 변경 기록 ----------
+    // 열람 기록만 남고 권한 변경이 안 남으면 "이 사람이 왜 볼 수 있었나"를 되짚을 수 없다.
+
+    @Test
+    void 권한을_부여하면_누가_누구에게_무엇을_줬는지_남는다() {
+        String docId = newDocument("문서");
+        auditLogRepository.deleteAll();
+
+        permissionService.share(ResourceType.DOCUMENT, docId,
+                PrincipalType.USER, mate.getUserId(), PermissionType.ALLOW, true);
+
+        AuditLogEntity log = onlyChangeLog();
+        assertEquals(AuditAction.PERMISSION_GRANT, log.getAction());
+        assertEquals(author.getUserId(), log.getActorUserId(), "부여한 사람");
+        assertEquals(mate.getUserId(), log.getTargetPrincipalId(), "받은 사람");
+        assertEquals(docId, log.getResourceId());
+        assertTrue(log.getDetail().contains("ALLOW"), "무엇을 줬는지 남아야 한다: " + log.getDetail());
+    }
+
+    @Test
+    void 권한을_회수하면_회수_기록이_남는다() {
+        String docId = newDocument("문서");
+        var granted = permissionService.share(ResourceType.DOCUMENT, docId,
+                PrincipalType.USER, mate.getUserId(), PermissionType.ALLOW, true);
+        auditLogRepository.deleteAll();
+
+        permissionService.revoke(ResourceType.DOCUMENT, docId, granted.getId());
+
+        AuditLogEntity log = onlyChangeLog();
+        assertEquals(AuditAction.PERMISSION_REVOKE, log.getAction());
+        assertEquals(mate.getUserId(), log.getTargetPrincipalId());
+    }
+
+    @Test
+    void 역할을_바꾸면_변경_전후가_남는다() {
+        loginAs(admin);
+        auditLogRepository.deleteAll();
+
+        workspaceService.changeRole(workspace.getWorkspaceId(), mate.getUserId(), WorkspaceRole.ADMIN);
+
+        AuditLogEntity log = onlyChangeLog();
+        assertEquals(AuditAction.ROLE_CHANGE, log.getAction());
+        assertEquals(mate.getUserId(), log.getTargetPrincipalId());
+        assertEquals("MEMBER → ADMIN", log.getDetail());
+        assertNull(log.getResourceType(), "역할 변경은 폴더도 문서도 아니다");
+    }
+
+    @Test
+    void 권한_변경은_대상_기준으로_조회된다() {
+        String docId = newDocument("문서");
+        auditLogRepository.deleteAll();
+        permissionService.share(ResourceType.DOCUMENT, docId,
+                PrincipalType.USER, mate.getUserId(), PermissionType.ALLOW, true);
+
+        // "이 사람에게 무슨 권한이 오갔나"는 행위자가 아니라 대상으로 찾아야 한다.
+        List<AuditLogEntity> found = auditLogRepository.search(
+                workspace.getWorkspaceId(), null, mate.getUserId(), null, null, null, null);
+
+        assertEquals(1, found.size());
+        assertEquals(AuditAction.PERMISSION_GRANT, found.get(0).getAction());
+    }
+
+    /** 변경 기록만 골라 하나를 꺼낸다. 판정 과정에서 접근 기록이 함께 쌓이기 때문이다. */
+    private AuditLogEntity onlyChangeLog() {
+        List<AuditLogEntity> changes = auditLogRepository
+                .findByWorkspaceIdOrderByCreateAtDesc(workspace.getWorkspaceId()).stream()
+                .filter(log -> log.getAction().isPermissionChange())
+                .toList();
+        assertEquals(1, changes.size(), "권한 변경 기록이 정확히 하나 남아야 한다");
+        return changes.get(0);
     }
 }

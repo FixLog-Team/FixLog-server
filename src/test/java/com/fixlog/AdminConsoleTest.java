@@ -3,6 +3,7 @@ package com.fixlog;
 import com.fixlog.application.repository.AuditLogRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentLabelRepository;
+import com.fixlog.application.repository.LabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
@@ -69,6 +70,7 @@ class AdminConsoleTest {
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
     @Autowired DocumentHistoryRepository documentHistoryRepository;
+    @Autowired LabelRepository labelRepository;
     @Autowired DocumentLabelRepository documentLabelRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
@@ -90,13 +92,14 @@ class AdminConsoleTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
-                folderRepository, documentRepository, permissionRepository, invitationRepository);
+                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
+                auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         AuditService auditService = new AuditService(auditLogRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext, auditService, policyRepository);
         permissionService = new PermissionService(permissionRepository, workspaceMemberRepository,
-                groupRepository, userRepository, evaluator, workspaceContext);
+                groupRepository, userRepository, evaluator, workspaceContext, new AuditService(auditLogRepository));
         SecurityPolicyService securityPolicyService =
                 new SecurityPolicyService(policyRepository, workspaceService);
         folderService = new FolderService(folderRepository, documentRepository,
@@ -159,7 +162,7 @@ class AdminConsoleTest {
                 () -> adminConsole.permissions(ws),
                 () -> adminConsole.shares(ws),
                 () -> adminConsole.stats(ws),
-                () -> adminConsole.auditLogs(ws, null, null, null, null, null))) {
+                () -> adminConsole.auditLogs(ws, null, null, null, null, null, null))) {
             assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class, call::run).getCode());
         }
     }
@@ -215,12 +218,12 @@ class AdminConsoleTest {
         documentService.getDocument(docId);
 
         List<AuditLogDto> byMember = adminConsole.auditLogs(
-                workspace.getWorkspaceId(), member.getUserId(), null, null, null, null);
+                workspace.getWorkspaceId(), member.getUserId(), null, null, null, null, null);
 
         assertEquals(1, byMember.size());
         assertEquals("member", byMember.get(0).actorName());
         assertEquals(2, adminConsole.auditLogs(
-                workspace.getWorkspaceId(), null, null, null, null, null).size());
+                workspace.getWorkspaceId(), null, null, null, null, null, null).size());
     }
 
     @Test
@@ -234,7 +237,7 @@ class AdminConsoleTest {
         documentService.getDocument(docId);
 
         List<AuditLogDto> denied = adminConsole.auditLogs(
-                workspace.getWorkspaceId(), null, null, AuditResult.DENIED, null, null);
+                workspace.getWorkspaceId(), null, null, null, AuditResult.DENIED, null, null);
 
         assertEquals(1, denied.size());
         assertEquals(member.getUserId(), denied.get(0).actorUserId());
@@ -248,7 +251,7 @@ class AdminConsoleTest {
         documentService.getDocument(docId);
 
         List<AuditLogDto> logs = adminConsole.auditLogs(
-                workspace.getWorkspaceId(), null, null, null, null, null);
+                workspace.getWorkspaceId(), null, null, null, null, null, null);
 
         assertTrue(logs.get(0).viaAdmin());
     }

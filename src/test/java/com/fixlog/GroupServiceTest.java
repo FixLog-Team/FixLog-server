@@ -1,6 +1,10 @@
 package com.fixlog;
 
+import com.fixlog.application.repository.AuditLogRepository;
+import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.LabelRepository;
+import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
@@ -9,6 +13,7 @@ import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
+import com.fixlog.application.service.AuditService;
 import com.fixlog.application.service.GroupService;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
@@ -44,6 +49,10 @@ class GroupServiceTest {
     @Autowired DocumentRepository documentRepository;
     @Autowired PermissionRepository permissionRepository;
     @Autowired WorkspaceInvitationRepository invitationRepository;
+    @Autowired AuditLogRepository auditLogRepository;
+    @Autowired LabelRepository labelRepository;
+    @Autowired DocumentLabelRepository documentLabelRepository;
+    @Autowired SecurityPolicyRepository policyRepository;
 
     private WorkspaceService workspaceService;
     private GroupService groupService;
@@ -54,9 +63,10 @@ class GroupServiceTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
-                folderRepository, documentRepository, permissionRepository, invitationRepository);
+                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
+                auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         groupService = new GroupService(groupRepository, groupMemberRepository,
-                workspaceMemberRepository, userRepository, workspaceService);
+                workspaceMemberRepository, userRepository, workspaceService, new AuditService(auditLogRepository));
     }
 
     @AfterEach

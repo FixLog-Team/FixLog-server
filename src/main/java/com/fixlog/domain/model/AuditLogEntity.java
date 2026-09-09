@@ -34,15 +34,28 @@ public class AuditLogEntity {
     private UUID actorUserId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "action", length = 20, nullable = false)
+    @Column(name = "action", length = 30, nullable = false)
     private AuditAction action;
 
+    /** 역할 변경·초대처럼 폴더도 문서도 아닌 사건이 있으므로 null일 수 있다. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "resource_type", length = 20, nullable = false)
+    @Column(name = "resource_type", length = 20)
     private ResourceType resourceType;
 
-    @Column(name = "resource_id", length = 100, nullable = false)
+    @Column(name = "resource_id", length = 100)
     private String resourceId;
+
+    /** 권한을 받거나 잃은 주체. 접근 기록에는 없다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target_principal_type", length = 20)
+    private PrincipalType targetPrincipalType;
+
+    @Column(name = "target_principal_id", columnDefinition = "uuid")
+    private UUID targetPrincipalId;
+
+    /** 변경 전후 요약. 예: {@code "ALLOW → DENY"}, {@code "MEMBER → ADMIN"}. */
+    @Column(name = "detail", length = 255)
+    private String detail;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "result", length = 20, nullable = false)
@@ -58,14 +71,27 @@ public class AuditLogEntity {
     protected AuditLogEntity() {
     }
 
+    /** 접근 기록. 대상 주체와 변경 내용이 없다. */
     public AuditLogEntity(UUID workspaceId, UUID actorUserId, AuditAction action,
                           ResourceType resourceType, String resourceId,
+                          AuditResult result, boolean viaAdmin) {
+        this(workspaceId, actorUserId, action, resourceType, resourceId,
+                null, null, null, result, viaAdmin);
+    }
+
+    /** 권한 변경 기록. 누가(actor) 누구에게(target) 무엇을(detail) 했는지 남는다. */
+    public AuditLogEntity(UUID workspaceId, UUID actorUserId, AuditAction action,
+                          ResourceType resourceType, String resourceId,
+                          PrincipalType targetPrincipalType, UUID targetPrincipalId, String detail,
                           AuditResult result, boolean viaAdmin) {
         this.workspaceId = workspaceId;
         this.actorUserId = actorUserId;
         this.action = action;
         this.resourceType = resourceType;
         this.resourceId = resourceId;
+        this.targetPrincipalType = targetPrincipalType;
+        this.targetPrincipalId = targetPrincipalId;
+        this.detail = detail;
         this.result = result;
         this.viaAdmin = viaAdmin;
         this.createAt = Instant.now();
@@ -93,6 +119,18 @@ public class AuditLogEntity {
 
     public String getResourceId() {
         return resourceId;
+    }
+
+    public PrincipalType getTargetPrincipalType() {
+        return targetPrincipalType;
+    }
+
+    public UUID getTargetPrincipalId() {
+        return targetPrincipalId;
+    }
+
+    public String getDetail() {
+        return detail;
     }
 
     public AuditResult getResult() {
