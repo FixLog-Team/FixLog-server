@@ -13,31 +13,42 @@ package com.fixlog.domain.model;
 public enum AuditAction {
 
     // ---------- 접근 ----------
-    VIEW,
-    DOWNLOAD,
-    EDIT,
-    DELETE,
-    SHARE,
-    RESTORE,
+    VIEW(false),
+    DOWNLOAD(false),
+    EDIT(false),
+    DELETE(false),
+    SHARE(false),
+    RESTORE(false),
 
     // ---------- 권한 변경 ----------
     /** 폴더·문서 권한 부여 또는 수정. 수정이면 detail에 변경 전후가 남는다. */
-    PERMISSION_GRANT,
+    PERMISSION_GRANT(true),
     /** 폴더·문서 권한 회수. */
-    PERMISSION_REVOKE,
+    PERMISSION_REVOKE(true),
     /** 워크스페이스 역할 변경 (MEMBER ↔ ADMIN ↔ OWNER). */
-    ROLE_CHANGE,
+    ROLE_CHANGE(true),
     /** 워크스페이스 초대. */
-    MEMBER_INVITE,
+    MEMBER_INVITE(true),
     /** 워크스페이스에서 내보내기 또는 스스로 나가기. */
-    MEMBER_REMOVE,
+    MEMBER_REMOVE(true),
     /** 그룹 구성원 변경. 그룹에 걸린 권한이 그대로 따라가므로 권한 변경으로 본다. */
-    GROUP_MEMBER_CHANGE,
+    GROUP_MEMBER_CHANGE(true),
     /** 상속·기본 접근 정책 변경 (폴더 inherit·base_access, 워크스페이스 base_access). */
-    ACCESS_POLICY_CHANGE;
+    ACCESS_POLICY_CHANGE(true);
 
-    /** 접근 기록이 아니라 권한을 바꾼 기록인지. 관리 화면에서 두 종류를 갈라 보여주기 위한 구분이다. */
+    /**
+     * 값마다 성격을 직접 들고 있다. 선언 순서로 판단하면 상수를 재배치하거나
+     * 접근 계열 값을 뒤에 추가하는 순간 컴파일 에러도 테스트 실패도 없이 분류가 뒤집힌다.
+     * 이 값은 관리 화면에서 열람 기록과 권한 변경 기록을 가르는 데 쓰인다.
+     */
+    private final boolean permissionChange;
+
+    AuditAction(boolean permissionChange) {
+        this.permissionChange = permissionChange;
+    }
+
+    /** 접근 기록이 아니라 권한을 바꾼 기록인지. */
     public boolean isPermissionChange() {
-        return ordinal() >= PERMISSION_GRANT.ordinal();
+        return permissionChange;
     }
 }

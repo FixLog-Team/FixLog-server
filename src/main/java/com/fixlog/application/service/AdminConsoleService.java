@@ -29,9 +29,11 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 워크스페이스 관리자 콘솔 (FR-ADM-001~007).
@@ -108,9 +110,8 @@ public class AdminConsoleService {
 
         // 행위자와 대상을 함께 이름으로 바꾼다. 같은 사람이 양쪽에 나올 수 있어 한 번에 조회한다.
         Map<UUID, String> userNames = userNames(logs.stream()
-                .flatMap(entry -> java.util.stream.Stream.of(
-                        entry.getActorUserId(), entry.getTargetPrincipalId()))
-                .filter(java.util.Objects::nonNull)
+                .flatMap(entry -> Stream.of(entry.getActorUserId(), entry.getTargetPrincipalId()))
+                .filter(Objects::nonNull)
                 .distinct()
                 .toList());
 

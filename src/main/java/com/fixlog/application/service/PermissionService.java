@@ -53,10 +53,11 @@ public class PermissionService {
     /**
      * 만든 사람에게 접근 권한을 준다 (FR-PRM-011).
      * 권한 판정을 거치지 않는 유일한 부여 경로이므로 생성 직후에만 호출한다.
+     *
+     * <p>여기서 주는 소유 권한은 감사에 남기지 않는다. 문서를 만들 때마다 1건씩 쌓여
+     * 정작 봐야 할 "누가 누구에게 열어줬나"를 덮기 때문이다.
      */
     @Transactional
-    // 만든 사람에게 자동으로 주는 소유 권한은 감사에 남기지 않는다.
-    // 문서를 만들 때마다 1건씩 쌓여 정작 봐야 할 "누가 누구에게 열어줬나"를 덮는다.
     public PermissionEntity grantCreatorOwnership(UUID workspaceId, ResourceType resourceType,
                                                   String resourceId, UUID creatorId) {
         return permissionRepository.save(new PermissionEntity(

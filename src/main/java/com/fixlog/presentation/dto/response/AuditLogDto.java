@@ -28,10 +28,6 @@ public record AuditLogDto(
         boolean viaAdmin,
         Instant createAt
 ) {
-    public static AuditLogDto of(AuditLogEntity entity, String actorName) {
-        return of(entity, actorName, null);
-    }
-
     public static AuditLogDto of(AuditLogEntity entity, String actorName, String targetName) {
         return new AuditLogDto(
                 entity.getId(),
