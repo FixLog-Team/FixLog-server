@@ -116,14 +116,15 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     // ---------- 생성과 개인 워크스페이스 ----------
 
     @Test
-    void 워크스페이스를_만든_사람이_관리자가_된다() {
+    void 워크스페이스를_만든_사람이_소유자가_된다() {
         UserEntity creator = signUpAndLogin("creator");
 
         WorkspaceEntity workspace = workspaceService.create("OS 스터디");
 
         assertEquals("OS 스터디", workspace.getWorkspaceName());
         assertFalse(workspace.isPersonal());
-        assertEquals(WorkspaceRole.ADMIN,
+        // OWNER는 ADMIN보다 강한 역할이다. 만든 사람은 다른 OWNER를 세울 수 있어야 하므로 OWNER다.
+        assertEquals(WorkspaceRole.OWNER,
                 workspaceMemberRepository
                         .findByWorkspaceIdAndUserId(workspace.getWorkspaceId(), creator.getUserId())
                         .orElseThrow().getRole());
@@ -168,8 +169,9 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         List<WorkspaceDto> mine = workspaceService.myWorkspaces();
 
         assertEquals(2, mine.size(), "개인 워크스페이스와 초대받은 워크스페이스");
-        assertEquals(WorkspaceRole.ADMIN,
-                mine.stream().filter(WorkspaceDto::personal).findFirst().orElseThrow().role());
+        assertEquals(WorkspaceRole.OWNER,
+                mine.stream().filter(WorkspaceDto::personal).findFirst().orElseThrow().role(),
+                "개인 워크스페이스에서는 본인이 소유자다");
         assertEquals(WorkspaceRole.MEMBER,
                 mine.stream().filter(w -> !w.personal()).findFirst().orElseThrow().role());
     }
@@ -244,7 +246,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     }
 
     @Test
-    void 마지막_관리자는_워크스페이스를_나갈_수_없다() {
+    void 마지막_소유자는_워크스페이스를_나갈_수_없다() {
         signUpAndLogin("admin");
         WorkspaceEntity workspace = workspaceService.create("팀");
 
@@ -255,19 +257,20 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     }
 
     @Test
-    void 관리자가_둘이면_한_명은_나갈_수_있다() {
-        UserEntity admin = signUpAndLogin("admin");
+    void 소유자가_둘이면_한_명은_나갈_수_있다() {
+        UserEntity owner = signUpAndLogin("admin");
         WorkspaceEntity workspace = workspaceService.create("팀");
         UserEntity second = signUp("second");
         workspaceService.invite(workspace.getWorkspaceId(), "second@fixlog.dev");
-        workspaceService.changeRole(workspace.getWorkspaceId(), second.getUserId(), WorkspaceRole.ADMIN);
+        // 나가는 것을 막는 규칙은 "마지막 OWNER"에 걸린다. ADMIN을 하나 더 두는 것으로는 풀리지 않는다.
+        workspaceService.changeRole(workspace.getWorkspaceId(), second.getUserId(), WorkspaceRole.OWNER);
 
         workspaceService.leave(workspace.getWorkspaceId());
 
         assertFalse(workspaceMemberRepository
-                .existsByWorkspaceIdAndUserId(workspace.getWorkspaceId(), admin.getUserId()));
+                .existsByWorkspaceIdAndUserId(workspace.getWorkspaceId(), owner.getUserId()));
         assertEquals(1, workspaceMemberRepository
-                .countByWorkspaceIdAndRole(workspace.getWorkspaceId(), WorkspaceRole.ADMIN));
+                .countByWorkspaceIdAndRole(workspace.getWorkspaceId(), WorkspaceRole.OWNER));
     }
 
     // ---------- 개인 워크스페이스 제약 ----------
