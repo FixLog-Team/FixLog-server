@@ -7,6 +7,8 @@ import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.request.AdminGrantPermissionRequest;
 import com.fixlog.presentation.dto.request.AdminUpdatePermissionRequest;
 import com.fixlog.presentation.dto.request.FolderSettingsRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -25,6 +27,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/workspaces/{workspaceId}/admin")
+@Tag(name = "Admin")
 public class AdminPermissionController {
 
     private final AdminPermissionService adminPermissionService;
@@ -34,6 +37,7 @@ public class AdminPermissionController {
     }
 
     @GetMapping("/permissions/resources/{resourceType}/{resourceId}")
+    @Operation(operationId = "adminListPermissionsForResource")
     public Response listForResource(@PathVariable UUID workspaceId,
                                     @PathVariable ResourceType resourceType,
                                     @PathVariable String resourceId) {
@@ -42,6 +46,7 @@ public class AdminPermissionController {
     }
 
     @PatchMapping("/permissions/resources/folders/{folderId}/settings")
+    @Operation(operationId = "adminUpdateFolderSettings")
     public Response updateFolderSettings(@PathVariable UUID workspaceId,
                                          @PathVariable String folderId,
                                          @RequestBody FolderSettingsRequest request) {
@@ -52,6 +57,7 @@ public class AdminPermissionController {
     }
 
     @PostMapping("/permissions")
+    @Operation(operationId = "adminGrantPermission")
     public Response grant(@PathVariable UUID workspaceId,
                           @RequestBody AdminGrantPermissionRequest request) {
         return DataResponse.success(adminPermissionService.grant(
@@ -62,6 +68,7 @@ public class AdminPermissionController {
     }
 
     @PutMapping("/permissions/{permissionId}")
+    @Operation(operationId = "adminUpdatePermission")
     public Response update(@PathVariable UUID workspaceId,
                            @PathVariable UUID permissionId,
                            @RequestBody AdminUpdatePermissionRequest request) {
@@ -71,6 +78,7 @@ public class AdminPermissionController {
     }
 
     @DeleteMapping("/permissions/{permissionId}")
+    @Operation(operationId = "adminDeletePermission")
     public Response delete(@PathVariable UUID workspaceId,
                            @PathVariable UUID permissionId) {
         adminPermissionService.deletePermission(workspaceId, permissionId);

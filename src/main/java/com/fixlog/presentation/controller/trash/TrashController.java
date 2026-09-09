@@ -9,6 +9,8 @@ import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.request.LabelRequest;
 import com.fixlog.presentation.dto.response.DocumentDto;
 import com.fixlog.presentation.dto.response.LabelDto;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,6 +23,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Trash")
 public class TrashController {
 
     private final TrashService trashService;
@@ -34,17 +37,20 @@ public class TrashController {
     // ---------- 휴지통 ----------
 
     @GetMapping("/trash")
+    @Operation(operationId = "listTrash")
     public Response trash() {
         return DataResponse.success(trashService.list());
     }
 
     @PostMapping("/trash/{resourceType}/{resourceId}/restore")
+    @Operation(operationId = "restoreFromTrash")
     public Response restore(@PathVariable ResourceType resourceType, @PathVariable String resourceId) {
         trashService.restore(resourceType, resourceId);
         return Response.success("복원했습니다.");
     }
 
     @DeleteMapping("/trash/{resourceType}/{resourceId}")
+    @Operation(operationId = "purgeFromTrash")
     public Response purge(@PathVariable ResourceType resourceType, @PathVariable String resourceId) {
         trashService.purge(resourceType, resourceId);
         return Response.success("영구 삭제했습니다.");
@@ -53,28 +59,33 @@ public class TrashController {
     // ---------- 라벨 ----------
 
     @GetMapping("/labels")
+    @Operation(operationId = "listLabels")
     public Response labels() {
         return DataResponse.success(labelService.labelsOfWorkspace().stream().map(LabelDto::from).toList());
     }
 
     @GetMapping("/labels/{labelId}/documents")
+    @Operation(operationId = "listDocumentsWithLabel")
     public Response documentsWithLabel(@PathVariable UUID labelId) {
         return DataResponse.success(
                 labelService.documentsWith(labelId).stream().map(DocumentDto::from).toList());
     }
 
     @GetMapping("/documents/{documentId}/labels")
+    @Operation(operationId = "listDocumentLabels")
     public Response documentLabels(@PathVariable String documentId) {
         return DataResponse.success(labelService.labelsOf(documentId).stream().map(LabelDto::from).toList());
     }
 
     @PostMapping("/documents/{documentId}/labels")
+    @Operation(operationId = "attachLabel")
     public Response attachLabel(@PathVariable String documentId, @RequestBody LabelRequest request) {
         LabelEntity label = labelService.attach(documentId, request.labelName());
         return DataResponse.success(LabelDto.from(label));
     }
 
     @DeleteMapping("/documents/{documentId}/labels/{labelId}")
+    @Operation(operationId = "detachLabel")
     public Response detachLabel(@PathVariable String documentId, @PathVariable UUID labelId) {
         labelService.detach(documentId, labelId);
         return Response.success("라벨을 제거했습니다.");

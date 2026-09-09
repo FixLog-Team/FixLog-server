@@ -1,7 +1,7 @@
 # FixLog API 가이드 (프론트엔드용)
 
 > 최종 업데이트: 2026-09-08
-> Base URL (개발): `http://localhost:8080/fixlog`
+> Base URL (개발): `https://fixlog.art/fixlog`
 
 ---
 
@@ -22,6 +22,7 @@
 13. [관리자 콘솔 API](#13-관리자-콘솔-api)
 14. [보안 정책 API](#14-보안-정책-api)
 15. [에러 처리](#15-에러-처리)
+16. [Swagger UI](#16-swagger-ui)
 
 ---
 
@@ -31,7 +32,7 @@
 
 | 환경 | URL |
 |------|-----|
-| 개발 | `http://localhost:8080/fixlog` |
+| 개발 | `https://fixlog.art/fixlog` |
 
 ### 인증 헤더
 
@@ -125,7 +126,7 @@ GET  /swagger-ui.html
 
 ```
 1. 사용자가 로그인 요청
-   → 프론트: window.location.href = "http://localhost:8080/fixlog/login"
+   → 프론트: window.location.href = "https://fixlog.art/fixlog/login"
 
 2. 서버가 Google 로그인 페이지로 리디렉션
 
@@ -147,6 +148,8 @@ GET  /swagger-ui.html
 ## 3. 인증 API
 
 ### GET /login
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Auth/login)
+
 Google OAuth 로그인 시작 (페이지 이동)
 
 **인증 불필요**
@@ -158,6 +161,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### POST /auth/token/refresh
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Auth/refreshToken)
+
 액세스 토큰 재발급
 
 **인증 불필요**
@@ -183,6 +188,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### GET /auth/token
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Auth/getAuthSession)
+
 현재 로그인 사용자 정보 조회
 
 **인증 필요**
@@ -207,6 +214,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 > 모든 엔드포인트 **인증 필요**
 
 ### POST /api/documents
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/createDocument)
+
 문서 생성 (빈 문서)
 
 **Request Body**
@@ -226,6 +235,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### GET /api/documents
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/listDocuments)
+
 문서 목록 조회 (페이지네이션 / 무한스크롤)
 
 **Query Params**
@@ -257,6 +268,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### GET /api/documents/{documentId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/getDocument)
+
 문서 조회
 
 **Response**
@@ -283,6 +296,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### PUT /api/documents/{documentId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/saveDocument)
+
 문서 내용 저장
 
 **Request Body**
@@ -305,6 +320,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### PATCH /api/documents/{documentId}/title
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/updateDocumentTitle)
+
 문서 제목만 변경
 
 **Request Body**
@@ -319,6 +336,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### GET /api/documents/{documentId}/save-state
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/getDocumentSaveState)
+
 마지막 저장 상태 조회 (자동저장 확인용)
 
 **Response**
@@ -336,6 +355,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### POST /api/documents/{documentId}/duplicate
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/duplicateDocument)
+
 문서 복제
 
 **Response**
@@ -354,6 +375,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### DELETE /api/documents/{documentId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/deleteDocument)
+
 문서 삭제 (소프트 삭제 — 복구 가능)
 
 **Response**
@@ -367,6 +390,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### PATCH /api/documents/{documentId}/move
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/moveDocument)
+
 문서 폴더 이동
 
 **Request Body**
@@ -384,6 +409,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### PATCH /api/documents/reorder
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/reorderDocuments)
+
 같은 폴더 안 문서 순서 변경 (드래그 앤 드롭)
 
 **Request Body**
@@ -404,6 +431,8 @@ Google OAuth 로그인 시작 (페이지 이동)
 ---
 
 ### GET /api/documents/{documentId}/download
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/downloadDocument)
+
 문서 PDF 다운로드
 
 **Response**: `application/pdf` 바이너리
@@ -418,6 +447,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 > 모든 엔드포인트 **인증 필요**
 
 ### GET /api/folders
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/getRootContents)
+
 루트 콘텐츠 조회 (루트 폴더 + 루트 문서 목록). 소유자는 로그인 사용자로 자동 결정된다.
 
 **Response**
@@ -446,6 +477,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### GET /api/folders/{folderId}/contents
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/getFolderContents)
+
 폴더 콘텐츠 조회 (하위 폴더 + 문서 목록)
 
 **Response**: 위와 동일한 `FolderContentsDto` 형식
@@ -459,6 +492,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### GET /api/folders/tree
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/getFolderTree)
+
 전체 폴더 트리 조회 (사이드바용). 한 번의 요청으로 모든 폴더를 중첩 구조로 받는다.
 
 **Response**
@@ -496,6 +531,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### GET /api/folders/{folderId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/getFolder)
+
 특정 폴더 정보 조회
 
 **Response**: `FolderDto`
@@ -503,6 +540,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### POST /api/folders
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/createFolder)
+
 폴더 생성
 
 **Request Body**
@@ -521,6 +560,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### PUT /api/folders/{folderId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/updateFolder)
+
 폴더 이름 변경
 
 **Request Body**
@@ -535,6 +576,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### PATCH /api/folders/reorder
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/reorderFolders)
+
 같은 부모 아래 폴더 순서 변경 (드래그 앤 드롭)
 
 **Request Body**
@@ -553,6 +596,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### PATCH /api/folders/{folderId}/move
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/moveFolder)
+
 폴더 이동 (부모 폴더 변경)
 
 **Request Body**
@@ -570,6 +615,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### DELETE /api/folders/{folderId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/deleteFolder)
+
 폴더 삭제 (소프트 삭제)
 
 > 하위 폴더와 폴더 안의 모든 문서가 **함께 소프트 삭제**된다(캐스케이드).
@@ -590,6 +637,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 > AI 모델: Google Gemini (Chat), OpenAI (Embedding)
 
 ### POST /ai/analyze
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI/aiAnalyze)
+
 문서 분석 (요약 + 태그 + 임베딩 한 번에). content를 직접 body로 전달.
 
 **Request Body**
@@ -615,6 +664,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### POST /ai/summarize
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI/aiSummarize)
+
 문서 요약. content를 직접 body로 전달.
 
 **Request Body**
@@ -634,6 +685,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### POST /ai/documents/{documentId}/summarize
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI/aiSummarizeById)
+
 문서 ID 기반 요약. 서버가 DB에서 문서 원문(`plainText`)을 조회해 요약한다.
 권한 있는 문서만 대상이며, 요청 body는 없다.
 
@@ -649,6 +702,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### POST /ai/tags
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI/aiGenerateTags)
+
 태그 자동 생성 (5개, content를 직접 body로 전달)
 
 **Request Body**
@@ -671,6 +726,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### POST /ai/embedding
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI/aiGenerateEmbedding)
+
 임베딩 벡터 생성
 
 **Request Body**
@@ -690,6 +747,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### POST /ai/ask
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI/aiAsk)
+
 질문 기반 AI 답변 생성 (RAG). 접근 가능한 문서 중 질문과 유사한 문서를 검색해 그 내용을 근거로 답변을 생성하고, 참고한 문서 정보를 함께 반환한다.
 
 **Request Body**
@@ -733,6 +792,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 > 모든 엔드포인트 **인증 필요**
 
 ### POST /search
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Search/search)
+
 의미 기반(semantic) 문서 검색. 검색 문장을 임베딩한 뒤 벡터 유사도로 접근 가능한 문서 중 상위 N개를 반환한다.
 
 **Request Body**
@@ -771,34 +832,41 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ## 8. 워크스페이스 API
 
 ### GET /api/workspaces
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/listWorkspaces)
+
 내가 속한 워크스페이스 목록. 여기서 고른 `workspaceId`를 `X-Workspace-Id` 헤더로 보냅니다.
 
 ```json
 {
   "code": "SUCCESS",
   "result": [
-    { "workspaceId": "...", "workspaceName": "홍길동의 워크스페이스", "personal": true, "role": "ADMIN" },
-    { "workspaceId": "...", "workspaceName": "OS 스터디", "personal": false, "role": "MEMBER" }
+    { "workspaceId": "...", "workspaceName": "홍길동의 워크스페이스", "personal": true, "role": "OWNER", "baseAccess": "ALLOW", "createAt": "..." },
+    { "workspaceId": "...", "workspaceName": "OS 스터디", "personal": false, "role": "MEMBER", "baseAccess": "DENY", "createAt": "..." }
   ]
 }
 ```
 
 가입하면 개인 워크스페이스가 자동으로 생깁니다. 역할은 워크스페이스마다 다릅니다.
+`baseAccess`는 명시적 권한이 없는 구성원에게 적용되는 기본 접근(`ALLOW`/`DENY`). 개인 워크스페이스는 항상 `ALLOW`, 새로 만든 협업 워크스페이스는 기본 `DENY`입니다.
 
 ---
 
 ### POST /api/workspaces
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/createWorkspace)
+
 워크스페이스 생성
 
 ```json
 { "workspaceName": "OS 스터디" }
 ```
 
-만든 사람이 `ADMIN`이 됩니다.
+만든 사람이 `OWNER`가 됩니다.
 
 ---
 
 ### GET /api/workspaces/{workspaceId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/getWorkspace)
+
 워크스페이스 단건 조회. 구성원만 가능, 비구성원은 `NOT_FOUND`.
 
 **Response**
@@ -809,7 +877,9 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
     "workspaceId": "...",
     "workspaceName": "OS 스터디",
     "personal": false,
-    "role": "MEMBER"
+    "role": "MEMBER",
+    "baseAccess": "DENY",
+    "createAt": "2026-09-09T00:00:00Z"
   }
 }
 ```
@@ -817,6 +887,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### PATCH /api/workspaces/{workspaceId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/renameWorkspace)
+
 워크스페이스 이름 변경. **Admin만.**
 
 ```json
@@ -827,7 +899,27 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 ---
 
+### PATCH /api/workspaces/{workspaceId}/base-access
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/changeWorkspaceBaseAccess)
+
+워크스페이스 기본 접근 정책 변경. **Admin/Owner만.**
+
+```json
+{ "baseAccess": "DENY" }
+```
+
+| 값 | 의미 |
+|---|---|
+| `ALLOW` | 명시적 권한이 없어도 구성원이 접근 가능 |
+| `DENY` | 명시적 권한이 있는 구성원만 접근 가능 (기본값) |
+
+**Response**: `WorkspaceDto`
+
+---
+
 ### DELETE /api/workspaces/{workspaceId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/deleteWorkspace)
+
 워크스페이스 삭제. **Admin만. 개인 워크스페이스는 삭제 불가.**
 
 내부 폴더·문서 소프트 삭제, 구성원·초대·권한은 하드 삭제됩니다.
@@ -840,11 +932,15 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### GET /api/workspaces/{workspaceId}/members
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/listWorkspaceMembers)
+
 구성원 목록 (`userId`, `userName`, `email`, `role`, `joinedAt`).
 
 ---
 
 ### POST /api/workspaces/{workspaceId}/members
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/inviteWorkspaceMember)
+
 이미 가입한 사용자를 이메일로 초대합니다. **Admin만.**
 
 ```json
@@ -860,16 +956,22 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### PATCH /api/workspaces/{workspaceId}/members/{userId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/changeWorkspaceMemberRole)
+
 역할 변경. **Admin만.** `{ "role": "ADMIN" }`
 
 ---
 
 ### DELETE /api/workspaces/{workspaceId}/members/{userId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/removeWorkspaceMember)
+
 구성원 제거. **Admin만.**
 
 ---
 
 ### POST /api/workspaces/{workspaceId}/leave
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/leaveWorkspace)
+
 스스로 나가기.
 
 > **마지막 관리자는 강등·제거·탈퇴할 수 없습니다** (`INVALID_REQUEST`).
@@ -881,13 +983,13 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 관리자가 `POST .../admin/invitations`로 초대하면 서버가 이메일로 토큰을 전송합니다.
 수신자는 이메일 링크를 클릭해 수락/거절합니다 — 인증된 사용자만 수락할 수 있습니다.
 
-| 메서드 | 경로 | 설명 |
-|---|---|---|
-| `GET` | `/api/workspaces/{workspaceId}/admin/invitations` | 초대 목록 (Admin) |
-| `POST` | `/api/workspaces/{workspaceId}/admin/invitations` | 초대 발송 (Admin) |
-| `DELETE` | `/api/workspaces/{workspaceId}/admin/invitations/{invitationId}` | 초대 취소 (Admin) |
-| `POST` | `/api/workspaces/invitations/{token}/accept` | 초대 수락 (인증 필요) |
-| `POST` | `/api/workspaces/invitations/{token}/decline` | 초대 거절 |
+| 메서드 | 경로 | 설명 | Swagger |
+|---|---|---|---|
+| `GET` | `/api/workspaces/{workspaceId}/admin/invitations` | 초대 목록 (Admin) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListInvitations) |
+| `POST` | `/api/workspaces/{workspaceId}/admin/invitations` | 초대 발송 (Admin) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminInvite) |
+| `DELETE` | `/api/workspaces/{workspaceId}/admin/invitations/{invitationId}` | 초대 취소 (Admin) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminCancelInvitation) |
+| `POST` | `/api/workspaces/invitations/{token}/accept` | 초대 수락 (인증 필요) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/acceptInvitation) |
+| `POST` | `/api/workspaces/invitations/{token}/decline` | 초대 거절 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/declineInvitation) |
 
 초대 발송 Body:
 ```json
@@ -916,15 +1018,15 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 권한을 사람마다 주지 않고 묶음에 줄 때 씁니다. 그룹은 워크스페이스를 넘지 않습니다.
 
-| 메서드 | 경로 | 비고 |
-|---|---|---|
-| `GET` | `/api/workspaces/{workspaceId}/groups` | 구성원이면 조회 가능 |
-| `POST` | `/api/workspaces/{workspaceId}/groups` | Admin만. `{ "groupName": "백엔드 파트" }` |
-| `PATCH` | `/api/workspaces/{workspaceId}/groups/{groupId}` | Admin만 |
-| `DELETE` | `/api/workspaces/{workspaceId}/groups/{groupId}` | Admin만 |
-| `GET` | `/api/workspaces/{workspaceId}/groups/{groupId}/members` | |
-| `POST` | `/api/workspaces/{workspaceId}/groups/{groupId}/members` | Admin만. `{ "userId": "..." }` |
-| `DELETE` | `/api/workspaces/{workspaceId}/groups/{groupId}/members/{userId}` | Admin만 |
+| 메서드 | 경로 | 비고 | Swagger |
+|---|---|---|---|
+| `GET` | `/api/workspaces/{workspaceId}/groups` | 구성원이면 조회 가능 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/listGroups) |
+| `POST` | `/api/workspaces/{workspaceId}/groups` | Admin만. `{ "groupName": "백엔드 파트" }` | [→](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/createGroup) |
+| `PATCH` | `/api/workspaces/{workspaceId}/groups/{groupId}` | Admin만 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/renameGroup) |
+| `DELETE` | `/api/workspaces/{workspaceId}/groups/{groupId}` | Admin만 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/deleteGroup) |
+| `GET` | `/api/workspaces/{workspaceId}/groups/{groupId}/members` | | [→](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/listGroupMembers) |
+| `POST` | `/api/workspaces/{workspaceId}/groups/{groupId}/members` | Admin만. `{ "userId": "..." }` | [→](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/addGroupMember) |
+| `DELETE` | `/api/workspaces/{workspaceId}/groups/{groupId}/members/{userId}` | Admin만 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/removeGroupMember) |
 
 ---
 
@@ -947,6 +1049,8 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### GET /api/documents/{documentId}/my-permission
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Share/myDocumentPermission)
+
 내가 이 문서에 대해 갖는 유효 권한과 출처. 다운로드 버튼·편집 버튼 표시 여부 결정에 사용합니다.
 
 **Response**
@@ -971,11 +1075,15 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### GET /api/folders/{folderId}/my-permission
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Share/myFolderPermission)
+
 내가 이 폴더에 대해 갖는 유효 권한. 응답 형식은 위와 동일.
 
 ---
 
 ### POST /api/documents/{documentId}/permissions
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Share/shareDocument)
+
 문서 권한 부여. 이메일로 사용자에게 줄 때:
 
 ```json
@@ -996,11 +1104,15 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 ---
 
 ### GET /api/documents/{documentId}/permissions
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Share/listDocumentPermissions)
+
 누구에게 공유돼 있는지. 소유자와 Admin만 볼 수 있습니다.
 
 ---
 
 ### DELETE /api/documents/{documentId}/permissions/{permissionId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Share/revokeDocumentPermission)
+
 공유 회수. 대상자의 접근이 즉시 끊깁니다.
 
 ---
@@ -1015,12 +1127,19 @@ POST   /api/folders/{folderId}/permissions
 DELETE /api/folders/{folderId}/permissions/{permissionId}
 ```
 
+Swagger:
+- [GET listFolderPermissions](https://fixlog.art/fixlog/swagger-ui.html#/Share/listFolderPermissions)
+- [POST shareFolder](https://fixlog.art/fixlog/swagger-ui.html#/Share/shareFolder)
+- [DELETE revokeFolderPermission](https://fixlog.art/fixlog/swagger-ui.html#/Share/revokeFolderPermission)
+
 **폴더 권한은 하위 폴더·문서로 상속됩니다.** 폴더를 공유하면 그 안의 문서까지 열립니다.
 문서에 직접 준 권한이 상속보다 우선하고, 가까운 폴더가 먼 폴더를 이깁니다.
 
 ---
 
 ### GET /api/documents/shared-with-me
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Share/sharedWithMe)
+
 내가 만들지 않았지만 권한을 받은 문서.
 
 ---
@@ -1031,6 +1150,8 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 의미 없는 히스토리를 쌓지 않게 하기 위함입니다.
 
 ### GET /api/documents/{documentId}/history
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/listDocumentHistory)
+
 히스토리 목록. 최신순. 본문은 빼고 언제 누가 저장했는지만 내려갑니다.
 
 ```json
@@ -1056,11 +1177,15 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 ---
 
 ### GET /api/documents/{documentId}/history/{historyId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/getDocumentHistory)
+
 본문까지 포함한 상세.
 
 ---
 
 ### POST /api/documents/{documentId}/history/{historyId}/restore
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/restoreDocumentHistory)
+
 해당 시점으로 되돌립니다. **편집 권한이 필요합니다.**
 
 > **되돌린 결과도 새 히스토리로 쌓입니다.** 과거를 지우지 않으므로 되돌리기를 다시
@@ -1073,6 +1198,8 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 삭제는 지우는 것이 아니라 휴지통으로 보내는 것입니다.
 
 ### GET /api/trash
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Trash/listTrash)
+
 폴더와 문서를 한 목록에 섞어 최근 삭제순으로 돌려줍니다.
 
 ```json
@@ -1094,6 +1221,8 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 ---
 
 ### POST /api/trash/{resourceType}/{resourceId}/restore
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Trash/restoreFromTrash)
+
 `resourceType`은 `DOCUMENT` 또는 `FOLDER`.
 
 **부모 폴더가 아직 휴지통에 있으면 루트로 복원됩니다.** 삭제된 폴더 안으로 되살리면
@@ -1102,19 +1231,21 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 ---
 
 ### DELETE /api/trash/{resourceType}/{resourceId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Trash/purgeFromTrash)
+
 영구 삭제. 문서는 본문·히스토리·라벨·권한이 함께 사라집니다. **되돌릴 수 없습니다.**
 
 ---
 
 ## 12. 라벨 API
 
-| 메서드 | 경로 | 비고 |
-|---|---|---|
-| `GET` | `/api/labels` | 워크스페이스의 라벨 목록 |
-| `GET` | `/api/labels/{labelId}/documents` | 라벨이 붙은 문서. **권한 있는 것만** 나옵니다 |
-| `GET` | `/api/documents/{documentId}/labels` | 문서에 붙은 라벨 |
-| `POST` | `/api/documents/{documentId}/labels` | `{ "labelName": "spring" }`. 편집 권한 필요 |
-| `DELETE` | `/api/documents/{documentId}/labels/{labelId}` | 편집 권한 필요 |
+| 메서드 | 경로 | 비고 | Swagger |
+|---|---|---|---|
+| `GET` | `/api/labels` | 워크스페이스의 라벨 목록 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Trash/listLabels) |
+| `GET` | `/api/labels/{labelId}/documents` | 라벨이 붙은 문서. **권한 있는 것만** 나옵니다 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Trash/listDocumentsWithLabel) |
+| `GET` | `/api/documents/{documentId}/labels` | 문서에 붙은 라벨 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Trash/listDocumentLabels) |
+| `POST` | `/api/documents/{documentId}/labels` | `{ "labelName": "spring" }`. 편집 권한 필요 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Trash/attachLabel) |
+| `DELETE` | `/api/documents/{documentId}/labels/{labelId}` | 편집 권한 필요 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Trash/detachLabel) |
 
 같은 이름의 라벨은 워크스페이스에서 하나로 공유되며, 없는 이름을 붙이면 그때 만들어집니다.
 
@@ -1139,31 +1270,70 @@ DELETE /api/folders/{folderId}/permissions/{permissionId}
 
 ### 현황 조회
 
-| 메서드 | 경로 | 내용 |
-|---|---|---|
-| `GET` | `/api/workspaces/{id}/admin/permissions` | 권한 현황 (주체·리소스 이름 포함) |
-| `GET` | `/api/workspaces/{id}/admin/shares` | 공유 현황. 생성자 소유 권한은 빠집니다 |
-| `GET` | `/api/workspaces/{id}/admin/audit-logs` | 감사 로그 |
-| `GET` | `/api/workspaces/{id}/admin/stats` | 문서·폴더 총량, 휴지통 현황, 사용자별 분포 |
-| `GET` | `/api/workspaces/{id}/admin/users` | 구성원 상세 목록 |
-| `GET` | `/api/workspaces/{id}/admin/users/{userId}` | 특정 구성원 상세 |
-| `GET` | `/api/workspaces/{id}/admin/users/{userId}/access` | 해당 사용자가 접근 가능한 리소스 목록 |
+| 메서드 | 경로 | 내용 | Swagger |
+|---|---|---|---|
+| `GET` | `/api/workspaces/{id}/admin/permissions` | 권한 현황 (주체·리소스 이름 포함) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListPermissions) |
+| `GET` | `/api/workspaces/{id}/admin/shares` | 공유 현황. 생성자 소유 권한은 빠집니다 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListShares) |
+| `GET` | `/api/workspaces/{id}/admin/audit-logs` | 감사 로그 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListAuditLogs) |
+| `GET` | `/api/workspaces/{id}/admin/stats` | 문서·폴더 총량, 휴지통 현황, 사용자별 분포 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminGetStats) |
+| `GET` | `/api/workspaces/{id}/admin/users` | 구성원 상세 목록 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListUsers) |
+| `GET` | `/api/workspaces/{id}/admin/users/{userId}` | 특정 구성원 상세 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminGetUser) |
+| `GET` | `/api/workspaces/{id}/admin/users/{userId}/access` | 해당 사용자가 접근 가능한 리소스 목록 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminGetUserAccess) |
 
 ---
 
 ### 감사 로그 필터
 
 ```
-GET /api/workspaces/{id}/admin/audit-logs?actorUserId=...&action=VIEW&result=DENIED
+GET /api/workspaces/{id}/admin/audit-logs?actorUserId=...&targetUserId=...&action=VIEW&result=DENIED
                                           &from=2026-08-01T00:00:00Z&to=2026-09-01T00:00:00Z
 ```
 
-| 파라미터 | 값 |
+| 파라미터 | 설명 |
 |---|---|
-| `action` | `VIEW` `DOWNLOAD` `EDIT` `DELETE` `SHARE` `RESTORE` |
+| `actorUserId` | 행위를 한 사람 (누가 했나) |
+| `targetUserId` | 권한 변경의 대상이 된 사람 (누구에게 권한이 생겼나·빠졌나). 접근 기록에는 해당 없음 |
+| `action` | 아래 AuditAction 값 참고 |
 | `result` | `ALLOWED` `DENIED` |
 
+#### AuditAction 값
+
+| 범주 | 값 | 설명 |
+|---|---|---|
+| **접근** | `VIEW` | 열람 |
+| | `DOWNLOAD` | 다운로드 |
+| | `EDIT` | 수정 |
+| | `DELETE` | 삭제 |
+| | `SHARE` | 공유 |
+| | `RESTORE` | 복원 |
+| **권한 변경** | `PERMISSION_GRANT` | 폴더·문서 권한 부여 또는 수정 |
+| | `PERMISSION_REVOKE` | 폴더·문서 권한 회수 |
+| | `ROLE_CHANGE` | 워크스페이스 역할 변경 (MEMBER ↔ ADMIN ↔ OWNER) |
+| | `MEMBER_INVITE` | 워크스페이스 초대 |
+| | `MEMBER_REMOVE` | 워크스페이스에서 내보내기·나가기 |
+| | `GROUP_MEMBER_CHANGE` | 그룹 구성원 변경 |
+| | `ACCESS_POLICY_CHANGE` | 상속·기본 접근 정책 변경 (폴더 inherit/base_access, 워크스페이스 base_access) |
+
 **거부된 접근도 남습니다.** `viaAdmin`이 `true`면 관리자 특권으로 접근한 것입니다.
+
+#### AuditLogDto 응답 필드
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `logId` | UUID | 로그 식별자 |
+| `actorUserId` | UUID | 행위자 |
+| `actorName` | String | 행위자 이름 |
+| `action` | AuditAction | 행위 종류 |
+| `resourceType` | ResourceType | `DOCUMENT` / `FOLDER` (접근 기록에만) |
+| `resourceId` | String | 리소스 ID (접근 기록에만) |
+| `targetPrincipalType` | PrincipalType | 권한 변경 대상 유형 (`USER`/`GROUP`). 권한 변경 기록에만 존재 |
+| `targetPrincipalId` | UUID | 권한 변경 대상 ID. 권한 변경 기록에만 존재 |
+| `targetName` | String | 대상 이름 (조회 시 resolve). 권한 변경 기록에만 존재 |
+| `detail` | String | 변경 전후 요약 (예: `"MEMBER → ADMIN"`). 권한 변경 기록에만 존재 |
+| `permissionChange` | boolean | `true`면 권한 변경 기록, `false`면 접근 기록. 화면에서 두 종류를 분리 표시할 때 사용 |
+| `result` | AuditResult | `ALLOWED` / `DENIED` |
+| `viaAdmin` | boolean | 관리자 특권으로 접근했는지 |
+| `createAt` | Instant | 기록 시각 |
 
 ---
 
@@ -1173,6 +1343,8 @@ GET /api/workspaces/{id}/admin/audit-logs?actorUserId=...&action=VIEW&result=DEN
 GET /api/workspaces/{id}/admin/permissions/effective
     ?userId={userId}&resourceType=DOCUMENT&resourceId={documentId}
 ```
+
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminGetEffectivePermission)
 
 특정 사용자가 특정 리소스에 대해 갖는 유효 권한을 계산해서 반환합니다.
 
@@ -1184,6 +1356,8 @@ GET /api/workspaces/{id}/admin/permissions/effective
 GET /api/workspaces/{id}/admin/permissions/resources/{resourceType}/{resourceId}
 ```
 
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListPermissionsForResource)
+
 특정 리소스에 설정된 모든 권한 레코드 목록.
 
 ---
@@ -1192,7 +1366,7 @@ GET /api/workspaces/{id}/admin/permissions/resources/{resourceType}/{resourceId}
 
 Admin은 공유 설정 없이도 직접 권한을 조작할 수 있습니다.
 
-**POST** `/api/workspaces/{id}/admin/permissions`
+**POST** `/api/workspaces/{id}/admin/permissions` — [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminGrantPermission)
 ```json
 {
   "resourceType": "DOCUMENT",
@@ -1204,12 +1378,12 @@ Admin은 공유 설정 없이도 직접 권한을 조작할 수 있습니다.
 }
 ```
 
-**PUT** `/api/workspaces/{id}/admin/permissions/{permissionId}`
+**PUT** `/api/workspaces/{id}/admin/permissions/{permissionId}` — [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminUpdatePermission)
 ```json
 { "permissionType": "DENY", "canDownload": false }
 ```
 
-**DELETE** `/api/workspaces/{id}/admin/permissions/{permissionId}`
+**DELETE** `/api/workspaces/{id}/admin/permissions/{permissionId}` — [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminDeletePermission)
 
 ---
 
@@ -1218,6 +1392,8 @@ Admin은 공유 설정 없이도 직접 권한을 조작할 수 있습니다.
 ```
 PATCH /api/workspaces/{id}/admin/permissions/resources/folders/{folderId}/settings
 ```
+
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminUpdateFolderSettings)
 
 ```json
 {
@@ -1235,17 +1411,18 @@ PATCH /api/workspaces/{id}/admin/permissions/resources/folders/{folderId}/settin
 
 ### 초대 관리 (Admin)
 
-| 메서드 | 경로 | 설명 |
-|---|---|---|
-| `GET` | `/api/workspaces/{id}/admin/invitations` | 초대 목록 (PENDING/ACCEPTED/DECLINED/EXPIRED) |
-| `POST` | `/api/workspaces/{id}/admin/invitations` | 초대 발송. `{ "email": "...", "role": "MEMBER" }` |
-| `DELETE` | `/api/workspaces/{id}/admin/invitations/{invitationId}` | 초대 취소 |
+| 메서드 | 경로 | 설명 | Swagger |
+|---|---|---|---|
+| `GET` | `/api/workspaces/{id}/admin/invitations` | 초대 목록 (PENDING/ACCEPTED/DECLINED/EXPIRED) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListInvitations) |
+| `POST` | `/api/workspaces/{id}/admin/invitations` | 초대 발송. `{ "email": "...", "role": "MEMBER" }` | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminInvite) |
+| `DELETE` | `/api/workspaces/{id}/admin/invitations/{invitationId}` | 초대 취소 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminCancelInvitation) |
 
 ---
 
 ## 14. 보안 정책 API
 
 ### GET /api/workspaces/{workspaceId}/security-policy
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/SecurityPolicy/getSecurityPolicy)
 
 구성원이면 볼 수 있습니다. 자기에게 어떤 제약이 걸려 있는지는 알아야 하기 때문입니다.
 
@@ -1264,6 +1441,7 @@ PATCH /api/workspaces/{id}/admin/permissions/resources/folders/{folderId}/settin
 ---
 
 ### PATCH /api/workspaces/{workspaceId}/security-policy
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/SecurityPolicy/updateSecurityPolicy)
 
 **Admin만.** 넘기지 않은 항목은 그대로 둡니다.
 
@@ -1315,10 +1493,22 @@ API 호출
 
 ---
 
-## Swagger UI
+## 16. Swagger UI
 
-개발 환경에서 직접 API 테스트 가능:
+개발 환경에서 브라우저로 API를 직접 테스트할 수 있습니다.
 
-```
-http://localhost:8080/fixlog/swagger-ui.html
-```
+| 경로 | 설명 |
+|------|------|
+| `https://fixlog.art/fixlog/swagger-ui.html` | Swagger UI (API 탐색·테스트) |
+| `https://fixlog.art/fixlog/v3/api-docs` | OpenAPI 3.0 JSON 스펙 |
+
+> 두 경로 모두 **인증 불필요**입니다. 토큰 없이 접근 가능합니다.
+
+### 인증이 필요한 API 테스트 방법
+
+1. Swagger UI 우측 상단 **Authorize** 버튼 클릭
+2. `bearerAuth` 항목에 `accessToken` 값 입력 (Bearer 접두사 없이)
+3. **Authorize** → **Close**
+4. 이후 잠금 아이콘이 표시된 엔드포인트가 토큰과 함께 호출됨
+
+> `X-Workspace-Id` 헤더가 필요한 API는 각 엔드포인트의 **Parameters** 섹션에서 직접 입력합니다.

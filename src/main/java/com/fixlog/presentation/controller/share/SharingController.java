@@ -12,6 +12,8 @@ import com.fixlog.presentation.dto.request.ShareRequest;
 import com.fixlog.presentation.dto.response.DocumentDto;
 import com.fixlog.presentation.dto.response.MyPermissionDto;
 import com.fixlog.presentation.dto.response.PermissionDto;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,6 +29,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Share")
 public class SharingController {
 
     private final PermissionService permissionService;
@@ -42,6 +45,7 @@ public class SharingController {
 
     /** 현재 유저가 이 문서에 대해 갖는 유효 권한 + 출처. 프론트 UI 제어(다운로드 버튼 등)에 사용한다. */
     @GetMapping("/documents/{documentId}/my-permission")
+    @Operation(operationId = "myDocumentPermission")
     public Response myDocumentPermission(@PathVariable String documentId) {
         return DataResponse.success(
                 MyPermissionDto.of(permissionEvaluator.evaluateWithSource(ResourceType.DOCUMENT, documentId)));
@@ -49,6 +53,7 @@ public class SharingController {
 
     /** 현재 유저가 이 폴더에 대해 갖는 유효 권한 + 출처. */
     @GetMapping("/folders/{folderId}/my-permission")
+    @Operation(operationId = "myFolderPermission")
     public Response myFolderPermission(@PathVariable String folderId) {
         return DataResponse.success(
                 MyPermissionDto.of(permissionEvaluator.evaluateWithSource(ResourceType.FOLDER, folderId)));
@@ -56,37 +61,44 @@ public class SharingController {
 
     /** 내가 만들지 않았지만 권한을 받은 문서 (FR-SHR-005). {@code /{documentId}}보다 먼저 선언한다. */
     @GetMapping("/documents/shared-with-me")
+    @Operation(operationId = "sharedWithMe")
     public Response sharedWithMe() {
         return DataResponse.success(documentService.sharedWithMe().stream().map(DocumentDto::from).toList());
     }
 
     @GetMapping("/documents/{documentId}/permissions")
+    @Operation(operationId = "listDocumentPermissions")
     public Response documentPermissions(@PathVariable String documentId) {
         return DataResponse.success(permissionService.listFor(ResourceType.DOCUMENT, documentId));
     }
 
     @PostMapping("/documents/{documentId}/permissions")
+    @Operation(operationId = "shareDocument")
     public Response shareDocument(@PathVariable String documentId, @RequestBody ShareRequest request) {
         return DataResponse.success(share(ResourceType.DOCUMENT, documentId, request));
     }
 
     @DeleteMapping("/documents/{documentId}/permissions/{permissionId}")
+    @Operation(operationId = "revokeDocumentPermission")
     public Response revokeDocument(@PathVariable String documentId, @PathVariable UUID permissionId) {
         permissionService.revoke(ResourceType.DOCUMENT, documentId, permissionId);
         return Response.success("공유를 회수했습니다.");
     }
 
     @GetMapping("/folders/{folderId}/permissions")
+    @Operation(operationId = "listFolderPermissions")
     public Response folderPermissions(@PathVariable String folderId) {
         return DataResponse.success(permissionService.listFor(ResourceType.FOLDER, folderId));
     }
 
     @PostMapping("/folders/{folderId}/permissions")
+    @Operation(operationId = "shareFolder")
     public Response shareFolder(@PathVariable String folderId, @RequestBody ShareRequest request) {
         return DataResponse.success(share(ResourceType.FOLDER, folderId, request));
     }
 
     @DeleteMapping("/folders/{folderId}/permissions/{permissionId}")
+    @Operation(operationId = "revokeFolderPermission")
     public Response revokeFolder(@PathVariable String folderId, @PathVariable UUID permissionId) {
         permissionService.revoke(ResourceType.FOLDER, folderId, permissionId);
         return Response.success("공유를 회수했습니다.");

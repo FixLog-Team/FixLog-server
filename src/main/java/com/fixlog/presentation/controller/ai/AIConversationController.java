@@ -27,7 +27,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/ai/conversations")
-@Tag(name = "AI 대화방", description = "사용자별 AI 대화방 생성, 조회 및 삭제 API")
+@Tag(name = "AI-Chat", description = "사용자별 AI 대화방 생성, 조회 및 삭제 API")
 @SecurityRequirement(name = "Bearer Authentication")
 public class AIConversationController {
 
@@ -39,6 +39,7 @@ public class AIConversationController {
 
     @PostMapping
     @Operation(
+            operationId = "createConversation",
             summary = "AI 대화방 생성",
             description = "로그인 사용자의 새 AI 대화방을 생성합니다. 제목을 생략하거나 공백으로 보내면 '새 대화'로 생성됩니다."
     )
@@ -53,6 +54,7 @@ public class AIConversationController {
 
     @GetMapping
     @Operation(
+            operationId = "listConversations",
             summary = "AI 대화방 목록 조회",
             description = "로그인 사용자의 삭제되지 않은 대화방을 최근 활동 순으로 페이지 조회합니다."
     )
@@ -72,6 +74,7 @@ public class AIConversationController {
 
     @GetMapping("/{conversationId}")
     @Operation(
+            operationId = "getConversation",
             summary = "AI 대화방 상세 조회",
             description = "대화방 기본 정보를 조회합니다. 로그인 사용자가 소유하지 않은 대화방도 404로 처리합니다."
     )
@@ -89,6 +92,7 @@ public class AIConversationController {
 
     @DeleteMapping("/{conversationId}")
     @Operation(
+            operationId = "deleteConversation",
             summary = "AI 대화방 삭제",
             description = "대화방을 소프트 삭제합니다. 메시지 기록은 DB에 보존되지만 이후 API 조회에서는 제외됩니다."
     )

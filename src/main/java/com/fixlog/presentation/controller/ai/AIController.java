@@ -8,6 +8,8 @@ import com.fixlog.presentation.dto.request.AskRequest;
 import com.fixlog.presentation.dto.request.DocumentRequest;
 import com.fixlog.presentation.dto.response.AskResponse;
 import com.fixlog.presentation.dto.response.DocumentSummaryResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,6 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/ai")
+@Tag(name = "AI")
 public class AIController {
 
     private final DocumentAIService documentAIService;
@@ -29,6 +32,7 @@ public class AIController {
     }
 
     @PostMapping("/analyze")
+    @Operation(operationId = "aiAnalyze")
     public DataResponse<DocumentSummaryResponse> analyzeDocument(@Valid @RequestBody DocumentRequest request) {
         DocumentAIService.DocumentAnalysisDto analysis = documentAIService.analyzeDocument(request.content());
         List<Double> embedding = embeddingService.generateEmbedding(analysis.summary());
@@ -37,26 +41,31 @@ public class AIController {
     }
 
     @PostMapping("/summarize")
+    @Operation(operationId = "aiSummarize")
     public DataResponse<String> summarizeDocument(@Valid @RequestBody DocumentRequest request) {
         return DataResponse.success("요약이 완료되었습니다.", documentAIService.summarizeDocument(request.content()));
     }
 
     @PostMapping("/documents/{documentId}/summarize")
+    @Operation(operationId = "aiSummarizeById")
     public DataResponse<String> summarizeDocumentById(@PathVariable String documentId) {
         return DataResponse.success("요약이 완료되었습니다.", documentAIService.summarizeDocumentById(documentId));
     }
 
     @PostMapping("/tags")
+    @Operation(operationId = "aiGenerateTags")
     public DataResponse<List<String>> generateTags(@Valid @RequestBody DocumentRequest request) {
         return DataResponse.success("태그 생성이 완료되었습니다.", documentAIService.generateTags(request.content()));
     }
 
     @PostMapping("/embedding")
+    @Operation(operationId = "aiGenerateEmbedding")
     public DataResponse<List<Double>> generateEmbedding(@Valid @RequestBody DocumentRequest request) {
         return DataResponse.success("임베딩 생성이 완료되었습니다.", embeddingService.generateEmbedding(request.content()));
     }
 
     @PostMapping("/ask")
+    @Operation(operationId = "aiAsk")
     public DataResponse<AskResponse> ask(@Valid @RequestBody AskRequest request) {
         return DataResponse.success("답변 생성이 완료되었습니다.", documentQAService.ask(request.question(), request.topK()));
     }

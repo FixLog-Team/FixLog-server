@@ -26,7 +26,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/ai/conversations/{conversationId}/messages")
-@Tag(name = "AI 메시지", description = "AI 대화방 메시지 전송 및 기록 조회 API")
+@Tag(name = "AI-Chat", description = "AI 대화방 메시지 전송 및 기록 조회 API")
 @SecurityRequirement(name = "Bearer Authentication")
 public class AIMessageController {
 
@@ -42,6 +42,7 @@ public class AIMessageController {
 
     @PostMapping
     @Operation(
+            operationId = "sendMessage",
             summary = "AI 메시지 전송",
             description = "사용자 메시지를 저장하고, 사용자의 과거 트러블슈팅 문서를 벡터 검색해 근거(references)와 함께 "
                     + "Gemini 답변을 생성해 저장합니다. 후속 질문은 대화 맥락 기반으로 독립 질문으로 재작성 후 검색되며, "
@@ -67,6 +68,7 @@ public class AIMessageController {
 
     @GetMapping
     @Operation(
+            operationId = "listMessages",
             summary = "AI 메시지 기록 조회",
             description = "대화방 메시지를 순번 기반 커서 방식으로 조회합니다. 응답 items는 화면 출력에 맞게 오래된 순서부터 반환됩니다."
     )
