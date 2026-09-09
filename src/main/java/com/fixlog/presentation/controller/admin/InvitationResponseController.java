@@ -3,6 +3,8 @@ package com.fixlog.presentation.controller.admin;
 import com.fixlog.application.service.InvitationService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/workspaces/invitations")
+@Tag(name = "Invitation")
 public class InvitationResponseController {
 
     private final InvitationService invitationService;
@@ -24,11 +27,13 @@ public class InvitationResponseController {
     }
 
     @PostMapping("/{token}/accept")
+    @Operation(operationId = "acceptInvitation")
     public Response accept(@PathVariable String token) {
         return DataResponse.success(invitationService.accept(token));
     }
 
     @PostMapping("/{token}/decline")
+    @Operation(operationId = "declineInvitation")
     public Response decline(@PathVariable String token) {
         return DataResponse.success(invitationService.decline(token));
     }
