@@ -1,8 +1,14 @@
 package com.fixlog.application.service;
 
+import com.fixlog.application.repository.AuditLogRepository;
+import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
+import com.fixlog.application.repository.GroupMemberRepository;
+import com.fixlog.application.repository.GroupRepository;
+import com.fixlog.application.repository.LabelRepository;
 import com.fixlog.application.repository.PermissionRepository;
+import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
@@ -40,6 +46,12 @@ public class WorkspaceService {
     private final PermissionRepository permissionRepository;
     private final WorkspaceInvitationRepository invitationRepository;
     private final AuditService auditService;
+    private final AuditLogRepository auditLogRepository;
+    private final LabelRepository labelRepository;
+    private final DocumentLabelRepository documentLabelRepository;
+    private final SecurityPolicyRepository securityPolicyRepository;
+    private final GroupRepository groupRepository;
+    private final GroupMemberRepository groupMemberRepository;
 
     public WorkspaceService(WorkspaceRepository workspaceRepository,
                             WorkspaceMemberRepository memberRepository,
@@ -49,7 +61,13 @@ public class WorkspaceService {
                             DocumentRepository documentRepository,
                             PermissionRepository permissionRepository,
                             WorkspaceInvitationRepository invitationRepository,
-                            AuditService auditService) {
+                            AuditService auditService,
+                            AuditLogRepository auditLogRepository,
+                            LabelRepository labelRepository,
+                            DocumentLabelRepository documentLabelRepository,
+                            SecurityPolicyRepository securityPolicyRepository,
+                            GroupRepository groupRepository,
+                            GroupMemberRepository groupMemberRepository) {
         this.workspaceRepository = workspaceRepository;
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
@@ -59,6 +77,12 @@ public class WorkspaceService {
         this.permissionRepository = permissionRepository;
         this.invitationRepository = invitationRepository;
         this.auditService = auditService;
+        this.auditLogRepository = auditLogRepository;
+        this.labelRepository = labelRepository;
+        this.documentLabelRepository = documentLabelRepository;
+        this.securityPolicyRepository = securityPolicyRepository;
+        this.groupRepository = groupRepository;
+        this.groupMemberRepository = groupMemberRepository;
     }
 
     /**
@@ -284,6 +308,23 @@ public class WorkspaceService {
             throw new BusinessException(Code.INVALID_REQUEST, "개인 워크스페이스는 삭제할 수 없습니다.");
         }
 
+        // 감사 로그 삭제 (workspace FK 참조)
+        auditLogRepository.deleteByWorkspaceId(workspaceId);
+        // document_label 삭제 (label FK 참조) — label보다 먼저 삭제
+        List<UUID> labelIds = labelRepository.findByWorkspaceIdOrderByLabelNameAsc(workspaceId)
+                .stream().map(l -> l.getId()).toList();
+        labelIds.forEach(documentLabelRepository::deleteByLabelId);
+        labelRepository.deleteByWorkspaceId(workspaceId);
+        // 그룹 멤버 → 그룹 삭제
+        List<UUID> groupIds = groupRepository.findByWorkspaceId(workspaceId)
+                .stream().map(g -> g.getGroupId()).toList();
+        if (!groupIds.isEmpty()) {
+            groupMemberRepository.deleteByGroupIdIn(groupIds);
+        }
+        groupRepository.deleteByWorkspaceId(workspaceId);
+        // 보안 정책 삭제
+        securityPolicyRepository.deleteById(workspaceId);
+        // 기존 삭제 로직
         folderRepository.softDeleteByWorkspaceId(workspaceId);
         documentRepository.softDeleteByWorkspaceId(workspaceId);
         permissionRepository.deleteByWorkspaceId(workspaceId);

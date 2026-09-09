@@ -15,4 +15,6 @@ public interface LabelRepository extends JpaRepository<LabelEntity, UUID> {
 
     /** 라벨은 워크스페이스를 넘지 않는다. ID만으로 찾지 않는다. */
     Optional<LabelEntity> findByIdAndWorkspaceId(UUID id, UUID workspaceId);
+
+    void deleteByWorkspaceId(UUID workspaceId);
 }
