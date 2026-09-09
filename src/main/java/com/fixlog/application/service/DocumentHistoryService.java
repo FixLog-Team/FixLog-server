@@ -3,6 +3,7 @@ package com.fixlog.application.service;
 import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository.DocumentHistorySummary;
 import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.common.security.SecurityUtil;
@@ -30,10 +31,13 @@ public class DocumentHistoryService {
     private final DocumentRepository documentRepository;
     private final DocumentHistoryRepository historyRepository;
     private final int retentionLimit;
+    private final WorkspaceMemberRepository workspaceMemberRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public DocumentHistoryService(DocumentRepository documentRepository,
                                   DocumentHistoryRepository historyRepository,
-                                  @Value("${fixlog.document.history.retention:50}") int retentionLimit) {
+                                  @Value("${fixlog.document.history.retention:50}") int retentionLimit,
+                                  WorkspaceMemberRepository workspaceMemberRepository) {
         // 0 이하로 설정되면 저장할 때마다 히스토리가 전부 지워지므로 기동 시점에 막는다.
         if (retentionLimit < 1) {
             throw new IllegalArgumentException(
@@ -42,6 +46,14 @@ public class DocumentHistoryService {
         this.documentRepository = documentRepository;
         this.historyRepository = historyRepository;
         this.retentionLimit = retentionLimit;
+        this.workspaceMemberRepository = workspaceMemberRepository;
+    }
+
+    /** 워크스페이스 구성원 검증이 불필요한 경우(DocumentService 내부 호출 등)에 사용하는 생성자. */
+    public DocumentHistoryService(DocumentRepository documentRepository,
+                                  DocumentHistoryRepository historyRepository,
+                                  int retentionLimit) {
+        this(documentRepository, historyRepository, retentionLimit, null);
     }
 
     /**
@@ -90,8 +102,17 @@ public class DocumentHistoryService {
     }
 
     private DocumentEntity requireOwnedDocument(String documentId) {
-        return documentRepository
+        DocumentEntity doc = documentRepository
                 .findByDocumentIdAndUsable(documentId, USABLE)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));
+        if (workspaceMemberRepository != null) {
+            UUID userId = SecurityUtil.getCurrentUser() == null ? null
+                    : SecurityUtil.getCurrentUser().getUserId();
+            if (userId == null || !workspaceMemberRepository.existsByWorkspaceIdAndUserId(
+                    doc.getWorkspaceId(), userId)) {
+                throw new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다.");
+            }
+        }
+        return doc;
     }
 }

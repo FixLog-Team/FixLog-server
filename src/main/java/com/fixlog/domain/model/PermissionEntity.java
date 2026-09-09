@@ -60,6 +60,10 @@ public class PermissionEntity {
     @Column(name = "can_download", nullable = false)
     private boolean canDownload;
 
+    /** 문서/폴더를 편집할 수 있는지. 생성자(creator)에게만 true로 설정된다. */
+    @Column(name = "can_edit", nullable = false)
+    private boolean canEdit;
+
     @Column(name = "granted_by", columnDefinition = "uuid")
     private UUID grantedBy;
 
@@ -98,6 +102,10 @@ public class PermissionEntity {
         this.updateAt = Instant.now();
     }
 
+    public void markAsCreator() {
+        this.canEdit = true;
+    }
+
     public void update(PermissionType permissionType, boolean canDownload) {
         this.permissionType = permissionType;
         this.canDownload = canDownload;
@@ -134,6 +142,10 @@ public class PermissionEntity {
 
     public boolean isCanDownload() {
         return canDownload;
+    }
+
+    public boolean isCanEdit() {
+        return canEdit;
     }
 
     public UUID getGrantedBy() {
