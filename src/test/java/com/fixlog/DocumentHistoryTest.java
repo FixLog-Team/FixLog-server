@@ -76,6 +76,7 @@ class DocumentHistoryTest {
     private DocumentService documentService;
     private DocumentHistoryService documentHistoryService;
     private WorkspaceService workspaceService;
+    private PermissionEvaluator permissionEvaluator;
 
     @BeforeEach
     void setUp() {
@@ -85,7 +86,7 @@ class DocumentHistoryTest {
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
                 folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
                 auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
-        PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
+        permissionEvaluator = new PermissionEvaluator(
                 permissionRepository, workspaceMemberRepository, groupMemberRepository,
                 groupRepository, folderRepository, documentRepository, workspaceContext,
                 new AuditService(auditLogRepository), policyRepository);
@@ -95,7 +96,7 @@ class DocumentHistoryTest {
         SecurityPolicyService securityPolicyService =
                 new SecurityPolicyService(policyRepository, workspaceService);
         documentHistoryService = new DocumentHistoryService(
-                documentRepository, documentHistoryRepository, RETENTION);
+                documentHistoryRepository, RETENTION, permissionEvaluator);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
                 documentHistoryService, event -> {}, workspaceContext,
@@ -210,7 +211,7 @@ class DocumentHistoryTest {
     void 보존_개수를_0이하로_설정하면_기동에_실패한다() {
         // 설정 실수로 히스토리가 통째로 지워지는 것을 기동 시점에 막는다.
         assertThrows(IllegalArgumentException.class,
-                () -> new DocumentHistoryService(documentRepository, documentHistoryRepository, 0));
+                () -> new DocumentHistoryService(documentHistoryRepository, 0, permissionEvaluator));
     }
 
     @Test

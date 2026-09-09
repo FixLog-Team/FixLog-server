@@ -89,7 +89,7 @@ class FolderDocumentReorderTest {
 folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
-                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50),
+                new DocumentHistoryService(documentHistoryRepository, 50, permissionEvaluator),
                 event -> {}, workspaceContext, permissionEvaluator, permissionService, securityPolicyService);
     }
 
