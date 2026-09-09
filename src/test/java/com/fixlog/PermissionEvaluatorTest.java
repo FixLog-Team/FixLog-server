@@ -248,7 +248,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
                 PermissionType.ALLOW, false);
 
         // 접근은 허용되지만 반출만 막힌다
-        assertTrue(evaluator.require(ResourceType.DOCUMENT, doc.getDocumentId(), PermissionAction.EDIT)
+        assertTrue(evaluator.require(ResourceType.DOCUMENT, doc.getDocumentId(), PermissionAction.VIEW)
                 .allowed());
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
                 () -> evaluator.requireDownload(ResourceType.DOCUMENT, doc.getDocumentId())).getCode());

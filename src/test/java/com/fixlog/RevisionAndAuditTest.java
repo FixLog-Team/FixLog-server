@@ -107,7 +107,7 @@ class RevisionAndAuditTest {
                 workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
-                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50),
+                new DocumentHistoryService(documentHistoryRepository, 50, evaluator),
                 event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService);
 
         // 감사 로그는 별도 트랜잭션에 커밋되므로 테스트 롤백으로 지워지지 않는다

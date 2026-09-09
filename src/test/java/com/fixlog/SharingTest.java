@@ -107,7 +107,7 @@ class SharingTest {
                 workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
-                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50),
+                new DocumentHistoryService(documentHistoryRepository, 50, evaluator),
                 event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService);
 
         UserEntity admin = signUp("admin");
