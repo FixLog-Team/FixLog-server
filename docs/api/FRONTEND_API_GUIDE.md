@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-09-08
+> 최종 업데이트: 2026-09-10
 > Base URL (개발): `https://fixlog.art/fixlog`
 
 ---
@@ -13,6 +13,7 @@
 4. [문서 API](#4-문서-api)
 5. [폴더 API](#5-폴더-api)
 6. [AI API](#6-ai-api)
+6-1. [AI 대화방 API](#6-1-ai-대화방-api)
 7. [검색 API](#7-검색-api)
 8. [워크스페이스 API](#8-워크스페이스-api)
 9. [공유 API](#9-공유-api)
@@ -787,6 +788,157 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 ---
 
+## 6-1. AI 대화방 API
+
+> 모든 엔드포인트 **인증 필요**
+
+멀티턴 AI 채팅 기능입니다. 대화방을 만들고 메시지를 주고받습니다. 단발성 RAG 질의(`POST /ai/ask`)와 달리 대화 맥락을 유지합니다.
+
+---
+
+### POST /api/ai/conversations
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI-Chat/createConversation)
+
+AI 대화방 생성
+
+**Request Body**
+```json
+{
+  "title": "새 대화"
+}
+```
+- `title`: 선택. 생략하거나 공백이면 "새 대화"로 생성됩니다.
+
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "conversationId": "uuid",
+    "title": "새 대화",
+    "createdAt": "2026-09-10T00:00:00Z"
+  }
+}
+```
+
+---
+
+### GET /api/ai/conversations
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI-Chat/listConversations)
+
+AI 대화방 목록 조회 (최근 활동 순)
+
+**Query Parameters**
+- `page` (기본값: 0)
+- `size` (기본값: 20)
+
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "content": [
+      { "conversationId": "uuid", "title": "새 대화", "createdAt": "..." }
+    ],
+    "totalElements": 5
+  }
+}
+```
+
+---
+
+### GET /api/ai/conversations/{conversationId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI-Chat/getConversation)
+
+AI 대화방 상세 조회
+
+**Response** — 생성과 동일한 구조
+
+---
+
+### DELETE /api/ai/conversations/{conversationId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI-Chat/deleteConversation)
+
+AI 대화방 삭제 (소프트 삭제)
+
+**Response**
+```json
+{ "success": true, "message": "대화방이 삭제되었습니다." }
+```
+
+---
+
+### POST /api/ai/conversations/{conversationId}/messages
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI-Chat/sendMessage)
+
+메시지 전송 및 AI 답변 생성
+
+사용자 문서를 벡터 검색해 근거(references)와 함께 Gemini 답변을 생성합니다. 후속 질문은 대화 맥락 기반으로 재작성됩니다.
+
+**Request Body**
+```json
+{
+  "content": "NullPointerException이 발생하는 이유가 뭔가요?"
+}
+```
+- `content`: 필수. 1자 이상 20,000자 이하.
+
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "userMessage": {
+      "messageId": "uuid",
+      "role": "USER",
+      "content": "NullPointerException이 발생하는 이유가 뭔가요?",
+      "status": "COMPLETED",
+      "sequence": 1
+    },
+    "assistantMessage": {
+      "messageId": "uuid",
+      "role": "ASSISTANT",
+      "content": "NPE는 null 참조에 접근할 때 발생합니다...",
+      "status": "COMPLETED",
+      "sequence": 2
+    },
+    "references": [
+      { "documentId": "doc-uuid", "title": "NPE 해결 회고" }
+    ]
+  }
+}
+```
+
+- `status`: `COMPLETED` | `FAILED` | `PENDING`
+- `references`: 검색된 관련 문서 목록. 없으면 빈 배열.
+
+---
+
+### GET /api/ai/conversations/{conversationId}/messages
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/AI-Chat/listMessages)
+
+메시지 기록 조회 (커서 기반, 오래된 순)
+
+**Query Parameters**
+- `beforeSequence`: 이 순번보다 오래된 메시지를 조회 (선택, 없으면 최신부터)
+- `size`: 조회 개수, 1~100 범위로 보정됩니다 (기본값: 20)
+
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      { "messageId": "uuid", "role": "USER", "content": "...", "status": "COMPLETED", "sequence": 1 },
+      { "messageId": "uuid", "role": "ASSISTANT", "content": "...", "status": "COMPLETED", "sequence": 2 }
+    ],
+    "hasMore": false
+  }
+}
+```
+
+---
+
 ## 7. 검색 API
 
 > 모든 엔드포인트 **인증 필요**
@@ -1040,7 +1192,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 | permissionType | 접근 |
 |---|---|
-| `ALLOW` | 조회·편집 허용 |
+| `ALLOW` | 조회 허용. 편집은 `canEdit` 필드로 별도 제어 |
 | `DENY` | 명시적 차단 (상속된 ALLOW보다 우선) |
 
 **우선순위**: 직접 부여된 권한 > 가까운 폴더 상속 > 먼 폴더 상속
@@ -1060,6 +1212,7 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
   "result": {
     "access": true,
     "canDownload": true,
+    "canEdit": true,
     "source": "DIRECT",
     "sourceDetail": "직접 부여"
   }
@@ -1163,7 +1316,7 @@ Swagger:
       "source": "SAVE",
       "restoredFromId": null,
       "createUser": "user-uuid",
-      "createAt": "2026-09-08T07:00:00Z"
+      "createTime": "2026-09-08T07:00:00Z"
     }
   ]
 }
@@ -1374,7 +1527,8 @@ Admin은 공유 설정 없이도 직접 권한을 조작할 수 있습니다.
   "principalType": "USER",
   "principalId": "user-uuid",
   "permissionType": "ALLOW",
-  "canDownload": true
+  "canDownload": true,
+  "canEdit": false
 }
 ```
 
