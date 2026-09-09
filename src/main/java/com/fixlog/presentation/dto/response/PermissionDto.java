@@ -14,6 +14,7 @@ public record PermissionDto(
         String principalName,
         PermissionType permissionType,
         boolean canDownload,
+        boolean canEdit,
         Instant createAt
 ) {
     public static PermissionDto of(PermissionEntity entity, String principalName) {
@@ -24,6 +25,7 @@ public record PermissionDto(
                 principalName,
                 entity.getPermissionType(),
                 entity.isCanDownload(),
+                entity.isCanEdit(),
                 entity.getCreateAt()
         );
     }
