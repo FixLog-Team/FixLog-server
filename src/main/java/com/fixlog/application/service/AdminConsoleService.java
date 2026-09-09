@@ -106,7 +106,10 @@ public class AdminConsoleService {
                                        Instant from, Instant to) {
         workspaceService.requireAdmin(workspaceId);
         List<AuditLogEntity> logs = auditLogRepository.search(
-                workspaceId, actorUserId, targetUserId, action, result, from, to);
+                workspaceId, actorUserId, targetUserId,
+                action != null ? action.name() : null,
+                result != null ? result.name() : null,
+                from, to);
 
         // 행위자와 대상을 함께 이름으로 바꾼다. 같은 사람이 양쪽에 나올 수 있어 한 번에 조회한다.
         Map<UUID, String> userNames = userNames(logs.stream()

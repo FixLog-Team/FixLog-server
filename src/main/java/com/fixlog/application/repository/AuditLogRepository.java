@@ -20,6 +20,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntity, UUID> 
 
     List<AuditLogEntity> findByWorkspaceIdOrderByCreateAtDesc(UUID workspaceId);
 
+    void deleteByWorkspaceId(UUID workspaceId);
+
     List<AuditLogEntity> findByResourceTypeAndResourceIdOrderByCreateAtDesc(
             ResourceType resourceType, String resourceId);
 
@@ -31,22 +33,22 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntity, UUID> 
      * <p>{@code actorUserId}는 행위자, {@code targetPrincipalId}는 권한을 받거나 잃은 대상이다.
      * "이 사람이 무엇을 했나"와 "이 사람에게 무슨 권한이 오갔나"는 다른 질문이라 조건을 나눈다.
      */
-    @Query("""
-            select a from AuditLogEntity a
-            where a.workspaceId = :workspaceId
-              and (:actorUserId is null or a.actorUserId = :actorUserId)
-              and (:targetPrincipalId is null or a.targetPrincipalId = :targetPrincipalId)
-              and (:action is null or a.action = :action)
-              and (:result is null or a.result = :result)
-              and (:from is null or a.createAt >= :from)
-              and (:to is null or a.createAt < :to)
-            order by a.createAt desc
-            """)
+    @Query(value = """
+            SELECT * FROM audit_log a
+            WHERE a.workspace_id = :workspaceId
+              AND (CAST(:actorUserId AS uuid) IS NULL OR a.actor_user_id = CAST(:actorUserId AS uuid))
+              AND (CAST(:targetPrincipalId AS uuid) IS NULL OR a.target_principal_id = CAST(:targetPrincipalId AS uuid))
+              AND (CAST(:action AS varchar) IS NULL OR a.action = CAST(:action AS varchar))
+              AND (CAST(:result AS varchar) IS NULL OR a.result = CAST(:result AS varchar))
+              AND (CAST(:from AS timestamp) IS NULL OR a.create_at >= CAST(:from AS timestamp))
+              AND (CAST(:to AS timestamp) IS NULL OR a.create_at < CAST(:to AS timestamp))
+            ORDER BY a.create_at DESC
+            """, nativeQuery = true)
     List<AuditLogEntity> search(@Param("workspaceId") UUID workspaceId,
                                 @Param("actorUserId") UUID actorUserId,
                                 @Param("targetPrincipalId") UUID targetPrincipalId,
-                                @Param("action") AuditAction action,
-                                @Param("result") AuditResult result,
+                                @Param("action") String action,
+                                @Param("result") String result,
                                 @Param("from") Instant from,
                                 @Param("to") Instant to);
 }
