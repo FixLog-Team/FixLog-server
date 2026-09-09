@@ -9,6 +9,8 @@ import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
+import com.fixlog.domain.model.AuditAction;
+import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.UserEntity;
 import com.fixlog.domain.model.WorkspaceEntity;
@@ -37,6 +39,7 @@ public class WorkspaceService {
     private final DocumentRepository documentRepository;
     private final PermissionRepository permissionRepository;
     private final WorkspaceInvitationRepository invitationRepository;
+    private final AuditService auditService;
 
     public WorkspaceService(WorkspaceRepository workspaceRepository,
                             WorkspaceMemberRepository memberRepository,
@@ -45,7 +48,8 @@ public class WorkspaceService {
                             FolderRepository folderRepository,
                             DocumentRepository documentRepository,
                             PermissionRepository permissionRepository,
-                            WorkspaceInvitationRepository invitationRepository) {
+                            WorkspaceInvitationRepository invitationRepository,
+                            AuditService auditService) {
         this.workspaceRepository = workspaceRepository;
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
@@ -54,6 +58,7 @@ public class WorkspaceService {
         this.documentRepository = documentRepository;
         this.permissionRepository = permissionRepository;
         this.invitationRepository = invitationRepository;
+        this.auditService = auditService;
     }
 
     /**
@@ -138,6 +143,10 @@ public class WorkspaceService {
 
         WorkspaceMemberEntity member = memberRepository.save(
                 new WorkspaceMemberEntity(workspaceId, invitee.getUserId(), WorkspaceRole.MEMBER));
+
+        auditService.recordChange(workspaceId, workspaceContext.requireCurrentUserId(),
+                AuditAction.MEMBER_INVITE, null, null,
+                PrincipalType.USER, invitee.getUserId(), "MEMBER로 합류");
         return WorkspaceMemberDto.of(member, invitee);
     }
 
@@ -166,8 +175,13 @@ public class WorkspaceService {
             requireNotLastAdmin(workspaceId, "마지막 관리자는 강등할 수 없습니다.");
         }
 
+        WorkspaceRole previousRole = target.getRole();
         target.changeRole(newRole);
         memberRepository.save(target);
+
+        auditService.recordChange(workspaceId, workspaceContext.requireCurrentUserId(),
+                AuditAction.ROLE_CHANGE, null, null,
+                PrincipalType.USER, targetUserId, previousRole + " → " + newRole);
         return WorkspaceMemberDto.of(target, userRepository.findById(targetUserId).orElse(null));
     }
 
@@ -187,6 +201,10 @@ public class WorkspaceService {
             requireNotLastAdmin(workspaceId, "마지막 관리자는 제거할 수 없습니다.");
         }
         memberRepository.delete(target);
+
+        auditService.recordChange(workspaceId, workspaceContext.requireCurrentUserId(),
+                AuditAction.MEMBER_REMOVE, null, null,
+                PrincipalType.USER, targetUserId, "내보내짐 (" + target.getRole() + ")");
     }
 
     /** 구성원이 스스로 나간다 (FR-WS-007). */
@@ -202,6 +220,10 @@ public class WorkspaceService {
             requireNotLastAdmin(workspaceId, "마지막 관리자는 워크스페이스를 나갈 수 없습니다.");
         }
         memberRepository.delete(me);
+
+        auditService.recordChange(workspaceId, me.getUserId(),
+                AuditAction.MEMBER_REMOVE, null, null,
+                PrincipalType.USER, me.getUserId(), "스스로 나감 (" + me.getRole() + ")");
     }
 
     /** 워크스페이스 단건 조회. 구성원만 가능하며 비구성원에게는 존재를 알리지 않는다. */
@@ -239,8 +261,13 @@ public class WorkspaceService {
         WorkspaceMemberEntity me = requireAdmin(workspaceId);
         WorkspaceEntity workspace = workspaceRepository.findById(workspaceId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
+        PermissionType previous = workspace.getBaseAccess();
         workspace.changeBaseAccess(baseAccess);
         workspaceRepository.save(workspace);
+
+        auditService.recordChange(workspaceId, me.getUserId(),
+                AuditAction.ACCESS_POLICY_CHANGE, null, null, null, null,
+                "워크스페이스 기본 접근 " + previous + " → " + baseAccess);
         return WorkspaceDto.of(workspace, me.getRole());
     }
 

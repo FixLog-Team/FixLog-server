@@ -73,13 +73,13 @@ class WorkspaceRemovalFlowVerificationTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
-                folderRepository, documentRepository, permissionRepository, invitationRepository);
+                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository));
         PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
                 permissionRepository, workspaceMemberRepository, groupMemberRepository,
                 groupRepository, folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository), policyRepository);
                 PermissionService permissionService = new PermissionService(
                 permissionRepository, workspaceMemberRepository, groupRepository,
-                userRepository, permissionEvaluator, workspaceContext);
+                userRepository, permissionEvaluator, workspaceContext, new AuditService(auditLogRepository));
         SecurityPolicyService securityPolicyService =
                 new SecurityPolicyService(policyRepository, workspaceService);
 folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator, permissionService);

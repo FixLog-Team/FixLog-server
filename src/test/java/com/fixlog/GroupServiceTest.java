@@ -1,5 +1,6 @@
 package com.fixlog;
 
+import com.fixlog.application.repository.AuditLogRepository;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
@@ -9,6 +10,7 @@ import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
+import com.fixlog.application.service.AuditService;
 import com.fixlog.application.service.GroupService;
 import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
@@ -44,6 +46,7 @@ class GroupServiceTest {
     @Autowired DocumentRepository documentRepository;
     @Autowired PermissionRepository permissionRepository;
     @Autowired WorkspaceInvitationRepository invitationRepository;
+    @Autowired AuditLogRepository auditLogRepository;
 
     private WorkspaceService workspaceService;
     private GroupService groupService;
@@ -54,9 +57,9 @@ class GroupServiceTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
-                folderRepository, documentRepository, permissionRepository, invitationRepository);
+                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository));
         groupService = new GroupService(groupRepository, groupMemberRepository,
-                workspaceMemberRepository, userRepository, workspaceService);
+                workspaceMemberRepository, userRepository, workspaceService, new AuditService(auditLogRepository));
     }
 
     @AfterEach

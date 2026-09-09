@@ -99,16 +99,25 @@ public class AdminConsoleService {
 
     /** 감사 로그 필터 조회 (FR-ADM-004, FR-AUD-005). */
     @Transactional(readOnly = true)
-    public List<AuditLogDto> auditLogs(UUID workspaceId, UUID actorUserId, AuditAction action,
-                                       AuditResult result, Instant from, Instant to) {
+    public List<AuditLogDto> auditLogs(UUID workspaceId, UUID actorUserId, UUID targetUserId,
+                                       AuditAction action, AuditResult result,
+                                       Instant from, Instant to) {
         workspaceService.requireAdmin(workspaceId);
-        List<AuditLogEntity> logs = auditLogRepository.search(workspaceId, actorUserId, action, result, from, to);
+        List<AuditLogEntity> logs = auditLogRepository.search(
+                workspaceId, actorUserId, targetUserId, action, result, from, to);
 
+        // 행위자와 대상을 함께 이름으로 바꾼다. 같은 사람이 양쪽에 나올 수 있어 한 번에 조회한다.
         Map<UUID, String> userNames = userNames(logs.stream()
-                .map(AuditLogEntity::getActorUserId).distinct().toList());
+                .flatMap(entry -> java.util.stream.Stream.of(
+                        entry.getActorUserId(), entry.getTargetPrincipalId()))
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList());
 
         return logs.stream()
-                .map(entry -> AuditLogDto.of(entry, userNames.get(entry.getActorUserId())))
+                .map(entry -> AuditLogDto.of(entry,
+                        userNames.get(entry.getActorUserId()),
+                        userNames.get(entry.getTargetPrincipalId())))
                 .toList();
     }
 
