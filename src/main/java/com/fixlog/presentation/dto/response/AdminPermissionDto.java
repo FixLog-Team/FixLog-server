@@ -19,6 +19,7 @@ public record AdminPermissionDto(
         String principalName,
         PermissionType permissionType,
         boolean canDownload,
+        boolean canEdit,
         Instant createAt
 ) {
     public static AdminPermissionDto of(PermissionEntity entity, String principalName, String resourceName) {
@@ -32,6 +33,7 @@ public record AdminPermissionDto(
                 principalName,
                 entity.getPermissionType(),
                 entity.isCanDownload(),
+                entity.isCanEdit(),
                 entity.getCreateAt()
         );
     }

@@ -66,6 +66,7 @@ public class WorkspaceController {
     /**
      * 기본 접근 정책 변경. 워크스페이스 전체의 노출 범위를 한 번에 바꾸므로 관리자만 호출할 수 있다.
      */
+    @Operation(operationId = "changeWorkspaceBaseAccess")
     @PatchMapping("/{workspaceId}/base-access")
     public Response changeBaseAccess(@PathVariable UUID workspaceId,
                                      @Valid @RequestBody WorkspaceBaseAccessRequest request) {

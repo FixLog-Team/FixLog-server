@@ -7,6 +7,7 @@ import com.fixlog.domain.model.PermissionSource;
 public record MyPermissionDto(
         boolean access,
         boolean canDownload,
+        boolean canEdit,
         PermissionSource source,
         String sourceDetail
 ) {
@@ -14,6 +15,7 @@ public record MyPermissionDto(
         return new MyPermissionDto(
                 dws.decision().allowed(),
                 dws.decision().canDownload(),
+                dws.decision().canEdit(),
                 dws.source(),
                 dws.sourceDetail()
         );
