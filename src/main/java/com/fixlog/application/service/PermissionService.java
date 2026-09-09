@@ -60,10 +60,12 @@ public class PermissionService {
     @Transactional
     public PermissionEntity grantCreatorOwnership(UUID workspaceId, ResourceType resourceType,
                                                   String resourceId, UUID creatorId) {
-        return permissionRepository.save(new PermissionEntity(
+        PermissionEntity entity = new PermissionEntity(
                 workspaceId, PrincipalType.USER, creatorId,
                 resourceType, resourceId,
-                PermissionType.ALLOW, true, creatorId));
+                PermissionType.ALLOW, true, creatorId);
+        entity.markAsCreator();
+        return permissionRepository.save(entity);
     }
 
     /**

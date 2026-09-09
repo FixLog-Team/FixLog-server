@@ -91,7 +91,7 @@ public class PermissionEvaluator {
      * <p>{@code allowed}가 false인 채로 반환되는 경우는 없다 — 접근 불가이면 예외가 먼저 던져진다.
      * {@code canDownload}는 ALLOW 상태에서만 의미 있다.
      */
-    public record Decision(boolean allowed, boolean canDownload, boolean workspaceAdmin) {
+    public record Decision(boolean allowed, boolean canDownload, boolean workspaceAdmin, boolean canEdit) {
     }
 
     /**
@@ -102,7 +102,11 @@ public class PermissionEvaluator {
     public Decision require(ResourceType resourceType, String resourceId, PermissionAction action) {
         return audited(resourceType, resourceId, auditActionOf(action), () -> {
             requirePolicyAllows(resourceType, resourceId, action);
-            return evaluate(resourceType, resourceId);
+            Decision decision = evaluate(resourceType, resourceId);
+            if (action != PermissionAction.VIEW && !decision.workspaceAdmin() && !decision.canEdit()) {
+                throw new BusinessException(Code.FORBIDDEN, "편집 권한이 없습니다.");
+            }
+            return decision;
         });
     }
 
@@ -379,13 +383,13 @@ public class PermissionEvaluator {
                 if (userPerm.isPresent()) {
                     PermissionEntity p = userPerm.get();
                     if (p.getPermissionType() == PermissionType.DENY) return Optional.empty();
-                    return Optional.of(new Decision(true, p.isCanDownload(), false));
+                    return Optional.of(new Decision(true, p.isCanDownload(), false, p.isCanEdit()));
                 }
                 Optional<PermissionEntity> groupPerm = strongest(atTarget, PrincipalType.GROUP);
                 if (groupPerm.isPresent()) {
                     PermissionEntity p = groupPerm.get();
                     if (p.getPermissionType() == PermissionType.DENY) return Optional.empty();
-                    return Optional.of(new Decision(true, p.isCanDownload(), false));
+                    return Optional.of(new Decision(true, p.isCanDownload(), false, p.isCanEdit()));
                 }
             }
 
@@ -401,19 +405,19 @@ public class PermissionEvaluator {
             if (closestFolderWithBaseAccess != null) {
                 FolderAccessInfo info = folderInfo.get(closestFolderWithBaseAccess);
                 if (info != null && info.baseAccess() == PermissionType.DENY) return Optional.empty();
-                return Optional.of(new Decision(true, true, false));
+                return Optional.of(new Decision(true, true, false, false));
             }
 
             // 상속 체인이 루트까지 올라갔다. 워크스페이스 기본 정책으로 확정한다.
             if (workspaceBaseAccess == PermissionType.DENY) {
                 return Optional.empty();
             }
-            return Optional.of(new Decision(true, true, false));
+            return Optional.of(new Decision(true, true, false, false));
         }
     }
 
     private Decision adminDecision() {
-        return new Decision(true, true, true);
+        return new Decision(true, true, true, true);
     }
 
     /**
@@ -470,14 +474,14 @@ public class PermissionEvaluator {
             if (folder != null && folder.getBaseAccess() == PermissionType.DENY) {
                 throw new BusinessException(Code.FORBIDDEN, "이 폴더에 대한 기본 접근이 차단되어 있습니다.");
             }
-            return new Decision(true, true, false);
+            return new Decision(true, true, false, false);
         }
 
         // 루트까지 올라왔다. 워크스페이스 기본 정책이 마지막 판단이다.
         if (workspaceBaseAccess == PermissionType.DENY) {
             throw new BusinessException(Code.FORBIDDEN, "이 워크스페이스는 기본 접근이 차단되어 있습니다.");
         }
-        return new Decision(true, true, false);
+        return new Decision(true, true, false, false);
     }
 
     /** 출처 추적 포함 판정. */
@@ -525,35 +529,35 @@ public class PermissionEvaluator {
             if (userPerm.isPresent()) {
                 PermissionEntity p = userPerm.get();
                 if (p.getPermissionType() == PermissionType.DENY) {
-                    return new DecisionWithSource(new Decision(false, false, false), source, detail);
+                    return new DecisionWithSource(new Decision(false, false, false, false), source, detail);
                 }
-                return new DecisionWithSource(new Decision(true, p.isCanDownload(), false), source, detail);
+                return new DecisionWithSource(new Decision(true, p.isCanDownload(), false, p.isCanEdit()), source, detail);
             }
             Optional<PermissionEntity> groupPerm = strongest(atTarget, PrincipalType.GROUP);
             if (groupPerm.isPresent()) {
                 PermissionEntity p = groupPerm.get();
                 if (p.getPermissionType() == PermissionType.DENY) {
-                    return new DecisionWithSource(new Decision(false, false, false), source, detail);
+                    return new DecisionWithSource(new Decision(false, false, false, false), source, detail);
                 }
-                return new DecisionWithSource(new Decision(true, p.isCanDownload(), false), source, detail);
+                return new DecisionWithSource(new Decision(true, p.isCanDownload(), false, p.isCanEdit()), source, detail);
             }
         }
 
         if (baseAccessFolderId != null) {
             FolderEntity folder = folderById.get(baseAccessFolderId);
             if (folder != null && folder.getBaseAccess() == PermissionType.DENY) {
-                return new DecisionWithSource(new Decision(false, false, false),
+                return new DecisionWithSource(new Decision(false, false, false, false),
                         PermissionSource.INHERITED, "폴더 기본 접근 차단");
             }
-            return new DecisionWithSource(new Decision(true, true, false),
+            return new DecisionWithSource(new Decision(true, true, false, false),
                     PermissionSource.INHERITED, "폴더 기본 접근 허용");
         }
 
         if (workspaceBaseAccess == PermissionType.DENY) {
-            return new DecisionWithSource(new Decision(false, false, false),
+            return new DecisionWithSource(new Decision(false, false, false, false),
                     PermissionSource.WORKSPACE_DEFAULT, "워크스페이스 기본 차단");
         }
-        return new DecisionWithSource(new Decision(true, true, false),
+        return new DecisionWithSource(new Decision(true, true, false, false),
                 PermissionSource.WORKSPACE_DEFAULT, "워크스페이스 기본 허용");
     }
 
@@ -561,7 +565,7 @@ public class PermissionEvaluator {
         if (permission.getPermissionType() == PermissionType.DENY) {
             throw new BusinessException(Code.FORBIDDEN, "접근이 명시적으로 차단되었습니다.");
         }
-        return new Decision(true, permission.isCanDownload(), false);
+        return new Decision(true, permission.isCanDownload(), false, permission.isCanEdit());
     }
 
     private Optional<PermissionEntity> findForType(List<PermissionEntity> permissions, PrincipalType type) {
