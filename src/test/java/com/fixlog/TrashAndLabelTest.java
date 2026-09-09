@@ -99,7 +99,8 @@ class TrashAndLabelTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
-                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository));
+                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
+                auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         AuditService auditService = new AuditService(auditLogRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,

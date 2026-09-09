@@ -3,7 +3,9 @@ package com.fixlog;
 import com.fixlog.application.repository.AuditLogRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository.DocumentHistorySummary;
+import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.LabelRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
@@ -63,6 +65,8 @@ class DocumentHistoryTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
+    @Autowired LabelRepository labelRepository;
+    @Autowired DocumentLabelRepository documentLabelRepository;
     @Autowired GroupRepository groupRepository;
     @Autowired GroupMemberRepository groupMemberRepository;
     @Autowired WorkspaceInvitationRepository invitationRepository;
@@ -79,7 +83,8 @@ class DocumentHistoryTest {
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
                 workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
-                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository));
+                folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
+                auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
                 permissionRepository, workspaceMemberRepository, groupMemberRepository,
                 groupRepository, folderRepository, documentRepository, workspaceContext,
