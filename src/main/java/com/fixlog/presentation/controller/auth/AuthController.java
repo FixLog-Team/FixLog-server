@@ -6,12 +6,15 @@ import com.fixlog.common.response.Response;
 import com.fixlog.common.security.JwtProvider;
 import com.fixlog.common.security.SecurityUtil;
 import com.fixlog.domain.model.UserEntity;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
+@Tag(name = "Auth")
 public class AuthController {
 
     private final JwtProvider jwtProvider;
@@ -21,6 +24,7 @@ public class AuthController {
     }
 
     @PostMapping("/token/refresh")
+    @Operation(operationId = "refreshToken")
     public Response refresh(@RequestBody Map<String, String> body) {
         String refreshToken = body.get("refreshToken");
         if (refreshToken == null) {
@@ -37,6 +41,7 @@ public class AuthController {
     }
 
     @GetMapping("/token")
+    @Operation(operationId = "getAuthSession")
     public Response session() {
         UserEntity user = SecurityUtil.getCurrentUser();
         if (user == null) {
