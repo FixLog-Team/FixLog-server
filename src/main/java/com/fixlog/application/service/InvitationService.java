@@ -43,17 +43,20 @@ public class InvitationService {
     private final UserRepository userRepository;
     private final WorkspaceService workspaceService;
     private final WorkspaceContext workspaceContext;
+    private final EmailService emailService;
 
     public InvitationService(WorkspaceInvitationRepository invitationRepository,
                              WorkspaceMemberRepository memberRepository,
                              UserRepository userRepository,
                              WorkspaceService workspaceService,
-                             WorkspaceContext workspaceContext) {
+                             WorkspaceContext workspaceContext,
+                             EmailService emailService) {
         this.invitationRepository = invitationRepository;
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
         this.workspaceService = workspaceService;
         this.workspaceContext = workspaceContext;
+        this.emailService = emailService;
     }
 
     /** Admin/Owner가 이메일로 초대 발송. 이미 PENDING 초대가 있으면 중복 불가. */
@@ -87,9 +90,8 @@ public class InvitationService {
         WorkspaceInvitationEntity invitation = invitationRepository.save(
                 new WorkspaceInvitationEntity(workspaceId, normalizedEmail, role, token, invitedBy, expiresAt));
 
-        // 1차: 이메일 발송 대신 로그 출력
-        log.info("[INVITATION] workspaceId={} email={} token={} expiresAt={}",
-                workspaceId, normalizedEmail, token, expiresAt);
+        String workspaceName = workspaceService.getWorkspaceName(workspaceId);
+        emailService.sendInvitationEmail(normalizedEmail, token, inviterName(invitedBy), workspaceName);
 
         return InvitationDto.of(invitation, inviterName(invitedBy));
     }

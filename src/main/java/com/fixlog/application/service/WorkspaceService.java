@@ -360,6 +360,12 @@ public class WorkspaceService {
      * 개인 워크스페이스는 초대·역할 변경·구성원 제거가 불가능하다 (FR-WS-009).
      * 구성원이 하나뿐이라 이 동작들이 성립하지 않는다.
      */
+    public String getWorkspaceName(UUID workspaceId) {
+        return workspaceRepository.findById(workspaceId)
+                .map(WorkspaceEntity::getWorkspaceName)
+                .orElse("FixLog 워크스페이스");
+    }
+
     private WorkspaceEntity requireCollaborativeWorkspace(UUID workspaceId) {
         requireMembership(workspaceId);
         WorkspaceEntity workspace = workspaceRepository.findById(workspaceId)
