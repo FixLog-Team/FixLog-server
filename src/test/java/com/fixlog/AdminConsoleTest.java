@@ -1,19 +1,21 @@
 package com.fixlog;
 
 import com.fixlog.application.repository.AuditLogRepository;
+import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
-import com.fixlog.application.repository.DocumentRevisionRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.AdminConsoleService;
 import com.fixlog.application.service.AuditService;
+import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
@@ -27,7 +29,7 @@ import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.AuditAction;
 import com.fixlog.domain.model.AuditResult;
-import com.fixlog.domain.model.PermissionLevel;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
 import com.fixlog.domain.model.WorkspaceEntity;
@@ -66,10 +68,11 @@ class AdminConsoleTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
-    @Autowired DocumentRevisionRepository revisionRepository;
+    @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired DocumentLabelRepository documentLabelRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
+    @Autowired WorkspaceInvitationRepository invitationRepository;
 
     private WorkspaceService workspaceService;
     private PermissionService permissionService;
@@ -86,7 +89,8 @@ class AdminConsoleTest {
         WorkspaceContext workspaceContext =
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
-                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, invitationRepository);
         AuditService auditService = new AuditService(auditLogRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
@@ -98,10 +102,12 @@ class AdminConsoleTest {
         folderService = new FolderService(folderRepository, documentRepository,
                 workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {},
-                workspaceContext, evaluator, permissionService, revisionRepository, securityPolicyService);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(),
+                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50),
+                event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService);
         adminConsole = new AdminConsoleService(permissionRepository, auditLogRepository,
-                documentRepository, folderRepository, userRepository, groupRepository, workspaceService);
+                documentRepository, folderRepository, userRepository, groupRepository,
+                workspaceMemberRepository, workspaceService);
 
         auditLogRepository.deleteAll();
 
@@ -185,7 +191,7 @@ class AdminConsoleTest {
         String shared = newDocument("공유한 문서");
         newDocument("공유 안 한 문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, shared,
-                "member@fixlog.dev", PermissionLevel.VIEWER, true);
+                "member@fixlog.dev", PermissionType.ALLOW, true);
 
         List<AdminPermissionDto> shares = adminConsole.shares(workspace.getWorkspaceId());
 
@@ -200,7 +206,7 @@ class AdminConsoleTest {
     void 감사_로그를_행위자로_거를_수_있다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "member@fixlog.dev", PermissionLevel.VIEWER, true);
+                "member@fixlog.dev", PermissionType.ALLOW, true);
         auditLogRepository.deleteAll();
 
         loginAs(member);

@@ -9,6 +9,7 @@ import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.SecurityPolicyRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.DocumentPdfGenerator;
@@ -16,8 +17,9 @@ import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
 import com.fixlog.application.repository.AuditLogRepository;
-import com.fixlog.application.repository.DocumentRevisionRepository;
+import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.service.AuditService;
+import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
 import com.fixlog.application.service.SecurityPolicyService;
@@ -80,9 +82,10 @@ class DocumentServiceCharacterizationTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
-    @Autowired DocumentRevisionRepository revisionRepository;
+    @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired GroupRepository groupRepository;
     @Autowired GroupMemberRepository groupMemberRepository;
+    @Autowired WorkspaceInvitationRepository invitationRepository;
 
     private DocumentService documentService;
     private FolderService folderService;
@@ -95,7 +98,8 @@ class DocumentServiceCharacterizationTest {
         WorkspaceContext workspaceContext =
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
-                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, invitationRepository);
         PermissionEvaluator permissionEvaluator = new PermissionEvaluator(
                 permissionRepository, workspaceMemberRepository, groupMemberRepository,
                 groupRepository, folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository), policyRepository);
@@ -106,7 +110,9 @@ class DocumentServiceCharacterizationTest {
                 new SecurityPolicyService(policyRepository, workspaceService);
 folderService = new FolderService(folderRepository, documentRepository, workspaceContext, permissionEvaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), publishedEvents::add, workspaceContext, permissionEvaluator, permissionService, revisionRepository, securityPolicyService);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(),
+                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50),
+                publishedEvents::add, workspaceContext, permissionEvaluator, permissionService, securityPolicyService);
     }
 
     @AfterEach

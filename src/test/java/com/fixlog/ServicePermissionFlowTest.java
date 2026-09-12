@@ -7,6 +7,7 @@ import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.DocumentPdfGenerator;
@@ -14,8 +15,9 @@ import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
 import com.fixlog.application.repository.AuditLogRepository;
-import com.fixlog.application.repository.DocumentRevisionRepository;
+import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.service.AuditService;
+import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
 import com.fixlog.application.service.SecurityPolicyService;
@@ -26,7 +28,7 @@ import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.domain.model.FolderEntity;
 import com.fixlog.domain.model.PermissionEntity;
-import com.fixlog.domain.model.PermissionLevel;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
@@ -75,9 +77,10 @@ class ServicePermissionFlowTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
-    @Autowired DocumentRevisionRepository revisionRepository;
+    @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
+    @Autowired WorkspaceInvitationRepository invitationRepository;
 
     private WorkspaceService workspaceService;
     private DocumentService documentService;
@@ -92,7 +95,8 @@ class ServicePermissionFlowTest {
         WorkspaceContext workspaceContext =
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
-                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, invitationRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository), policyRepository);
@@ -103,8 +107,9 @@ class ServicePermissionFlowTest {
                 new SecurityPolicyService(policyRepository, workspaceService);
 folderService = new FolderService(folderRepository, documentRepository, workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {},
-                workspaceContext, evaluator, permissionService, revisionRepository, securityPolicyService);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(),
+                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50),
+                event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService);
 
         admin = signUp("admin");
         loginAs(admin);
@@ -140,9 +145,9 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     }
 
     private void grant(ResourceType type, String id, UUID userId,
-                       PermissionLevel level, boolean canDownload) {
+                       PermissionType permissionType, boolean canDownload) {
         permissionRepository.save(new PermissionEntity(workspace.getWorkspaceId(),
-                PrincipalType.USER, userId, type, id, level, canDownload, admin.getUserId()));
+                PrincipalType.USER, userId, type, id, permissionType, canDownload, admin.getUserId()));
     }
 
     // ---------- 헤더로 지정한 워크스페이스에서 만들어진다 ----------
@@ -186,7 +191,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     void VIEWER는_문서를_저장할_수_없다() {
         loginAs(admin);
         String docId = documentService.create(new DocumentCreateRequest(null, "읽기 전용")).getDocumentId();
-        grant(ResourceType.DOCUMENT, docId, member.getUserId(), PermissionLevel.VIEWER, true);
+        grant(ResourceType.DOCUMENT, docId, member.getUserId(), PermissionType.ALLOW, true);
 
         loginAs(member);
         assertEquals("읽기 전용", documentService.getDocument(docId).getTitle());
@@ -199,7 +204,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     void 다운로드_플래그가_없으면_문서를_내려받을_수_없다() {
         loginAs(admin);
         String docId = documentService.create(new DocumentCreateRequest(null, "반출 금지")).getDocumentId();
-        grant(ResourceType.DOCUMENT, docId, member.getUserId(), PermissionLevel.EDITOR, false);
+        grant(ResourceType.DOCUMENT, docId, member.getUserId(), PermissionType.ALLOW, false);
 
         loginAs(member);
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
@@ -213,7 +218,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         loginAs(admin);
         String visible = documentService.create(new DocumentCreateRequest(null, "공유된 문서")).getDocumentId();
         documentService.create(new DocumentCreateRequest(null, "안 준 문서"));
-        grant(ResourceType.DOCUMENT, visible, member.getUserId(), PermissionLevel.VIEWER, true);
+        grant(ResourceType.DOCUMENT, visible, member.getUserId(), PermissionType.ALLOW, true);
 
         loginAs(member);
         var page = documentService.list(null, PageRequest.of(0, 10));
@@ -236,7 +241,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         loginAs(admin);
         FolderEntity shared = folderService.createFolder(new FolderRequest(null, "공유 폴더"));
         folderService.createFolder(new FolderRequest(null, "비공개 폴더"));
-        grant(ResourceType.FOLDER, shared.getFolderId(), member.getUserId(), PermissionLevel.VIEWER, true);
+        grant(ResourceType.FOLDER, shared.getFolderId(), member.getUserId(), PermissionType.ALLOW, true);
 
         loginAs(member);
         List<FolderTreeDto> tree = folderService.getFolderTree();
@@ -251,7 +256,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         FolderEntity folder = folderService.createFolder(new FolderRequest(null, "공유 폴더"));
         String docId = documentService.create(
                 new DocumentCreateRequest(folder.getFolderId(), "폴더 안 문서")).getDocumentId();
-        grant(ResourceType.FOLDER, folder.getFolderId(), member.getUserId(), PermissionLevel.EDITOR, true);
+        grant(ResourceType.FOLDER, folder.getFolderId(), member.getUserId(), PermissionType.ALLOW, true);
 
         loginAs(member);
 

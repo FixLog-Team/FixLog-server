@@ -1,7 +1,11 @@
 package com.fixlog;
 
 import com.fixlog.application.repository.AiUsageRepository;
+import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.FolderRepository;
+import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.UserApiKeyRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.repository.UserRepository;
@@ -46,6 +50,10 @@ class AiUsageAndApiKeyTest {
     @Autowired WorkspaceMemberRepository workspaceMemberRepository;
     @Autowired AiUsageRepository aiUsageRepository;
     @Autowired UserApiKeyRepository apiKeyRepository;
+    @Autowired FolderRepository folderRepository;
+    @Autowired DocumentRepository documentRepository;
+    @Autowired PermissionRepository permissionRepository;
+    @Autowired WorkspaceInvitationRepository workspaceInvitationRepository;
 
     private WorkspaceService workspaceService;
     private AiUsageService aiUsageService;
@@ -61,7 +69,8 @@ class AiUsageAndApiKeyTest {
         WorkspaceContext workspaceContext =
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
-                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, workspaceInvitationRepository);
 
         properties = new AiUsageProperties();
         properties.setFreeMonthlyTokenLimit(1_000L);

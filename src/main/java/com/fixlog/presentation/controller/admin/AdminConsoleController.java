@@ -1,10 +1,14 @@
 package com.fixlog.presentation.controller.admin;
 
 import com.fixlog.application.service.AdminConsoleService;
+import com.fixlog.application.service.EffectivePermissionService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
 import com.fixlog.domain.model.AuditAction;
 import com.fixlog.domain.model.AuditResult;
+import com.fixlog.domain.model.ResourceType;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,25 +26,32 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/workspaces/{workspaceId}/admin")
+@Tag(name = "Admin")
 public class AdminConsoleController {
 
     private final AdminConsoleService adminConsoleService;
+    private final EffectivePermissionService effectivePermissionService;
 
-    public AdminConsoleController(AdminConsoleService adminConsoleService) {
+    public AdminConsoleController(AdminConsoleService adminConsoleService,
+                                  EffectivePermissionService effectivePermissionService) {
         this.adminConsoleService = adminConsoleService;
+        this.effectivePermissionService = effectivePermissionService;
     }
 
     @GetMapping("/permissions")
+    @Operation(operationId = "adminListPermissions")
     public Response permissions(@PathVariable UUID workspaceId) {
         return DataResponse.success(adminConsoleService.permissions(workspaceId));
     }
 
     @GetMapping("/shares")
+    @Operation(operationId = "adminListShares")
     public Response shares(@PathVariable UUID workspaceId) {
         return DataResponse.success(adminConsoleService.shares(workspaceId));
     }
 
     @GetMapping("/audit-logs")
+    @Operation(operationId = "adminListAuditLogs")
     public Response auditLogs(@PathVariable UUID workspaceId,
                               @RequestParam(required = false) UUID actorUserId,
                               @RequestParam(required = false) AuditAction action,
@@ -54,7 +65,36 @@ public class AdminConsoleController {
     }
 
     @GetMapping("/stats")
+    @Operation(operationId = "adminGetStats")
     public Response stats(@PathVariable UUID workspaceId) {
         return DataResponse.success(adminConsoleService.stats(workspaceId));
+    }
+
+    @GetMapping("/users")
+    @Operation(operationId = "adminListUsers")
+    public Response listUsers(@PathVariable UUID workspaceId) {
+        return DataResponse.success(adminConsoleService.listUsers(workspaceId));
+    }
+
+    @GetMapping("/users/{userId}")
+    @Operation(operationId = "adminGetUser")
+    public Response getUser(@PathVariable UUID workspaceId, @PathVariable UUID userId) {
+        return DataResponse.success(adminConsoleService.getUser(workspaceId, userId));
+    }
+
+    @GetMapping("/users/{userId}/access")
+    @Operation(operationId = "adminGetUserAccess")
+    public Response userAccess(@PathVariable UUID workspaceId, @PathVariable UUID userId) {
+        return DataResponse.success(effectivePermissionService.computeForUser(workspaceId, userId));
+    }
+
+    @GetMapping("/permissions/effective")
+    @Operation(operationId = "adminGetEffectivePermission")
+    public Response effectivePermission(@PathVariable UUID workspaceId,
+                                        @RequestParam UUID userId,
+                                        @RequestParam ResourceType resourceType,
+                                        @RequestParam String resourceId) {
+        return DataResponse.success(
+                effectivePermissionService.computeSingle(workspaceId, userId, resourceType, resourceId));
     }
 }

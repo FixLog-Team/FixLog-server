@@ -43,4 +43,10 @@ public interface FolderRepository extends JpaRepository<FolderEntity, String> {
      * 워크스페이스 조건 없이도 다른 워크스페이스의 폴더가 섞이지 않는다.
      */
     List<FolderEntity> findByPathStartingWith(String pathPrefix);
+
+    /** 워크스페이스 삭제 시 내부 폴더 일괄 soft-delete. */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(
+            "UPDATE FolderEntity f SET f.usable = 0 WHERE f.workspaceId = :workspaceId AND f.usable = 1")
+    void softDeleteByWorkspaceId(@org.springframework.data.repository.query.Param("workspaceId") UUID workspaceId);
 }

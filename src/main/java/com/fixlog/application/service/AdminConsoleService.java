@@ -6,6 +6,9 @@ import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceMemberRepository;
+import com.fixlog.common.code.Code;
+import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.AuditAction;
 import com.fixlog.domain.model.AuditLogEntity;
 import com.fixlog.domain.model.AuditResult;
@@ -14,7 +17,9 @@ import com.fixlog.domain.model.FolderEntity;
 import com.fixlog.domain.model.PermissionEntity;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
+import com.fixlog.domain.model.WorkspaceMemberEntity;
 import com.fixlog.presentation.dto.response.AdminPermissionDto;
+import com.fixlog.presentation.dto.response.AdminUserDto;
 import com.fixlog.presentation.dto.response.AuditLogDto;
 import com.fixlog.presentation.dto.response.WorkspaceStatsDto;
 import org.springframework.stereotype.Service;
@@ -25,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -42,6 +48,7 @@ public class AdminConsoleService {
     private final FolderRepository folderRepository;
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
+    private final WorkspaceMemberRepository memberRepository;
     private final WorkspaceService workspaceService;
 
     public AdminConsoleService(PermissionRepository permissionRepository,
@@ -50,6 +57,7 @@ public class AdminConsoleService {
                                FolderRepository folderRepository,
                                UserRepository userRepository,
                                GroupRepository groupRepository,
+                               WorkspaceMemberRepository memberRepository,
                                WorkspaceService workspaceService) {
         this.permissionRepository = permissionRepository;
         this.auditLogRepository = auditLogRepository;
@@ -57,6 +65,7 @@ public class AdminConsoleService {
         this.folderRepository = folderRepository;
         this.userRepository = userRepository;
         this.groupRepository = groupRepository;
+        this.memberRepository = memberRepository;
         this.workspaceService = workspaceService;
     }
 
@@ -122,6 +131,31 @@ public class AdminConsoleService {
                 documentRepository.countByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(0)),
                 folderRepository.countByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(0)),
                 byUserName);
+    }
+
+    /** 워크스페이스 구성원 목록 (FR-ADM-009). */
+    @Transactional(readOnly = true)
+    public List<AdminUserDto> listUsers(UUID workspaceId) {
+        workspaceService.requireAdmin(workspaceId);
+        List<WorkspaceMemberEntity> members = memberRepository.findByWorkspaceIdOrderByCreateAtAsc(workspaceId);
+        Map<UUID, UserEntity> users = userRepository
+                .findAllById(members.stream().map(WorkspaceMemberEntity::getUserId).toList()).stream()
+                .collect(Collectors.toMap(UserEntity::getUserId, Function.identity()));
+        return members.stream()
+                .map(m -> AdminUserDto.of(m, users.get(m.getUserId())))
+                .filter(dto -> dto != null)
+                .toList();
+    }
+
+    /** 특정 구성원 상세 조회. */
+    @Transactional(readOnly = true)
+    public AdminUserDto getUser(UUID workspaceId, UUID targetUserId) {
+        workspaceService.requireAdmin(workspaceId);
+        WorkspaceMemberEntity member = memberRepository.findByWorkspaceIdAndUserId(workspaceId, targetUserId)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "구성원을 찾을 수 없습니다."));
+        UserEntity user = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+        return AdminUserDto.of(member, user);
     }
 
     /** 권한 목록에 사람이 읽을 이름을 붙인다. ID만 나열하면 콘솔에서 쓸 수 없다. */

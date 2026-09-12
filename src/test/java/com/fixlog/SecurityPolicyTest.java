@@ -1,17 +1,19 @@
 package com.fixlog;
 
 import com.fixlog.application.repository.AuditLogRepository;
+import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentRepository;
-import com.fixlog.application.repository.DocumentRevisionRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.AuditService;
+import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.DocumentPdfGenerator;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
@@ -23,7 +25,7 @@ import com.fixlog.application.service.WorkspaceContext;
 import com.fixlog.application.service.WorkspaceService;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
-import com.fixlog.domain.model.PermissionLevel;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.SecurityPolicyEntity;
 import com.fixlog.domain.model.UserEntity;
@@ -62,9 +64,10 @@ class SecurityPolicyTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
-    @Autowired DocumentRevisionRepository revisionRepository;
+    @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
+    @Autowired WorkspaceInvitationRepository invitationRepository;
 
     private WorkspaceService workspaceService;
     private PermissionService permissionService;
@@ -80,7 +83,8 @@ class SecurityPolicyTest {
         WorkspaceContext workspaceContext =
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
-                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, invitationRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext,
@@ -91,8 +95,9 @@ class SecurityPolicyTest {
         FolderService folderService = new FolderService(folderRepository, documentRepository,
                 workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {},
-                workspaceContext, evaluator, permissionService, revisionRepository, policyService);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(),
+                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50),
+                event -> {}, workspaceContext, evaluator, permissionService, policyService);
 
         auditLogRepository.deleteAll();
 
@@ -156,7 +161,7 @@ class SecurityPolicyTest {
     void 정책이_다운로드를_막으면_권한이_있어도_막힌다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "member@fixlog.dev", PermissionLevel.EDITOR, true);
+                "member@fixlog.dev", PermissionType.ALLOW, true);
         policyService.update(workspace.getWorkspaceId(), null, false, null, null, null);
 
         loginAs(member);
@@ -182,7 +187,7 @@ class SecurityPolicyTest {
 
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
                 () -> permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                        "member@fixlog.dev", PermissionLevel.VIEWER, true)).getCode());
+                        "member@fixlog.dev", PermissionType.ALLOW, true)).getCode());
     }
 
     @Test

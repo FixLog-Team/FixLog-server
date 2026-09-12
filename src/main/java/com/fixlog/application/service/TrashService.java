@@ -1,8 +1,8 @@
 package com.fixlog.application.service;
 
+import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
-import com.fixlog.application.repository.DocumentRevisionRepository;
 import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
@@ -35,7 +35,7 @@ public class TrashService {
 
     private final DocumentRepository documentRepository;
     private final FolderRepository folderRepository;
-    private final DocumentRevisionRepository revisionRepository;
+    private final DocumentHistoryRepository historyRepository;
     private final DocumentLabelRepository documentLabelRepository;
     private final PermissionRepository permissionRepository;
     private final WorkspaceMemberRepository workspaceMemberRepository;
@@ -44,7 +44,7 @@ public class TrashService {
 
     public TrashService(DocumentRepository documentRepository,
                         FolderRepository folderRepository,
-                        DocumentRevisionRepository revisionRepository,
+                        DocumentHistoryRepository historyRepository,
                         DocumentLabelRepository documentLabelRepository,
                         PermissionRepository permissionRepository,
                         WorkspaceMemberRepository workspaceMemberRepository,
@@ -52,7 +52,7 @@ public class TrashService {
                         AuditService auditService) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
-        this.revisionRepository = revisionRepository;
+        this.historyRepository = historyRepository;
         this.documentLabelRepository = documentLabelRepository;
         this.permissionRepository = permissionRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
@@ -129,8 +129,7 @@ public class TrashService {
             case DOCUMENT -> {
                 DocumentEntity doc = trashedDocument(workspaceId, resourceId);
                 requireRestorer(workspaceId, doc.getDeletedBy(), me);
-                revisionRepository.deleteAll(
-                        revisionRepository.findByDocumentIdOrderByRevisionNoDesc(resourceId));
+                historyRepository.deleteByDocumentId(resourceId);
                 documentLabelRepository.deleteByDocumentId(resourceId);
                 permissionRepository.deleteAll(
                         permissionRepository.findByResourceTypeAndResourceId(resourceType, resourceId));

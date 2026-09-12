@@ -31,13 +31,12 @@ public class DocumentSearchService {
     private final int candidateMultiplier;
     private final int maxChunksPerDocument;
 
-    public DocumentSearchService(
-            VectorStore vectorStore,
-            DocumentRepository documentRepository,
-            WorkspaceContext workspaceContext,
-            PermissionEvaluator permissionEvaluator,
-            @Value("${fixlog.ai.search.candidate-multiplier:4}") int candidateMultiplier,
-            @Value("${fixlog.ai.search.max-chunks-per-document:2}") int maxChunksPerDocument) {
+    public DocumentSearchService(VectorStore vectorStore,
+                                 DocumentRepository documentRepository,
+                                 WorkspaceContext workspaceContext,
+                                 PermissionEvaluator permissionEvaluator,
+                                 @Value("${fixlog.ai.search.candidate-multiplier:4}") int candidateMultiplier,
+                                 @Value("${fixlog.ai.search.max-chunks-per-document:2}") int maxChunksPerDocument) {
         this.vectorStore = vectorStore;
         this.documentRepository = documentRepository;
         this.workspaceContext = workspaceContext;
@@ -54,7 +53,10 @@ public class DocumentSearchService {
         return similaritySearch(query, topK, SearchRequest.SIMILARITY_THRESHOLD_ACCEPT_ALL);
     }
 
-    /** 현재 워크스페이스에서 조회 권한이 있는 문서만 대상으로 유사도 검색한다. */
+    /**
+     * 유사도 threshold를 적용한 검색. 관련성 낮은 청크를 걸러
+     * LLM 컨텍스트에 불필요한 토큰이 들어가는 것을 막는다.
+     */
     public List<Document> similaritySearch(String query, int topK, double similarityThreshold) {
         UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
         PermissionEvaluator.Scope scope = permissionEvaluator.scopeFor(workspaceId);
@@ -70,6 +72,7 @@ public class DocumentSearchService {
         if (accessible.isEmpty()) {
             return List.of();
         }
+
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         int candidateCount = Math.max(topK, topK * candidateMultiplier);
         List<Document> candidates = vectorStore.similaritySearch(
@@ -97,7 +100,6 @@ public class DocumentSearchService {
         String documentId = String.valueOf(document.getMetadata().get("documentId"));
         int currentCount = documentCounts.getOrDefault(documentId, 0);
         if (currentCount >= maxChunksPerDocument) return false;
-
         documentCounts.put(documentId, currentCount + 1);
         return true;
     }

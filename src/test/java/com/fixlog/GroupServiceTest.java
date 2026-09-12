@@ -1,8 +1,12 @@
 package com.fixlog;
 
+import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.FolderRepository;
 import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
+import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.GroupService;
@@ -36,6 +40,10 @@ class GroupServiceTest {
     @Autowired WorkspaceMemberRepository workspaceMemberRepository;
     @Autowired GroupRepository groupRepository;
     @Autowired GroupMemberRepository groupMemberRepository;
+    @Autowired FolderRepository folderRepository;
+    @Autowired DocumentRepository documentRepository;
+    @Autowired PermissionRepository permissionRepository;
+    @Autowired WorkspaceInvitationRepository invitationRepository;
 
     private WorkspaceService workspaceService;
     private GroupService groupService;
@@ -45,7 +53,8 @@ class GroupServiceTest {
         WorkspaceContext workspaceContext =
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
-                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, invitationRepository);
         groupService = new GroupService(groupRepository, groupMemberRepository,
                 workspaceMemberRepository, userRepository, workspaceService);
     }

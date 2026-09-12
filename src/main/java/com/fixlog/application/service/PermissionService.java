@@ -8,7 +8,7 @@ import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.PermissionEntity;
-import com.fixlog.domain.model.PermissionLevel;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.response.PermissionDto;
@@ -47,10 +47,7 @@ public class PermissionService {
     }
 
     /**
-     * 만든 사람에게 소유 권한을 준다.
-     *
-     * <p>이게 없으면 일반 구성원은 문서를 만드는 즉시 접근을 잃는다. 만들었다는 사실
-     * ({@code create_user})은 접근 제어에 쓰이지 않기 때문이다 (FR-PRM-011).
+     * 만든 사람에게 접근 권한을 준다 (FR-PRM-011).
      * 권한 판정을 거치지 않는 유일한 부여 경로이므로 생성 직후에만 호출한다.
      */
     @Transactional
@@ -59,34 +56,33 @@ public class PermissionService {
         return permissionRepository.save(new PermissionEntity(
                 workspaceId, PrincipalType.USER, creatorId,
                 resourceType, resourceId,
-                PermissionLevel.OWNER, true, creatorId));
+                PermissionType.ALLOW, true, creatorId));
     }
 
-    /** 공유 = 권한 부여 (FR-SHR-001~003). 공유 설정은 OWNER만 할 수 있다. */
+    /**
+     * 권한 부여 (FR-SHR-001~003).
+     * Admin/Owner만 권한을 관리할 수 있다. 일반 구성원은 허용되지 않는다.
+     */
     @Transactional
     public PermissionEntity share(ResourceType resourceType, String resourceId,
                                   PrincipalType principalType, UUID principalId,
-                                  PermissionLevel level, boolean canDownload) {
+                                  PermissionType permissionType, boolean canDownload) {
         permissionEvaluator.require(resourceType, resourceId, PermissionAction.SHARE);
         UUID workspaceId = permissionEvaluator.workspaceIdOf(resourceType, resourceId);
         UUID granter = workspaceContext.requireCurrentUserId();
 
-        if (level == null) {
-            throw new BusinessException(Code.INVALID_REQUEST, "권한 레벨은 필수입니다.");
-        }
         requirePrincipalInWorkspace(workspaceId, principalType, principalId);
 
-        // 같은 대상·주체에 이미 있으면 덮어쓴다. 중복 레코드가 생기면 판정이 흔들린다.
         return permissionRepository
                 .findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
                         resourceType, resourceId, principalType, principalId)
                 .map(existing -> {
-                    existing.update(level, canDownload);
+                    existing.update(permissionType, canDownload);
                     return permissionRepository.save(existing);
                 })
                 .orElseGet(() -> permissionRepository.save(new PermissionEntity(
                         workspaceId, principalType, principalId,
-                        resourceType, resourceId, level, canDownload, granter)));
+                        resourceType, resourceId, permissionType, canDownload, granter)));
     }
 
     /** 공유 회수 (FR-SHR-004). */
@@ -139,16 +135,16 @@ public class PermissionService {
         }
     }
 
-    /** 이메일로 사용자를 찾아 공유한다. 초대와 같은 방식으로 대상을 지정하기 위한 편의 경로다. */
+    /** 이메일로 사용자를 찾아 권한을 부여한다. */
     @Transactional
     public PermissionEntity shareWithEmail(ResourceType resourceType, String resourceId,
-                                           String email, PermissionLevel level, boolean canDownload) {
+                                           String email, PermissionType permissionType, boolean canDownload) {
         if (email == null || email.isBlank()) {
             throw new BusinessException(Code.INVALID_REQUEST, "공유할 사용자의 이메일은 필수입니다.");
         }
         UUID userId = userRepository.findByEmail(email.trim())
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "가입된 사용자를 찾을 수 없습니다."))
                 .getUserId();
-        return share(resourceType, resourceId, PrincipalType.USER, userId, level, canDownload);
+        return share(resourceType, resourceId, PrincipalType.USER, userId, permissionType, canDownload);
     }
 }

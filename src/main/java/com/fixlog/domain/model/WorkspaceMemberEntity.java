@@ -60,8 +60,18 @@ public class WorkspaceMemberEntity {
         this.role = role;
     }
 
+    public boolean isAdminOrOwner() {
+        return role == WorkspaceRole.ADMIN || role == WorkspaceRole.OWNER;
+    }
+
+    public boolean isOwner() {
+        return role == WorkspaceRole.OWNER;
+    }
+
+    /** @deprecated isAdminOrOwner() 사용 */
+    @Deprecated
     public boolean isAdmin() {
-        return role == WorkspaceRole.ADMIN;
+        return isAdminOrOwner();
     }
 
     public UUID getId() {

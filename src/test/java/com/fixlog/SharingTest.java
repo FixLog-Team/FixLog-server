@@ -7,6 +7,7 @@ import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.SecurityPolicyRepository;
 import com.fixlog.application.repository.UserRepository;
+import com.fixlog.application.repository.WorkspaceInvitationRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
 import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.application.service.DocumentPdfGenerator;
@@ -14,8 +15,9 @@ import com.fixlog.application.service.DocumentService;
 import com.fixlog.application.service.DocumentTextExtractor;
 import com.fixlog.application.service.FolderService;
 import com.fixlog.application.repository.AuditLogRepository;
-import com.fixlog.application.repository.DocumentRevisionRepository;
+import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.service.AuditService;
+import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.PermissionEvaluator;
 import com.fixlog.application.service.PermissionService;
 import com.fixlog.application.service.SecurityPolicyService;
@@ -26,7 +28,7 @@ import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.GroupEntity;
 import com.fixlog.domain.model.GroupMemberEntity;
 import com.fixlog.domain.model.PermissionEntity;
-import com.fixlog.domain.model.PermissionLevel;
+import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
@@ -67,9 +69,10 @@ class SharingTest {
     @Autowired PermissionRepository permissionRepository;
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
-    @Autowired DocumentRevisionRepository revisionRepository;
+    @Autowired DocumentHistoryRepository documentHistoryRepository;
     @Autowired FolderRepository folderRepository;
     @Autowired DocumentRepository documentRepository;
+    @Autowired WorkspaceInvitationRepository invitationRepository;
 
     private WorkspaceService workspaceService;
     private PermissionService permissionService;
@@ -85,7 +88,8 @@ class SharingTest {
         WorkspaceContext workspaceContext =
                 new WorkspaceContext(workspaceRepository, workspaceMemberRepository);
         workspaceService = new WorkspaceService(
-                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext);
+                workspaceRepository, workspaceMemberRepository, userRepository, workspaceContext,
+                folderRepository, documentRepository, permissionRepository, invitationRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
                 workspaceMemberRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext, new AuditService(auditLogRepository), policyRepository);
@@ -96,8 +100,9 @@ class SharingTest {
         folderService = new FolderService(folderRepository, documentRepository,
                 workspaceContext, evaluator, permissionService);
         documentService = new DocumentService(documentRepository, folderRepository,
-                new DocumentTextExtractor(), new DocumentPdfGenerator(), event -> {},
-                workspaceContext, evaluator, permissionService, revisionRepository, securityPolicyService);
+                new DocumentTextExtractor(), new DocumentPdfGenerator(),
+                new DocumentHistoryService(documentRepository, documentHistoryRepository, 50),
+                event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService);
 
         UserEntity admin = signUp("admin");
         loginAs(admin);
@@ -145,7 +150,7 @@ class SharingTest {
         String docId = newDocument("내 문서");
 
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionLevel.VIEWER, true);
+                "mate@fixlog.dev", PermissionType.ALLOW, true);
 
         loginAs(mate);
         assertEquals("내 문서", documentService.getDocument(docId).getTitle());
@@ -155,7 +160,7 @@ class SharingTest {
     void 공유_레벨이_행위를_제한한다() {
         String docId = newDocument("읽기만");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionLevel.VIEWER, true);
+                "mate@fixlog.dev", PermissionType.ALLOW, true);
 
         loginAs(mate);
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
@@ -167,7 +172,7 @@ class SharingTest {
     void 다운로드만_따로_막을_수_있다() {
         String docId = newDocument("반출 금지");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionLevel.EDITOR, false);
+                "mate@fixlog.dev", PermissionType.ALLOW, false);
 
         loginAs(mate);
         assertEquals("반출 금지", documentService.getDocument(docId).getTitle());
@@ -180,16 +185,16 @@ class SharingTest {
     void 같은_대상에_다시_공유하면_레벨이_갱신된다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionLevel.VIEWER, true);
+                "mate@fixlog.dev", PermissionType.ALLOW, true);
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionLevel.EDITOR, true);
+                "mate@fixlog.dev", PermissionType.ALLOW, true);
 
         List<PermissionEntity> forMate = permissionRepository
                 .findByResourceTypeAndResourceId(ResourceType.DOCUMENT, docId).stream()
                 .filter(p -> p.getPrincipalId().equals(mate.getUserId())).toList();
 
         assertEquals(1, forMate.size(), "중복 레코드가 생기면 안 된다");
-        assertEquals(PermissionLevel.EDITOR, forMate.get(0).getPermissionLevel());
+        assertEquals(PermissionType.ALLOW, forMate.get(0).getPermissionType());
     }
 
     @Test
@@ -199,7 +204,7 @@ class SharingTest {
                 new DocumentCreateRequest(folder.getFolderId(), "폴더 안 문서")).getDocumentId();
 
         permissionService.shareWithEmail(ResourceType.FOLDER, folder.getFolderId(),
-                "mate@fixlog.dev", PermissionLevel.VIEWER, true);
+                "mate@fixlog.dev", PermissionType.ALLOW, true);
 
         loginAs(mate);
         assertEquals("폴더 안 문서", documentService.getDocument(docId).getTitle());
@@ -212,7 +217,7 @@ class SharingTest {
         groupMemberRepository.save(new GroupMemberEntity(group.getGroupId(), mate.getUserId()));
 
         permissionService.share(ResourceType.DOCUMENT, docId,
-                PrincipalType.GROUP, group.getGroupId(), PermissionLevel.VIEWER, true);
+                PrincipalType.GROUP, group.getGroupId(), PermissionType.ALLOW, true);
 
         loginAs(mate);
         assertEquals("그룹 문서", documentService.getDocument(docId).getTitle());
@@ -227,7 +232,7 @@ class SharingTest {
 
         BusinessException e = assertThrows(BusinessException.class,
                 () -> permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                        "outsider@fixlog.dev", PermissionLevel.VIEWER, true));
+                        "outsider@fixlog.dev", PermissionType.ALLOW, true));
 
         assertEquals(Code.NOT_FOUND, e.getCode());
     }
@@ -236,12 +241,12 @@ class SharingTest {
     void 소유자가_아니면_공유_설정을_할_수_없다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionLevel.EDITOR, true);
+                "mate@fixlog.dev", PermissionType.ALLOW, true);
 
         loginAs(mate);
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
                 () -> permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                        "admin@fixlog.dev", PermissionLevel.VIEWER, true)).getCode());
+                        "admin@fixlog.dev", PermissionType.ALLOW, true)).getCode());
     }
 
     // ---------- 회수 ----------
@@ -250,7 +255,7 @@ class SharingTest {
     void 공유를_회수하면_접근이_끊긴다() {
         String docId = newDocument("문서");
         PermissionEntity granted = permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionLevel.VIEWER, true);
+                "mate@fixlog.dev", PermissionType.ALLOW, true);
 
         permissionService.revoke(ResourceType.DOCUMENT, docId, granted.getId());
 
@@ -265,7 +270,7 @@ class SharingTest {
     void 나와_공유됨에는_내가_만들지_않은_것만_나온다() {
         String mine = newDocument("내가 만든 문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, mine,
-                "mate@fixlog.dev", PermissionLevel.VIEWER, true);
+                "mate@fixlog.dev", PermissionType.ALLOW, true);
 
         loginAs(mate);
         String mateOwn = newDocument("mate가 만든 문서");

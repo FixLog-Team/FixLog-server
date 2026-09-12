@@ -57,4 +57,6 @@ public interface PermissionRepository extends JpaRepository<PermissionEntity, UU
 
     Optional<PermissionEntity> findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
             ResourceType resourceType, String resourceId, PrincipalType principalType, UUID principalId);
+
+    void deleteByWorkspaceId(UUID workspaceId);
 }
