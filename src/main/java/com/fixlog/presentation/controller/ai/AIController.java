@@ -43,7 +43,7 @@ public class AIController {
     @PostMapping("/summarize")
     @Operation(operationId = "aiSummarize")
     public DataResponse<String> summarizeDocument(@Valid @RequestBody DocumentRequest request) {
-        return DataResponse.success("요약이 완료되었습니다.", documentAIService.summarizeDocument(request.content()));
+        return DataResponse.success("요약이 완료되었습니다.", documentAIService.summarizeFreeText(request.content()));
     }
 
     @PostMapping("/documents/{documentId}/summarize")

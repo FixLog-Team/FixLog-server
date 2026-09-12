@@ -87,6 +87,10 @@ public abstract class AbstractAIService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    protected AbstractAIService(ChatClient chatClient) {
+        this(chatClient, null);
+    }
+
     protected AbstractAIService(ChatClient chatClient, TokenUsageLogger tokenUsageLogger) {
         this.chatClient = chatClient;
         this.tokenUsageLogger = tokenUsageLogger;
@@ -96,8 +100,41 @@ public abstract class AbstractAIService {
     public record DocumentAnalysisDto(String summary, List<String> tags) {
     }
 
+    /** 응답과 함께 토큰 사용량을 돌려준다. 사용량을 기록하려면 호출 지점에서 알아야 한다. */
+    public record AiResult(String content, long inputTokens, long outputTokens) {
+    }
+
     public String summarizeDocument(String content) {
-        return callAndLog("summarize", SUMMARIZE_PROMPT, content);
+        return summarizeDocumentWithUsage(content).content();
+    }
+
+    public AiResult summarizeDocumentWithUsage(String content) {
+        PromptTemplate promptTemplate = new PromptTemplate(SUMMARIZE_PROMPT);
+        Prompt prompt = promptTemplate.create(Map.of("content", content));
+        ChatResponse response = chatClient.prompt(prompt).call().chatResponse();
+        return toResult(response);
+    }
+
+    /**
+     * 사용량 메타데이터는 모델·버전에 따라 비어 있을 수 있다. 없으면 0으로 남긴다 —
+     * 기록을 건너뛰면 호출이 있었다는 사실 자체가 사라진다.
+     */
+    protected AiResult toResult(ChatResponse response) {
+        if (response == null) {
+            return new AiResult("", 0L, 0L);
+        }
+        String text = response.getResult() == null || response.getResult().getOutput() == null
+                ? "" : response.getResult().getOutput().getText();
+
+        long input = 0L;
+        long output = 0L;
+        if (response.getMetadata() != null && response.getMetadata().getUsage() != null) {
+            Integer prompt = response.getMetadata().getUsage().getPromptTokens();
+            Integer completion = response.getMetadata().getUsage().getCompletionTokens();
+            input = prompt == null ? 0L : prompt;
+            output = completion == null ? 0L : completion;
+        }
+        return new AiResult(text, input, output);
     }
 
     public List<String> generateTags(String content) {
@@ -134,7 +171,9 @@ public abstract class AbstractAIService {
     private String callAndLog(String feature, String promptTemplate, String content) {
         Prompt prompt = new PromptTemplate(promptTemplate).create(Map.of("content", content));
         ChatResponse response = chatClient.prompt(prompt).call().chatResponse();
-        tokenUsageLogger.logChat(feature, response);
+        if (tokenUsageLogger != null) {
+            tokenUsageLogger.logChat(feature, response);
+        }
         if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
             throw new BusinessException(Code.UNKNOWN, "AI 응답이 비어 있습니다.");
         }
