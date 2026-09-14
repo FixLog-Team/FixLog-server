@@ -157,7 +157,7 @@
 ```
 
 ### `POST /api/workspaces/{workspaceId}/admin/invitations` — 초대 발송 _(Admin+)_
-토큰 발급 후 DB 저장 (1차: 이메일 발송은 로그로 대체). 유효기간 7일.
+토큰 발급 후 DB 저장, Gmail SMTP로 이메일 비동기 발송. 유효기간 7일.
 
 **Request**
 ```json
@@ -170,12 +170,29 @@ PENDING 상태 초대만 취소 가능
 
 **Response** — 성공 메시지
 
+### `GET /api/workspaces/invitations/{token}` — 초대 미리보기
+인증 불필요. 만료·처리된 토큰도 현재 status 반환 (에러 없음). 로그인 전 초대 화면 표시에 사용.
+
+**Response** — `InvitationPreviewDto`
+```json
+{
+  "email": "string",
+  "role": "MEMBER",
+  "status": "PENDING|ACCEPTED|DECLINED|EXPIRED",
+  "expiresAt": "2026-09-21T00:00:00Z",
+  "workspaceName": "string",
+  "inviterName": "string|null"
+}
+```
+
 ### `POST /api/workspaces/invitations/{token}/accept` — 초대 수락
 인증 필요. 로그인 이메일 ≠ 초대 이메일이면 403
 
 **Response** — `InvitationDto`
 
 ### `POST /api/workspaces/invitations/{token}/decline` — 초대 거절
+인증 불필요.
+
 **Response** — `InvitationDto`
 
 ---
