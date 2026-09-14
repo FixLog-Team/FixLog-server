@@ -11,6 +11,7 @@ import com.fixlog.domain.model.WorkspaceInvitationEntity;
 import com.fixlog.domain.model.WorkspaceMemberEntity;
 import com.fixlog.domain.model.WorkspaceRole;
 import com.fixlog.presentation.dto.response.InvitationDto;
+import com.fixlog.presentation.dto.response.InvitationPreviewDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -141,6 +142,19 @@ public class InvitationService {
         invitation.decline();
         invitationRepository.save(invitation);
         return InvitationDto.of(invitation, inviterName(invitation.getInvitedBy()));
+    }
+
+    /** 미인증 공개 조회 — 만료·처리된 토큰도 상태를 반환한다. */
+    @Transactional
+    public InvitationPreviewDto getPreview(String token) {
+        WorkspaceInvitationEntity invitation = invitationRepository.findByToken(token)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "유효하지 않은 초대 토큰입니다."));
+        if (invitation.isPending() && invitation.isExpired()) {
+            invitation.expire();
+            invitationRepository.save(invitation);
+        }
+        String workspaceName = workspaceService.getWorkspaceName(invitation.getWorkspaceId());
+        return InvitationPreviewDto.of(invitation, workspaceName, inviterName(invitation.getInvitedBy()));
     }
 
     @Transactional
