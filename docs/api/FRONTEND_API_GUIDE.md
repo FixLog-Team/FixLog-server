@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-09-10
+> 최종 업데이트: 2026-09-14
 > Base URL (개발): `https://fixlog.art/fixlog`
 
 ---
@@ -16,6 +16,7 @@
 6-1. [AI 대화방 API](#6-1-ai-대화방-api)
 7. [검색 API](#7-검색-api)
 8. [워크스페이스 API](#8-워크스페이스-api)
+8-1. [초대 API (이메일 기반)](#8-1-초대-api--이메일-기반)
 9. [공유 API](#9-공유-api)
 10. [문서 히스토리 API](#10-문서-히스토리-api)
 11. [휴지통 API](#11-휴지통-api)
@@ -1130,37 +1131,260 @@ AI 대화방 삭제 (소프트 삭제)
 
 ---
 
-### 초대 링크 흐름
+---
 
-관리자가 `POST .../admin/invitations`로 초대하면 서버가 이메일로 토큰을 전송합니다.
-수신자는 이메일 링크를 클릭해 수락/거절합니다 — 인증된 사용자만 수락할 수 있습니다.
+## 8-1. 초대 API — 이메일 기반
 
-| 메서드 | 경로 | 설명 | Swagger |
-|---|---|---|---|
-| `GET` | `/api/workspaces/{workspaceId}/admin/invitations` | 초대 목록 (Admin) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListInvitations) |
-| `POST` | `/api/workspaces/{workspaceId}/admin/invitations` | 초대 발송 (Admin) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminInvite) |
-| `DELETE` | `/api/workspaces/{workspaceId}/admin/invitations/{invitationId}` | 초대 취소 (Admin) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminCancelInvitation) |
-| `POST` | `/api/workspaces/invitations/{token}/accept` | 초대 수락 (인증 필요) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/acceptInvitation) |
-| `POST` | `/api/workspaces/invitations/{token}/decline` | 초대 거절 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/declineInvitation) |
+### 전체 흐름
 
-초대 발송 Body:
+```
+[Admin] POST .../admin/invitations
+    → 서버: DB에 초대 레코드 저장 + 이메일 발송 (비동기)
+    → 수신자: 이메일 내 링크 클릭
+        → {frontend-url}/invite/{token}  ← 프론트가 처리
+    → [프론트] GET .../invitations/{token}  ← 인증 불필요, 초대 정보 표시
+    → [프론트] 로그인 확인 후 POST .../invitations/{token}/accept 호출
+    → 서버: 초대 수락, 워크스페이스 멤버로 추가
+```
+
+> 이메일 발송은 **비동기**로 처리됩니다. 초대 API 응답이 200이면 DB에는 기록됐고, 이메일은 곧 발송됩니다.
+> 이메일 주소가 없어도(가입 전 사용자) 초대 가능합니다. 수락 시점에 해당 이메일로 로그인한 계정이면 됩니다.
+
+---
+
+### 초대 상태 (`status`)
+
+| 값 | 의미 |
+|---|---|
+| `PENDING` | 대기 중 (아직 수락/거절 안 함) |
+| `ACCEPTED` | 수락 완료 |
+| `DECLINED` | 거절 |
+| `EXPIRED` | 7일 초과 만료 |
+
+---
+
+### InvitationDto
+
+모든 초대 API의 응답 `result`에 사용되는 공통 DTO입니다.
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "workspaceId": "660e8400-e29b-41d4-a716-446655440001",
+  "email": "friend@fixlog.dev",
+  "role": "MEMBER",
+  "status": "PENDING",
+  "expiresAt": "2026-09-21T12:00:00Z",
+  "createAt": "2026-09-14T12:00:00Z",
+  "invitedByName": "홍길동"
+}
+```
+
+---
+
+### GET /api/workspaces/{workspaceId}/admin/invitations
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListInvitations)
+
+워크스페이스의 전체 초대 목록 조회. **Admin/Owner만.**
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "result": [
+    {
+      "id": "...",
+      "email": "a@fixlog.dev",
+      "role": "MEMBER",
+      "status": "PENDING",
+      "expiresAt": "2026-09-21T12:00:00Z",
+      "createAt": "2026-09-14T12:00:00Z",
+      "invitedByName": "홍길동"
+    }
+  ]
+}
+```
+
+---
+
+### POST /api/workspaces/{workspaceId}/admin/invitations
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminInvite)
+
+이메일로 초대장 발송. **Admin/Owner만.**
+
+**Request Body**
 ```json
 { "email": "friend@fixlog.dev", "role": "MEMBER" }
 ```
 
-> `role`을 생략하면 `MEMBER`로 초대됩니다.
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `email` | ✅ | 초대할 이메일 주소 |
+| `role` | ❌ | `MEMBER` \| `ADMIN`. 생략 시 `MEMBER` |
 
-초대 응답 (`InvitationDto`):
+**Response** — 생성된 `InvitationDto`
+
+**에러**
+
+| 상황 | 코드 |
+|---|---|
+| 이미 워크스페이스 구성원인 이메일 | `INVALID_REQUEST` |
+| 이미 PENDING 상태의 초대가 존재 | `INVALID_REQUEST` |
+| 개인 워크스페이스에 초대 시도 | `INVALID_REQUEST` |
+| Admin 권한 없음 | `FORBIDDEN` |
+
+---
+
+### DELETE /api/workspaces/{workspaceId}/admin/invitations/{invitationId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminCancelInvitation)
+
+PENDING 상태의 초대 취소. **Admin/Owner만.**
+
+**Response**
+```json
+{ "code": "SUCCESS", "message": "초대를 취소했습니다." }
+```
+
+**에러**
+
+| 상황 | 코드 |
+|---|---|
+| 존재하지 않는 초대 ID | `NOT_FOUND` |
+| PENDING이 아닌 초대 취소 시도 | `INVALID_REQUEST` |
+
+---
+
+### GET /api/workspaces/invitations/{token}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/getInvitationPreview)
+
+토큰으로 초대 정보 미리보기. **인증 불필요.** 로그인 전 화면에 초대 내용을 표시할 때 사용합니다.
+
+만료·처리된 토큰도 에러 없이 현재 `status`를 반환합니다.
+
+**Response**
 ```json
 {
-  "id": "uuid",
-  "workspaceId": "uuid",
-  "email": "friend@fixlog.dev",
-  "role": "MEMBER",
-  "status": "PENDING",
-  "expiresAt": "2026-09-15T00:00:00Z",
-  "createAt": "2026-09-08T00:00:00Z",
-  "invitedByName": "홍길동"
+  "code": "SUCCESS",
+  "result": {
+    "email": "friend@fixlog.dev",
+    "role": "MEMBER",
+    "status": "PENDING",
+    "expiresAt": "2026-09-21T12:00:00Z",
+    "workspaceName": "OS 스터디",
+    "inviterName": "홍길동"
+  }
+}
+```
+
+**에러**
+
+| 상황 | 코드 |
+|---|---|
+| 존재하지 않는 토큰 | `NOT_FOUND` |
+
+---
+
+### POST /api/workspaces/invitations/{token}/accept
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/acceptInvitation)
+
+이메일 링크의 토큰으로 초대 수락. **로그인 필요.**
+
+> 로그인한 계정의 이메일과 초대된 이메일이 일치해야 수락됩니다.
+
+**Request** — Body 없음. `Authorization` 헤더만 필요.
+
+**Response** — 수락된 `InvitationDto` (`status: "ACCEPTED"`)
+
+**에러**
+
+| 상황 | 코드 |
+|---|---|
+| 유효하지 않은 토큰 | `NOT_FOUND` |
+| 만료된 토큰 (7일 초과) | `INVALID_REQUEST` |
+| 이미 수락/거절된 초대 | `INVALID_REQUEST` |
+| 로그인 이메일 ≠ 초대 이메일 | `FORBIDDEN` |
+| 이미 워크스페이스 구성원 | `INVALID_REQUEST` |
+
+---
+
+### POST /api/workspaces/invitations/{token}/decline
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/declineInvitation)
+
+초대 거절. 인증 불필요.
+
+**Request** — Body 없음.
+
+**Response** — 거절된 `InvitationDto` (`status: "DECLINED"`)
+
+**에러**
+
+| 상황 | 코드 |
+|---|---|
+| 유효하지 않은 토큰 | `NOT_FOUND` |
+| 만료된 토큰 | `INVALID_REQUEST` |
+| 이미 처리된 초대 | `INVALID_REQUEST` |
+
+---
+
+### 프론트엔드 구현 가이드
+
+#### 1. 초대 발송 (Admin 화면)
+
+```
+POST /api/workspaces/{workspaceId}/admin/invitations
+Body: { email, role }
+→ 성공: 목록 갱신
+→ INVALID_REQUEST "이미 PENDING": "이미 초대 중인 이메일입니다" 안내
+```
+
+#### 2. 초대 링크 처리 (`/invite/:token` 라우트)
+
+```
+1. 토큰을 URL 파라미터에서 추출
+2. GET /api/workspaces/invitations/{token} 호출 (인증 불필요)
+   - NOT_FOUND          → "유효하지 않은 초대 링크입니다" 안내
+   - status EXPIRED     → "만료된 초대입니다" 안내
+   - status ACCEPTED    → "이미 수락한 초대입니다" 안내
+   - status DECLINED    → "이미 거절한 초대입니다" 안내
+   - status PENDING     → 수락/거절 모달 표시
+                          ("OS 스터디에 홍길동님이 {role}로 초대했습니다")
+
+3. [수락하기] 클릭
+   - 비로그인: /login 리다이렉트 (token을 localStorage에 보존)
+   - 로그인 상태: POST /api/workspaces/invitations/{token}/accept
+     → 성공: 메인 페이지(/) 이동 + toast "워크스페이스에 참여했습니다"
+     → FORBIDDEN: toast "초대된 이메일({email})로 로그인해 주세요"
+     → INVALID_REQUEST: toast "만료되었거나 이미 처리된 초대입니다"
+
+4. [거절하기] 클릭
+   - 인증 불필요: POST /api/workspaces/invitations/{token}/decline
+     → 성공: 메인 페이지(/) 이동 + toast "초대를 거절했습니다"
+     → INVALID_REQUEST: toast "만료되었거나 이미 처리된 초대입니다"
+```
+
+> `{email}`, `{role}`, `workspaceName`, `inviterName` 은 2번 단계에서 받은 `InvitationPreviewDto`에서 꺼내 사용합니다.
+
+#### 3. 로그인 후 복귀 처리
+
+OAuth 로그인 후 초대 수락을 이어가려면 로그인 콜백에서 토큰을 보존해야 합니다.
+
+```ts
+// /invite/:token 진입 시 — 비로그인이면 토큰 저장 후 로그인으로 이동
+localStorage.setItem('pendingInviteToken', token);
+navigate('/login');
+
+// 로그인 콜백(/login/callback)에서 처리
+const pendingToken = localStorage.getItem('pendingInviteToken');
+if (pendingToken) {
+  localStorage.removeItem('pendingInviteToken');
+  try {
+    await api.post(`/api/workspaces/invitations/${pendingToken}/accept`);
+    toast.success('워크스페이스에 참여했습니다');
+  } catch (e) {
+    if (e.code === 'FORBIDDEN') toast.error('초대된 이메일로 로그인해 주세요');
+    else toast.error('만료되었거나 이미 처리된 초대입니다');
+  }
+  navigate('/');
 }
 ```
 
@@ -1565,11 +1789,14 @@ PATCH /api/workspaces/{id}/admin/permissions/resources/folders/{folderId}/settin
 
 ### 초대 관리 (Admin)
 
-| 메서드 | 경로 | 설명 | Swagger |
-|---|---|---|---|
-| `GET` | `/api/workspaces/{id}/admin/invitations` | 초대 목록 (PENDING/ACCEPTED/DECLINED/EXPIRED) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListInvitations) |
-| `POST` | `/api/workspaces/{id}/admin/invitations` | 초대 발송. `{ "email": "...", "role": "MEMBER" }` | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminInvite) |
-| `DELETE` | `/api/workspaces/{id}/admin/invitations/{invitationId}` | 초대 취소 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminCancelInvitation) |
+| 메서드 | 경로 | 인증 | 설명 | Swagger |
+|---|---|---|---|---|
+| `GET` | `/api/workspaces/{id}/admin/invitations` | 필요 | 초대 목록 (PENDING/ACCEPTED/DECLINED/EXPIRED) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminListInvitations) |
+| `POST` | `/api/workspaces/{id}/admin/invitations` | 필요 | 초대 발송. `{ "email": "...", "role": "MEMBER" }` | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminInvite) |
+| `DELETE` | `/api/workspaces/{id}/admin/invitations/{invitationId}` | 필요 | 초대 취소 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminCancelInvitation) |
+| `GET` | `/api/workspaces/invitations/{token}` | **불필요** | 초대 미리보기 (로그인 전 화면용) | [→](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/getInvitationPreview) |
+| `POST` | `/api/workspaces/invitations/{token}/accept` | 필요 | 초대 수락 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/acceptInvitation) |
+| `POST` | `/api/workspaces/invitations/{token}/decline` | **불필요** | 초대 거절 | [→](https://fixlog.art/fixlog/swagger-ui.html#/Invitation/declineInvitation) |
 
 ---
 
