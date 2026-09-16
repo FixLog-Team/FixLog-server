@@ -1,5 +1,6 @@
 package com.fixlog.application.service;
 
+import com.fixlog.application.repository.DocumentFavoriteRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
@@ -37,6 +38,7 @@ public class TrashService {
     private final FolderRepository folderRepository;
     private final DocumentHistoryRepository historyRepository;
     private final DocumentLabelRepository documentLabelRepository;
+    private final DocumentFavoriteRepository documentFavoriteRepository;
     private final PermissionRepository permissionRepository;
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final WorkspaceContext workspaceContext;
@@ -46,6 +48,7 @@ public class TrashService {
                         FolderRepository folderRepository,
                         DocumentHistoryRepository historyRepository,
                         DocumentLabelRepository documentLabelRepository,
+                        DocumentFavoriteRepository documentFavoriteRepository,
                         PermissionRepository permissionRepository,
                         WorkspaceMemberRepository workspaceMemberRepository,
                         WorkspaceContext workspaceContext,
@@ -54,6 +57,7 @@ public class TrashService {
         this.folderRepository = folderRepository;
         this.historyRepository = historyRepository;
         this.documentLabelRepository = documentLabelRepository;
+        this.documentFavoriteRepository = documentFavoriteRepository;
         this.permissionRepository = permissionRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.workspaceContext = workspaceContext;
@@ -131,6 +135,7 @@ public class TrashService {
                 requireRestorer(workspaceId, doc.getDeletedBy(), me);
                 historyRepository.deleteByDocumentId(resourceId);
                 documentLabelRepository.deleteByDocumentId(resourceId);
+                documentFavoriteRepository.deleteByDocumentId(resourceId);
                 permissionRepository.deleteAll(
                         permissionRepository.findByResourceTypeAndResourceId(resourceType, resourceId));
                 documentRepository.delete(doc);

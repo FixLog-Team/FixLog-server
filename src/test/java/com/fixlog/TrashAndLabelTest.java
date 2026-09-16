@@ -1,6 +1,7 @@
 package com.fixlog;
 
 import com.fixlog.application.repository.AuditLogRepository;
+import com.fixlog.application.repository.DocumentFavoriteRepository;
 import com.fixlog.application.repository.DocumentHistoryRepository;
 import com.fixlog.application.repository.DocumentLabelRepository;
 import com.fixlog.application.repository.DocumentRepository;
@@ -75,6 +76,7 @@ class TrashAndLabelTest {
     @Autowired SecurityPolicyRepository policyRepository;
     @Autowired AuditLogRepository auditLogRepository;
     @Autowired DocumentHistoryRepository documentHistoryRepository;
+    @Autowired DocumentFavoriteRepository documentFavoriteRepository;
     @Autowired LabelRepository labelRepository;
     @Autowired DocumentLabelRepository documentLabelRepository;
     @Autowired FolderRepository folderRepository;
@@ -116,7 +118,7 @@ class TrashAndLabelTest {
                 new DocumentHistoryService(documentHistoryRepository, 50, evaluator),
                 event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService);
         trashService = new TrashService(documentRepository, folderRepository, documentHistoryRepository,
-                documentLabelRepository, permissionRepository, workspaceMemberRepository,
+                documentLabelRepository, documentFavoriteRepository, permissionRepository, workspaceMemberRepository,
                 workspaceContext, auditService);
         labelService = new LabelService(labelRepository, documentLabelRepository,
                 documentRepository, workspaceContext, evaluator);
