@@ -41,6 +41,7 @@ import com.fixlog.presentation.dto.response.AuditLogDto;
 import com.fixlog.presentation.dto.response.WorkspaceStatsDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -226,6 +227,7 @@ class AdminConsoleTest {
                 workspace.getWorkspaceId(), null, null, null, null, null, null).size());
     }
 
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 거부된_접근만_따로_볼_수_있다() {
         String docId = newDocument("비밀 문서");

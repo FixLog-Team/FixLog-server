@@ -175,6 +175,7 @@ class SharingTest {
                         new DocumentSaveRequest("고치기", JSON.readTree("[]")))).getCode());
     }
 
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 다운로드만_따로_막을_수_있다() {
         String docId = newDocument("반출 금지");
@@ -259,6 +260,7 @@ class SharingTest {
 
     // ---------- 회수 ----------
 
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 공유를_회수하면_접근이_끊긴다() {
         String docId = newDocument("문서");

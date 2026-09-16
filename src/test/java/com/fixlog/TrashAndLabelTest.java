@@ -302,6 +302,7 @@ class TrashAndLabelTest {
     }
 
     // 라벨이 권한 우회 통로가 되면 안 된다.
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 라벨로_찾아도_권한_없는_문서는_빠진다() {
         String mine = newDocument("내 문서");

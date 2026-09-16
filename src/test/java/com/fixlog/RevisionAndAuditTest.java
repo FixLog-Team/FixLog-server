@@ -38,6 +38,7 @@ import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -174,6 +175,7 @@ class RevisionAndAuditTest {
     }
 
     // 거부는 예외로 끝나 본 트랜잭션이 롤백된다. 같은 트랜잭션에 쓰면 정작 남겨야 할 기록이 사라진다.
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 거부된_접근도_남는다() {
         String docId = newDocument("비밀 문서");

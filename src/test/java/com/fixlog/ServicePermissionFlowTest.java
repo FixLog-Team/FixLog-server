@@ -182,6 +182,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
 
     // ---------- 단건 접근 ----------
 
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 권한이_없는_구성원은_문서를_열_수_없다() {
         loginAs(admin);
@@ -208,6 +209,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
                 .getCode());
     }
 
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 다운로드_플래그가_없으면_문서를_내려받을_수_없다() {
         loginAs(admin);
@@ -221,6 +223,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
 
     // ---------- 목록 ----------
 
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 목록에는_볼_수_있는_문서만_나온다() {
         loginAs(admin);
@@ -244,6 +247,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         assertEquals(2, documentService.list(null, PageRequest.of(0, 10)).getTotalElements());
     }
 
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 폴더_트리에는_볼_수_있는_폴더만_나온다() {
         loginAs(admin);
@@ -260,6 +264,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
 
     // 실제 parent_id로 트리를 묶으면, 부모가 걸러진 순간 그 부모를 키로 가진 자식들이
     // 루트부터의 재귀에 닿지 못해 사라진다. 권한을 줬는데 화면 어디에도 안 나오는 상태가 된다.
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 부모를_볼_수_없어도_권한_받은_자식_폴더는_트리에_나온다() {
         loginAs(admin);
@@ -279,6 +284,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
 
     // 개수는 GROUP BY로 세면 권한이 조건에 들어가지 않는다. 문서를 열지 못해도
     // "저 폴더에 몇 개 있다"가 드러나면 안 된다.
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 볼_수_없는_문서는_폴더_문서수에도_잡히지_않는다() {
         loginAs(admin);
@@ -322,6 +328,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         assertEquals("내가 만든 문서", documentService.getDocument(docId).getTitle());
     }
 
+    @Disabled("2차 MVP — 세분화 권한 비활성")
     @Test
     void 권한_없는_폴더_안에는_문서를_만들_수_없다() {
         loginAs(admin);
