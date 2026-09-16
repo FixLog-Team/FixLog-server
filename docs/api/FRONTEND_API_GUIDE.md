@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-09-14
+> 최종 업데이트: 2026-09-17
 > Base URL (개발): `https://fixlog.art/fixlog`
 
 ---
@@ -21,6 +21,7 @@
 10. [문서 히스토리 API](#10-문서-히스토리-api)
 11. [휴지통 API](#11-휴지통-api)
 12. [라벨 API](#12-라벨-api)
+12-1. [즐겨찾기 API](#12-1-즐겨찾기-api)
 13. [관리자 콘솔 API](#13-관리자-콘솔-api)
 14. [보안 정책 API](#14-보안-정책-api)
 15. [에러 처리](#15-에러-처리)
@@ -1610,7 +1611,7 @@ Swagger:
 ### DELETE /api/trash/{resourceType}/{resourceId}
 > [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Trash/purgeFromTrash)
 
-영구 삭제. 문서는 본문·히스토리·라벨·권한이 함께 사라집니다. **되돌릴 수 없습니다.**
+영구 삭제. 문서는 본문·히스토리·라벨·즐겨찾기·권한이 함께 사라집니다. **되돌릴 수 없습니다.**
 
 ---
 
@@ -1637,6 +1638,76 @@ Swagger:
 3. 고른 것만 하나씩
    POST /api/documents/{documentId}/labels  { "labelName": "Spring Boot" }
 ```
+
+---
+
+## 12-1. 즐겨찾기 API
+
+> 모든 엔드포인트 **인증 필요**
+
+즐겨찾기는 사용자 개인 설정입니다. 같은 워크스페이스 구성원이어도 서로의 즐겨찾기를 볼 수 없습니다.
+
+### GET /api/documents/favorites
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/listFavorites)
+
+내 즐겨찾기 문서 목록 (최근 추가순)
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": [
+    {
+      "documentId": "uuid",
+      "folderId": "uuid",
+      "title": "문서 제목",
+      "updateUser": "user-uuid",
+      "updateTime": "2026-09-17T07:00:00Z"
+    }
+  ]
+}
+```
+
+> 소프트 삭제(휴지통)된 문서는 목록에서 자동으로 빠집니다.
+
+---
+
+### POST /api/documents/{documentId}/favorite
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/addFavorite)
+
+즐겨찾기 추가. 이미 추가되어 있으면 무시합니다 (멱등).
+
+**조건**: 해당 문서에 대한 **열람 권한** 필요.
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "즐겨찾기에 추가되었습니다."
+}
+```
+
+---
+
+### DELETE /api/documents/{documentId}/favorite
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/removeFavorite)
+
+즐겨찾기 제거.
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "즐겨찾기에서 제거되었습니다."
+}
+```
+
+**에러**
+
+| 상황 | 코드 |
+|---|---|
+| 즐겨찾기에 없는 문서 | `NOT_FOUND` |
 
 ---
 
