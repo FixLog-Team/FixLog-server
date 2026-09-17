@@ -630,6 +630,20 @@ public class PermissionEvaluator {
                 .toList();
     }
 
+    /**
+     * 개인 워크스페이스에서 직접 공유받은 문서 목록.
+     * 현재 워크스페이스가 아닌 다른 워크스페이스에서, 구성원이 아님에도 ALLOW 권한을 받은 문서만 반환한다.
+     */
+    public List<DocumentEntity> sharedFromPersonalWorkspaces(UUID currentWorkspaceId, UUID userId) {
+        return permissionRepository.findDirectDocumentAllowsForUser(userId).stream()
+                .filter(p -> !p.getWorkspaceId().equals(currentWorkspaceId))
+                .filter(p -> !workspaceMemberRepository.existsByWorkspaceIdAndUserId(p.getWorkspaceId(), userId))
+                .map(p -> documentRepository.findById(p.getResourceId()).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .filter(doc -> Integer.valueOf(1).equals(doc.getUsable()))
+                .toList();
+    }
+
     private BusinessException notFound(ResourceType resourceType) {
         String label = resourceType == ResourceType.FOLDER ? "폴더" : "문서";
         return new BusinessException(Code.NOT_FOUND, label + "를 찾을 수 없습니다.");

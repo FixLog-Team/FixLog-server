@@ -31,6 +31,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * 문서 서비스.
@@ -135,14 +136,24 @@ public class DocumentService {
     public List<DocumentEntity> sharedWithMe() {
         UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
         String me = requireUserId();
+        UUID myUserId = workspaceContext.requireCurrentUserId();
         PermissionEvaluator.Scope scope = permissionEvaluator.explicitScopeFor(workspaceId);
 
-        return documentRepository
+        List<DocumentEntity> inWorkspace = documentRepository
                 .findByWorkspaceIdAndUsableOrderByOrdinalAscCreateTimeAsc(workspaceId, Integer.valueOf(1))
                 .stream()
                 .filter(doc -> !me.equals(doc.getCreateUser()))
                 .filter(doc -> scope.canViewDocument(doc.getDocumentId(), doc.getFolderId()))
                 .toList();
+
+        // 개인 워크스페이스에서 직접 공유받은 문서 (다른 워크스페이스)
+        List<DocumentEntity> fromPersonal = permissionEvaluator
+                .sharedFromPersonalWorkspaces(workspaceId, myUserId)
+                .stream()
+                .filter(doc -> !me.equals(doc.getCreateUser()))
+                .toList();
+
+        return Stream.concat(inWorkspace.stream(), fromPersonal.stream()).toList();
     }
 
     @Transactional(readOnly = true)

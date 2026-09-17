@@ -58,5 +58,15 @@ public interface PermissionRepository extends JpaRepository<PermissionEntity, UU
     Optional<PermissionEntity> findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
             ResourceType resourceType, String resourceId, PrincipalType principalType, UUID principalId);
 
+    /** 워크스페이스 경계와 무관하게, 특정 사용자에게 직접 ALLOW된 문서 권한 레코드 전체. */
+    @Query("""
+            select p from PermissionEntity p
+            where p.principalType = com.fixlog.domain.model.PrincipalType.USER
+              and p.principalId = :userId
+              and p.resourceType = com.fixlog.domain.model.ResourceType.DOCUMENT
+              and p.permissionType = com.fixlog.domain.model.PermissionType.ALLOW
+            """)
+    List<PermissionEntity> findDirectDocumentAllowsForUser(@Param("userId") UUID userId);
+
     void deleteByWorkspaceId(UUID workspaceId);
 }
