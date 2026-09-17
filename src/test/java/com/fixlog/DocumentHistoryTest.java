@@ -87,12 +87,12 @@ class DocumentHistoryTest {
                 folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
                 auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         permissionEvaluator = new PermissionEvaluator(
-                permissionRepository, workspaceMemberRepository, groupMemberRepository,
+                permissionRepository, workspaceMemberRepository, workspaceRepository, groupMemberRepository,
                 groupRepository, folderRepository, documentRepository, workspaceContext,
                 new AuditService(auditLogRepository), policyRepository);
         PermissionService permissionService = new PermissionService(
                 permissionRepository, workspaceMemberRepository, groupRepository,
-                userRepository, permissionEvaluator, workspaceContext, new AuditService(auditLogRepository));
+                userRepository, workspaceRepository, permissionEvaluator, workspaceContext, new AuditService(auditLogRepository));
         SecurityPolicyService securityPolicyService =
                 new SecurityPolicyService(policyRepository, workspaceService);
         documentHistoryService = new DocumentHistoryService(
