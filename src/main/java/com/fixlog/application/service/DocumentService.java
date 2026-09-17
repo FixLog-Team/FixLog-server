@@ -5,6 +5,7 @@ import com.fixlog.application.event.DocumentDeletedEvent;
 import com.fixlog.application.event.DocumentSavedEvent;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
+import com.fixlog.application.repository.UserRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.common.security.SecurityUtil;
@@ -13,6 +14,8 @@ import com.fixlog.domain.model.DocumentHistoryEntity;
 import com.fixlog.domain.model.DocumentHistorySource;
 import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.ResourceType;
+import com.fixlog.domain.model.UserEntity;
+import com.fixlog.presentation.dto.response.DocumentDto;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
@@ -53,6 +56,7 @@ public class DocumentService {
     private final PermissionEvaluator permissionEvaluator;
     private final PermissionService permissionService;
     private final SecurityPolicyService securityPolicyService;
+    private final UserRepository userRepository;
 
     public DocumentService(DocumentRepository documentRepository,
                            FolderRepository folderRepository,
@@ -63,7 +67,8 @@ public class DocumentService {
                            WorkspaceContext workspaceContext,
                            PermissionEvaluator permissionEvaluator,
                            PermissionService permissionService,
-                           SecurityPolicyService securityPolicyService) {
+                           SecurityPolicyService securityPolicyService,
+                           UserRepository userRepository) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.textExtractor = textExtractor;
@@ -74,6 +79,7 @@ public class DocumentService {
         this.permissionEvaluator = permissionEvaluator;
         this.permissionService = permissionService;
         this.securityPolicyService = securityPolicyService;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -159,6 +165,15 @@ public class DocumentService {
     @Transactional(readOnly = true)
     public DocumentEntity getDocument(String documentId) {
         return loadPermitted(documentId, PermissionAction.VIEW);
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentDto getDocumentDto(String documentId) {
+        DocumentEntity doc = loadPermitted(documentId, PermissionAction.VIEW);
+        UserEntity author = doc.getCreateUser() != null
+                ? userRepository.findById(UUID.fromString(doc.getCreateUser())).orElse(null)
+                : null;
+        return DocumentDto.from(doc, author);
     }
 
     @Transactional

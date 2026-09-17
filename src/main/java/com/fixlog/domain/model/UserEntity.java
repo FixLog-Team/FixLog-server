@@ -33,6 +33,9 @@ public class UserEntity {
 	@Column(name = "update_at")
 	private Instant updateAt;
 
+	@Column(name = "picture_url")
+	private String pictureUrl;
+
 	protected UserEntity() {
 	}
 
@@ -45,9 +48,10 @@ public class UserEntity {
 		this.updateAt = Instant.now();
 	}
 
-	public void updateLoginInfo(String userName, String email) {
+	public void updateLoginInfo(String userName, String email, String pictureUrl) {
 		this.userName = userName;
 		this.email = email;
+		this.pictureUrl = pictureUrl;
 		this.lastLoginAt = Instant.now();
 		this.updateAt = Instant.now();
 
@@ -74,6 +78,10 @@ public class UserEntity {
 
 	public Instant getLastLoginAt() {
 		return lastLoginAt;
+	}
+
+	public String getPictureUrl() {
+		return pictureUrl;
 	}
 
 	public boolean isDeleted() {
