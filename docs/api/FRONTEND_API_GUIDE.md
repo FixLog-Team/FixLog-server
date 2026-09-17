@@ -289,12 +289,18 @@ Google OAuth 로그인 시작 (페이지 이동)
     "contentHash": "sha256hex",
     "ordinal": 0,
     "createUser": "user-uuid",
+    "createUserName": "홍길동",
+    "createUserPictureUrl": "https://lh3.googleusercontent.com/...",
     "createTime": "2026-05-19T07:00:00Z",
     "updateUser": "user-uuid",
     "updateTime": "2026-05-19T07:00:00Z"
   }
 }
 ```
+
+> `createUserName` / `createUserPictureUrl`은 작성자 표시에 사용합니다.
+> 작성자가 아직 Google 로그인을 하지 않은 경우 `createUserPictureUrl`은 `null`일 수 있습니다.
+> 목록(`GET /api/documents`) 및 저장·제목 변경 응답에는 포함되지 않습니다.
 
 ---
 
