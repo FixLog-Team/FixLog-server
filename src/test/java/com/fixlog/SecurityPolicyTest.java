@@ -166,7 +166,7 @@ class SecurityPolicyTest {
     void 정책이_다운로드를_막으면_권한이_있어도_막힌다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "member@fixlog.dev", PermissionType.ALLOW, true);
+                "member@fixlog.dev", true);
         policyService.update(workspace.getWorkspaceId(), null, false, null, null, null);
 
         loginAs(member);
@@ -192,7 +192,7 @@ class SecurityPolicyTest {
 
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
                 () -> permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                        "member@fixlog.dev", PermissionType.ALLOW, true)).getCode());
+                        "member@fixlog.dev", true)).getCode());
     }
 
     @Test

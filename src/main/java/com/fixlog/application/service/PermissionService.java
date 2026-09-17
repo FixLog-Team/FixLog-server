@@ -80,7 +80,8 @@ public class PermissionService {
     @Transactional
     public PermissionEntity share(ResourceType resourceType, String resourceId,
                                   PrincipalType principalType, UUID principalId,
-                                  PermissionType permissionType, boolean canDownload) {
+                                  boolean canDownload) {
+        PermissionType permissionType = PermissionType.ALLOW;
         permissionEvaluator.require(resourceType, resourceId, PermissionAction.SHARE);
         UUID workspaceId = permissionEvaluator.workspaceIdOf(resourceType, resourceId);
         UUID granter = workspaceContext.requireCurrentUserId();
@@ -180,13 +181,13 @@ public class PermissionService {
     /** 이메일로 사용자를 찾아 권한을 부여한다. */
     @Transactional
     public PermissionEntity shareWithEmail(ResourceType resourceType, String resourceId,
-                                           String email, PermissionType permissionType, boolean canDownload) {
+                                           String email, boolean canDownload) {
         if (email == null || email.isBlank()) {
             throw new BusinessException(Code.INVALID_REQUEST, "공유할 사용자의 이메일은 필수입니다.");
         }
         UUID userId = userRepository.findByEmail(email.trim())
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "가입된 사용자를 찾을 수 없습니다."))
                 .getUserId();
-        return share(resourceType, resourceId, PrincipalType.USER, userId, permissionType, canDownload);
+        return share(resourceType, resourceId, PrincipalType.USER, userId, canDownload);
     }
 }

@@ -195,7 +195,7 @@ class AdminConsoleTest {
         String shared = newDocument("공유한 문서");
         newDocument("공유 안 한 문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, shared,
-                "member@fixlog.dev", PermissionType.ALLOW, true);
+                "member@fixlog.dev", true);
 
         List<AdminPermissionDto> shares = adminConsole.shares(workspace.getWorkspaceId());
 
@@ -210,7 +210,7 @@ class AdminConsoleTest {
     void 감사_로그를_행위자로_거를_수_있다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "member@fixlog.dev", PermissionType.ALLOW, true);
+                "member@fixlog.dev", true);
         auditLogRepository.deleteAll();
 
         loginAs(member);

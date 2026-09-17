@@ -324,7 +324,7 @@ class TrashAndLabelTest {
     void 읽기_권한만_있으면_라벨을_붙일_수_없다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionType.ALLOW, true);
+                "mate@fixlog.dev", true);
 
         loginAs(mate);
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
