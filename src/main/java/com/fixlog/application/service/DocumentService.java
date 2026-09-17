@@ -15,7 +15,10 @@ import com.fixlog.domain.model.DocumentHistorySource;
 import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
+import com.fixlog.domain.model.FolderEntity;
 import com.fixlog.presentation.dto.response.DocumentDto;
+import com.fixlog.presentation.dto.response.FolderDto;
+import com.fixlog.presentation.dto.response.SharedWithMeDto;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
@@ -139,27 +142,43 @@ public class DocumentService {
      * 보면 목록이 의미를 잃기 때문이다.
      */
     @Transactional(readOnly = true)
-    public List<DocumentDto> sharedWithMe() {
+    public SharedWithMeDto sharedWithMe() {
         UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
         String me = requireUserId();
         UUID myUserId = workspaceContext.requireCurrentUserId();
         PermissionEvaluator.Scope scope = permissionEvaluator.explicitScopeFor(workspaceId);
 
-        List<DocumentEntity> inWorkspace = documentRepository
+        // 현재 워크스페이스 — 직접 공유된 문서
+        List<DocumentEntity> docsInWorkspace = documentRepository
                 .findByWorkspaceIdAndUsableOrderByOrdinalAscCreateTimeAsc(workspaceId, Integer.valueOf(1))
                 .stream()
                 .filter(doc -> !me.equals(doc.getCreateUser()))
                 .filter(doc -> scope.canViewDocument(doc.getDocumentId(), doc.getFolderId()))
                 .toList();
 
-        // 개인 워크스페이스에서 직접 공유받은 문서 (다른 워크스페이스)
-        List<DocumentEntity> fromPersonal = permissionEvaluator
+        // 현재 워크스페이스 — 직접 공유된 폴더
+        List<String> sharedFolderIds = scope.directlySharedFolderIds();
+        List<FolderEntity> foldersInWorkspace = sharedFolderIds.isEmpty() ? List.of()
+                : folderRepository.findAllById(sharedFolderIds).stream()
+                        .filter(f -> !me.equals(f.getCreateUser()))
+                        .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
+                        .toList();
+
+        // 개인 워크스페이스 직접 공유 — 문서
+        List<DocumentEntity> docsFromPersonal = permissionEvaluator
                 .sharedFromPersonalWorkspaces(workspaceId, myUserId)
                 .stream()
                 .filter(doc -> !me.equals(doc.getCreateUser()))
                 .toList();
 
-        return Stream.concat(inWorkspace.stream(), fromPersonal.stream())
+        // 개인 워크스페이스 직접 공유 — 폴더
+        List<FolderEntity> foldersFromPersonal = permissionEvaluator
+                .sharedFoldersFromPersonalWorkspaces(workspaceId, myUserId)
+                .stream()
+                .filter(f -> !me.equals(f.getCreateUser()))
+                .toList();
+
+        List<DocumentDto> documents = Stream.concat(docsInWorkspace.stream(), docsFromPersonal.stream())
                 .map(doc -> {
                     UserEntity author = doc.getCreateUser() != null
                             ? userRepository.findById(UUID.fromString(doc.getCreateUser())).orElse(null)
@@ -167,6 +186,12 @@ public class DocumentService {
                     return DocumentDto.from(doc, author);
                 })
                 .toList();
+
+        List<FolderDto> folders = Stream.concat(foldersInWorkspace.stream(), foldersFromPersonal.stream())
+                .map(FolderDto::from)
+                .toList();
+
+        return new SharedWithMeDto(folders, documents);
     }
 
     @Transactional(readOnly = true)
