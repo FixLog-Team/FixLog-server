@@ -242,7 +242,7 @@ class RevisionAndAuditTest {
         auditLogRepository.deleteAll();
 
         permissionService.share(ResourceType.DOCUMENT, docId,
-                PrincipalType.USER, mate.getUserId(), PermissionType.ALLOW, true);
+                PrincipalType.USER, mate.getUserId(), true);
 
         AuditLogEntity log = onlyChangeLog();
         assertEquals(AuditAction.PERMISSION_GRANT, log.getAction());
@@ -256,7 +256,7 @@ class RevisionAndAuditTest {
     void 권한을_회수하면_회수_기록이_남는다() {
         String docId = newDocument("문서");
         var granted = permissionService.share(ResourceType.DOCUMENT, docId,
-                PrincipalType.USER, mate.getUserId(), PermissionType.ALLOW, true);
+                PrincipalType.USER, mate.getUserId(), true);
         auditLogRepository.deleteAll();
 
         permissionService.revoke(ResourceType.DOCUMENT, docId, granted.getId());
@@ -285,7 +285,7 @@ class RevisionAndAuditTest {
         String docId = newDocument("문서");
         auditLogRepository.deleteAll();
         permissionService.share(ResourceType.DOCUMENT, docId,
-                PrincipalType.USER, mate.getUserId(), PermissionType.ALLOW, true);
+                PrincipalType.USER, mate.getUserId(), true);
 
         // "이 사람에게 무슨 권한이 오갔나"는 행위자가 아니라 대상으로 찾아야 한다.
         List<AuditLogEntity> found = auditLogRepository.search(

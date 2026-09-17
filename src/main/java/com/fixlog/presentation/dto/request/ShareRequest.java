@@ -1,6 +1,5 @@
 package com.fixlog.presentation.dto.request;
 
-import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.PrincipalType;
 
 import java.util.UUID;
@@ -13,14 +12,9 @@ public record ShareRequest(
         PrincipalType principalType,
         UUID principalId,
         String email,
-        PermissionType permissionType,
         Boolean canDownload
 ) {
     public boolean allowsDownload() {
         return canDownload == null || canDownload;
-    }
-
-    public PermissionType resolvedPermissionType() {
-        return permissionType == null ? PermissionType.ALLOW : permissionType;
     }
 }

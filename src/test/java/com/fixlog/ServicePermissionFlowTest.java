@@ -157,6 +157,10 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
                 PrincipalType.USER, userId, type, id, permissionType, canDownload, admin.getUserId()));
     }
 
+    private void grant(ResourceType type, String id, UUID userId, boolean canDownload) {
+        grant(type, id, userId, PermissionType.ALLOW, canDownload);
+    }
+
     // ---------- 헤더로 지정한 워크스페이스에서 만들어진다 ----------
 
     @Test
@@ -200,7 +204,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     void VIEWER는_문서를_저장할_수_없다() {
         loginAs(admin);
         String docId = documentService.create(new DocumentCreateRequest(null, "읽기 전용")).getDocumentId();
-        grant(ResourceType.DOCUMENT, docId, member.getUserId(), PermissionType.ALLOW, true);
+        grant(ResourceType.DOCUMENT, docId, member.getUserId(), true);
 
         loginAs(member);
         assertEquals("읽기 전용", documentService.getDocument(docId).getTitle());
@@ -214,7 +218,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
     void 다운로드_플래그가_없으면_문서를_내려받을_수_없다() {
         loginAs(admin);
         String docId = documentService.create(new DocumentCreateRequest(null, "반출 금지")).getDocumentId();
-        grant(ResourceType.DOCUMENT, docId, member.getUserId(), PermissionType.ALLOW, false);
+        grant(ResourceType.DOCUMENT, docId, member.getUserId(), false);
 
         loginAs(member);
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
@@ -229,7 +233,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         loginAs(admin);
         String visible = documentService.create(new DocumentCreateRequest(null, "공유된 문서")).getDocumentId();
         documentService.create(new DocumentCreateRequest(null, "안 준 문서"));
-        grant(ResourceType.DOCUMENT, visible, member.getUserId(), PermissionType.ALLOW, true);
+        grant(ResourceType.DOCUMENT, visible, member.getUserId(), true);
 
         loginAs(member);
         var page = documentService.list(null, PageRequest.of(0, 10));
@@ -253,7 +257,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         loginAs(admin);
         FolderEntity shared = folderService.createFolder(new FolderRequest(null, "공유 폴더"));
         folderService.createFolder(new FolderRequest(null, "비공개 폴더"));
-        grant(ResourceType.FOLDER, shared.getFolderId(), member.getUserId(), PermissionType.ALLOW, true);
+        grant(ResourceType.FOLDER, shared.getFolderId(), member.getUserId(), true);
 
         loginAs(member);
         List<FolderTreeDto> tree = folderService.getFolderTree();
@@ -272,7 +276,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         FolderEntity shared = folderService.createFolder(
                 new FolderRequest(secret.getFolderId(), "공유 하위"));
         grant(ResourceType.FOLDER, secret.getFolderId(), member.getUserId(), PermissionType.DENY, false);
-        grant(ResourceType.FOLDER, shared.getFolderId(), member.getUserId(), PermissionType.ALLOW, true);
+        grant(ResourceType.FOLDER, shared.getFolderId(), member.getUserId(), true);
 
         loginAs(member);
         List<FolderTreeDto> tree = folderService.getFolderTree();
@@ -292,7 +296,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         documentService.create(new DocumentCreateRequest(folder.getFolderId(), "보이는 문서"));
         String hidden = documentService.create(
                 new DocumentCreateRequest(folder.getFolderId(), "가려진 문서")).getDocumentId();
-        grant(ResourceType.FOLDER, folder.getFolderId(), member.getUserId(), PermissionType.ALLOW, true);
+        grant(ResourceType.FOLDER, folder.getFolderId(), member.getUserId(), true);
         grant(ResourceType.DOCUMENT, hidden, member.getUserId(), PermissionType.DENY, false);
 
         loginAs(member);
@@ -309,7 +313,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         FolderEntity folder = folderService.createFolder(new FolderRequest(null, "공유 폴더"));
         String docId = documentService.create(
                 new DocumentCreateRequest(folder.getFolderId(), "폴더 안 문서")).getDocumentId();
-        grant(ResourceType.FOLDER, folder.getFolderId(), member.getUserId(), PermissionType.ALLOW, true);
+        grant(ResourceType.FOLDER, folder.getFolderId(), member.getUserId(), true);
 
         loginAs(member);
 

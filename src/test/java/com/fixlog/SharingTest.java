@@ -157,7 +157,7 @@ class SharingTest {
         String docId = newDocument("내 문서");
 
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionType.ALLOW, true);
+                "mate@fixlog.dev", true);
 
         loginAs(mate);
         assertEquals("내 문서", documentService.getDocument(docId).getTitle());
@@ -168,7 +168,7 @@ class SharingTest {
     void 공유_레벨이_행위를_제한한다() {
         String docId = newDocument("읽기만");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionType.ALLOW, true);
+                "mate@fixlog.dev", true);
 
         loginAs(mate);
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
@@ -181,7 +181,7 @@ class SharingTest {
     void 다운로드만_따로_막을_수_있다() {
         String docId = newDocument("반출 금지");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionType.ALLOW, false);
+                "mate@fixlog.dev", false);
 
         loginAs(mate);
         assertEquals("반출 금지", documentService.getDocument(docId).getTitle());
@@ -194,9 +194,9 @@ class SharingTest {
     void 같은_대상에_다시_공유하면_레벨이_갱신된다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionType.ALLOW, true);
+                "mate@fixlog.dev", true);
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionType.ALLOW, true);
+                "mate@fixlog.dev", true);
 
         List<PermissionEntity> forMate = permissionRepository
                 .findByResourceTypeAndResourceId(ResourceType.DOCUMENT, docId).stream()
@@ -213,7 +213,7 @@ class SharingTest {
                 new DocumentCreateRequest(folder.getFolderId(), "폴더 안 문서")).getDocumentId();
 
         permissionService.shareWithEmail(ResourceType.FOLDER, folder.getFolderId(),
-                "mate@fixlog.dev", PermissionType.ALLOW, true);
+                "mate@fixlog.dev", true);
 
         loginAs(mate);
         assertEquals("폴더 안 문서", documentService.getDocument(docId).getTitle());
@@ -226,7 +226,7 @@ class SharingTest {
         groupMemberRepository.save(new GroupMemberEntity(group.getGroupId(), mate.getUserId()));
 
         permissionService.share(ResourceType.DOCUMENT, docId,
-                PrincipalType.GROUP, group.getGroupId(), PermissionType.ALLOW, true);
+                PrincipalType.GROUP, group.getGroupId(), true);
 
         loginAs(mate);
         assertEquals("그룹 문서", documentService.getDocument(docId).getTitle());
@@ -241,7 +241,7 @@ class SharingTest {
 
         BusinessException e = assertThrows(BusinessException.class,
                 () -> permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                        "outsider@fixlog.dev", PermissionType.ALLOW, true));
+                        "outsider@fixlog.dev", true));
 
         assertEquals(Code.NOT_FOUND, e.getCode());
     }
@@ -251,12 +251,12 @@ class SharingTest {
     void 소유자가_아니면_공유_설정을_할_수_없다() {
         String docId = newDocument("문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionType.ALLOW, true);
+                "mate@fixlog.dev", true);
 
         loginAs(mate);
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
                 () -> permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                        "admin@fixlog.dev", PermissionType.ALLOW, true)).getCode());
+                        "admin@fixlog.dev", true)).getCode());
     }
 
     // ---------- 회수 ----------
@@ -266,7 +266,7 @@ class SharingTest {
     void 공유를_회수하면_접근이_끊긴다() {
         String docId = newDocument("문서");
         PermissionEntity granted = permissionService.shareWithEmail(ResourceType.DOCUMENT, docId,
-                "mate@fixlog.dev", PermissionType.ALLOW, true);
+                "mate@fixlog.dev", true);
 
         permissionService.revoke(ResourceType.DOCUMENT, docId, granted.getId());
 
@@ -281,7 +281,7 @@ class SharingTest {
     void 나와_공유됨에는_내가_만들지_않은_것만_나온다() {
         String mine = newDocument("내가 만든 문서");
         permissionService.shareWithEmail(ResourceType.DOCUMENT, mine,
-                "mate@fixlog.dev", PermissionType.ALLOW, true);
+                "mate@fixlog.dev", true);
 
         loginAs(mate);
         String mateOwn = newDocument("mate가 만든 문서");
