@@ -9,7 +9,6 @@ import com.fixlog.domain.model.PermissionEntity;
 import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.request.ShareRequest;
-import com.fixlog.presentation.dto.response.DocumentDto;
 import com.fixlog.presentation.dto.response.MyPermissionDto;
 import com.fixlog.presentation.dto.response.PermissionDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,7 +62,7 @@ public class SharingController {
     @GetMapping("/documents/shared-with-me")
     @Operation(operationId = "sharedWithMe")
     public Response sharedWithMe() {
-        return DataResponse.success(documentService.sharedWithMe().stream().map(DocumentDto::from).toList());
+        return DataResponse.success(documentService.sharedWithMe());
     }
 
     @GetMapping("/documents/{documentId}/permissions")

@@ -139,7 +139,7 @@ public class DocumentService {
      * 보면 목록이 의미를 잃기 때문이다.
      */
     @Transactional(readOnly = true)
-    public List<DocumentEntity> sharedWithMe() {
+    public List<DocumentDto> sharedWithMe() {
         UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
         String me = requireUserId();
         UUID myUserId = workspaceContext.requireCurrentUserId();
@@ -159,7 +159,14 @@ public class DocumentService {
                 .filter(doc -> !me.equals(doc.getCreateUser()))
                 .toList();
 
-        return Stream.concat(inWorkspace.stream(), fromPersonal.stream()).toList();
+        return Stream.concat(inWorkspace.stream(), fromPersonal.stream())
+                .map(doc -> {
+                    UserEntity author = doc.getCreateUser() != null
+                            ? userRepository.findById(UUID.fromString(doc.getCreateUser())).orElse(null)
+                            : null;
+                    return DocumentDto.from(doc, author);
+                })
+                .toList();
     }
 
     @Transactional(readOnly = true)
