@@ -1450,12 +1450,17 @@ if (pendingToken) {
 | `INHERITED` | 상위 폴더에서 상속됨 |
 | `WORKSPACE_DEFAULT` | 워크스페이스 기본값 (Admin) |
 
+> **개인 워크스페이스 공유 사용자**의 경우 `canEdit`은 항상 `false`이며,
+> `sourceDetail`은 `"개인 워크스페이스 직접 공유"`로 반환됩니다.
+
 ---
 
 ### GET /api/folders/{folderId}/my-permission
 > [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Share/myFolderPermission)
 
 내가 이 폴더에 대해 갖는 유효 권한. 응답 형식은 위와 동일.
+
+> **개인 워크스페이스 공유 사용자**의 경우 `canEdit`은 항상 `false`입니다.
 
 ---
 
