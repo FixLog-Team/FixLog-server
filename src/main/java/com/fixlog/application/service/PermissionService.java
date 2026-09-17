@@ -133,6 +133,7 @@ public class PermissionService {
     public java.util.List<PermissionDto> listFor(ResourceType resourceType, String resourceId) {
         permissionEvaluator.require(resourceType, resourceId, PermissionAction.SHARE);
         return permissionRepository.findByResourceTypeAndResourceId(resourceType, resourceId).stream()
+                .filter(p -> !p.isCanEdit())   // creator 소유권 레코드는 공유 목록에서 제외
                 .map(p -> PermissionDto.of(p, principalNameOf(p)))
                 .toList();
     }
