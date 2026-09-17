@@ -194,16 +194,16 @@ public class PermissionEvaluator {
             return membership.get().isAdminOrOwner() ? adminDecision() : memberDecision();
         }
 
-        // 개인 워크스페이스: 직접 ALLOW 권한이 있으면 해당 리소스에 한해 접근 허용
+        // 개인 워크스페이스: 리소스 자신 또는 조상 폴더에 직접 ALLOW 권한이 있으면 접근 허용
         WorkspaceEntity workspace = workspaceRepository.findById(target.workspaceId())
                 .orElseThrow(() -> notFound(resourceType));
         if (workspace.isPersonal()) {
-            return permissionRepository
-                    .findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
-                            resourceType, resourceId, PrincipalType.USER, targetUserId)
-                    .filter(p -> p.getPermissionType() == PermissionType.ALLOW)
-                    .map(p -> new Decision(true, p.isCanDownload(), false, false))
-                    .orElseThrow(() -> notFound(resourceType));
+            PermissionEntity perm = findPersonalAllow(
+                    resourceType, resourceId, target.ancestorFolderIds(), targetUserId);
+            if (perm != null) {
+                return new Decision(true, perm.isCanDownload(), false, false);
+            }
+            throw notFound(resourceType);
         }
 
         throw notFound(resourceType);
@@ -232,18 +232,18 @@ public class PermissionEvaluator {
             return new DecisionWithSource(d, PermissionSource.DIRECT, detail);
         }
 
-        // 개인 워크스페이스 직접 공유 폴백
+        // 개인 워크스페이스: 리소스 자신 또는 조상 폴더에 직접 ALLOW 권한이 있으면 접근 허용
         WorkspaceEntity workspace = workspaceRepository.findById(target.workspaceId())
                 .orElseThrow(() -> notFound(resourceType));
         if (workspace.isPersonal()) {
-            return permissionRepository
-                    .findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
-                            resourceType, resourceId, PrincipalType.USER, targetUserId)
-                    .filter(p -> p.getPermissionType() == PermissionType.ALLOW)
-                    .map(p -> new DecisionWithSource(
-                            new Decision(true, p.isCanDownload(), false, false),
-                            PermissionSource.DIRECT, "개인 워크스페이스 직접 공유"))
-                    .orElseThrow(() -> notFound(resourceType));
+            PermissionEntity perm = findPersonalAllow(
+                    resourceType, resourceId, target.ancestorFolderIds(), targetUserId);
+            if (perm != null) {
+                return new DecisionWithSource(
+                        new Decision(true, perm.isCanDownload(), false, false),
+                        PermissionSource.DIRECT, "개인 워크스페이스 직접 공유");
+            }
+            throw notFound(resourceType);
         }
 
         throw notFound(resourceType);
@@ -264,25 +264,43 @@ public class PermissionEvaluator {
 
     private Scope buildScope(UUID workspaceId, boolean honorAdmin) {
         UUID userId = workspaceContext.requireCurrentUserId();
-        WorkspaceMemberEntity membership = workspaceMemberRepository
-                .findByWorkspaceIdAndUserId(workspaceId, userId)
-                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
+        Optional<WorkspaceMemberEntity> membership = workspaceMemberRepository
+                .findByWorkspaceIdAndUserId(workspaceId, userId);
 
-        if (honorAdmin) {
-            return new Scope(true, List.of(), Map.of(), PermissionType.ALLOW);
+        if (membership.isPresent()) {
+            if (honorAdmin && membership.get().isAdminOrOwner()) {
+                return new Scope(true, List.of(), Map.of(), PermissionType.ALLOW);
+            }
+            // 1차 MVP: 비관리자 구성원도 전체 열람 허용 (honorAdmin=false는 shared-with-me 전용)
+            if (honorAdmin) {
+                return new Scope(true, List.of(), Map.of(), PermissionType.ALLOW);
+            }
+            List<UUID> groupIds = groupIdsOf(userId, workspaceId);
+            List<PermissionEntity> permissions = permissionRepository.findForPrincipals(
+                    workspaceId, userId, groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
+            Map<String, FolderAccessInfo> folderInfo = buildFolderInfo(workspaceId);
+            return new Scope(false, permissions, folderInfo, workspaceContext.baseAccessOf(workspaceId));
         }
 
-        List<UUID> groupIds = groupIdsOf(userId, workspaceId);
-        List<PermissionEntity> permissions = permissionRepository.findForPrincipals(
-                workspaceId, userId, groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
+        // 비구성원: 개인 워크스페이스에서 직접 공유받은 경우에 한해 제한적 Scope 반환
+        WorkspaceEntity workspace = workspaceRepository.findById(workspaceId).orElse(null);
+        if (workspace != null && workspace.isPersonal()) {
+            List<PermissionEntity> permissions = permissionRepository
+                    .findDirectAllowsByWorkspaceAndUser(workspaceId, userId);
+            if (!permissions.isEmpty()) {
+                // 기본 접근을 DENY로 고정해 명시적 공유 범위 밖의 리소스는 차단한다.
+                return new Scope(false, permissions, buildFolderInfo(workspaceId), PermissionType.DENY);
+            }
+        }
 
-        Map<String, FolderAccessInfo> folderInfo = folderRepository
-                .findByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1)).stream()
+        throw new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다.");
+    }
+
+    private Map<String, FolderAccessInfo> buildFolderInfo(UUID workspaceId) {
+        return folderRepository.findByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1)).stream()
                 .collect(Collectors.toMap(
                         FolderEntity::getFolderId,
                         f -> new FolderAccessInfo(f.getPath(), f.isInheritFromParent(), f.getBaseAccess())));
-
-        return new Scope(false, permissions, folderInfo, workspaceContext.baseAccessOf(workspaceId));
     }
 
     /** 폴더의 경로·상속·기본접근 정보를 경량으로 담는다. */
@@ -681,6 +699,28 @@ public class PermissionEvaluator {
                 .filter(java.util.Objects::nonNull)
                 .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
                 .toList();
+    }
+
+    /**
+     * 개인 워크스페이스 폴백용: 리소스 자신에 대한 직접 ALLOW를 먼저 찾고,
+     * 없으면 조상 폴더 순서대로 탐색한다. 폴더 공유가 하위 콘텐츠에 전파되는 핵심 로직.
+     */
+    private PermissionEntity findPersonalAllow(ResourceType resourceType, String resourceId,
+                                               List<String> ancestorFolderIds, UUID userId) {
+        Optional<PermissionEntity> direct = permissionRepository
+                .findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
+                        resourceType, resourceId, PrincipalType.USER, userId)
+                .filter(p -> p.getPermissionType() == PermissionType.ALLOW);
+        if (direct.isPresent()) return direct.get();
+
+        for (String ancestorId : ancestorFolderIds) {
+            Optional<PermissionEntity> folderPerm = permissionRepository
+                    .findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
+                            ResourceType.FOLDER, ancestorId, PrincipalType.USER, userId)
+                    .filter(p -> p.getPermissionType() == PermissionType.ALLOW);
+            if (folderPerm.isPresent()) return folderPerm.get();
+        }
+        return null;
     }
 
     private BusinessException notFound(ResourceType resourceType) {
