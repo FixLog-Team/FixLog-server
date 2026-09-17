@@ -116,7 +116,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
                 new DocumentHistoryService(documentHistoryRepository, 50, evaluator),
-                event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService);
+                event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService, userRepository);
 
         admin = signUp("admin");
         loginAs(admin);
