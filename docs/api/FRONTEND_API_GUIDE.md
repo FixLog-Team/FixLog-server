@@ -1428,12 +1428,7 @@ if (pendingToken) {
 
 ### 권한 모델
 
-권한 타입은 `ALLOW` / `DENY` 두 가지입니다. 다운로드는 타입과 별개로 `canDownload`로 제어합니다.
-
-| permissionType | 접근 |
-|---|---|
-| `ALLOW` | 조회 허용. 편집은 `canEdit` 필드로 별도 제어 |
-| `DENY` | 명시적 차단 (상속된 ALLOW보다 우선) |
+공유 API는 항상 **ALLOW(접근 허용)** 권한을 부여합니다. 다운로드는 별개로 `canDownload`로 제어합니다.
 
 **우선순위**: 직접 부여된 권한 > 가까운 폴더 상속 > 먼 폴더 상속
 사용자에게 직접 부여된 권한은 그룹 권한보다 우선합니다.
@@ -1483,13 +1478,13 @@ if (pendingToken) {
 문서 권한 부여. 이메일로 사용자에게 줄 때:
 
 ```json
-{ "email": "friend@fixlog.dev", "permissionType": "ALLOW", "canDownload": false }
+{ "email": "friend@fixlog.dev", "canDownload": false }
 ```
 
 그룹에 줄 때:
 
 ```json
-{ "principalType": "GROUP", "principalId": "{groupId}", "permissionType": "ALLOW" }
+{ "principalType": "GROUP", "principalId": "{groupId}" }
 ```
 
 - **공유 설정은 소유자(리소스 생성자)와 워크스페이스 Admin만** 가능합니다 (`FORBIDDEN`).
@@ -1497,7 +1492,7 @@ if (pendingToken) {
 - **개인 워크스페이스**: 등록된 사용자라면 누구에게나 공유할 수 있습니다. 그룹 공유는 지원하지 않습니다.
   공유받은 사람은 **해당 문서에만** 접근 가능하며, 워크스페이스의 다른 문서는 볼 수 없습니다.
 - 같은 대상에 다시 보내면 **덮어씁니다.** 중복 레코드는 생기지 않습니다.
-- `permissionType`을 생략하면 `ALLOW`, `canDownload`를 생략하면 `true`입니다.
+- `canDownload`를 생략하면 `true`입니다.
 
 ---
 
