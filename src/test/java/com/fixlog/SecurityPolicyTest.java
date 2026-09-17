@@ -91,11 +91,11 @@ class SecurityPolicyTest {
                 folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
                 auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
-                workspaceMemberRepository, groupMemberRepository, groupRepository,
+                workspaceMemberRepository, workspaceRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext,
                 new AuditService(auditLogRepository), policyRepository);
         permissionService = new PermissionService(permissionRepository, workspaceMemberRepository,
-                groupRepository, userRepository, evaluator, workspaceContext, new AuditService(auditLogRepository));
+                groupRepository, userRepository, workspaceRepository, evaluator, workspaceContext, new AuditService(auditLogRepository));
         policyService = new SecurityPolicyService(policyRepository, workspaceService);
         FolderService folderService = new FolderService(folderRepository, documentRepository,
                 workspaceContext, evaluator, permissionService);

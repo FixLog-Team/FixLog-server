@@ -84,11 +84,11 @@ class PermissionEvaluatorTest {
                 folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
                 auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         evaluator = new PermissionEvaluator(permissionRepository, workspaceMemberRepository,
-                groupMemberRepository, groupRepository, folderRepository, documentRepository,
+                workspaceRepository, groupMemberRepository, groupRepository, folderRepository, documentRepository,
                 workspaceContext, new AuditService(auditLogRepository), policyRepository);
                 PermissionService permissionService = new PermissionService(
                 permissionRepository, workspaceMemberRepository, groupRepository,
-                userRepository, evaluator, workspaceContext, new AuditService(auditLogRepository));
+                userRepository, workspaceRepository, evaluator, workspaceContext, new AuditService(auditLogRepository));
 folderService = new FolderService(folderRepository, documentRepository, workspaceContext, evaluator, permissionService);
 
         admin = signUp("admin");

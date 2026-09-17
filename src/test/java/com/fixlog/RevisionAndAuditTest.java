@@ -97,11 +97,11 @@ class RevisionAndAuditTest {
                 folderRepository, documentRepository, permissionRepository, invitationRepository, new AuditService(auditLogRepository),
                 auditLogRepository, labelRepository, documentLabelRepository, policyRepository, groupRepository, groupMemberRepository);
         PermissionEvaluator evaluator = new PermissionEvaluator(permissionRepository,
-                workspaceMemberRepository, groupMemberRepository, groupRepository,
+                workspaceMemberRepository, workspaceRepository, groupMemberRepository, groupRepository,
                 folderRepository, documentRepository, workspaceContext,
                 new AuditService(auditLogRepository), policyRepository);
         permissionService = new PermissionService(permissionRepository, workspaceMemberRepository,
-                groupRepository, userRepository, evaluator, workspaceContext, new AuditService(auditLogRepository));
+                groupRepository, userRepository, workspaceRepository, evaluator, workspaceContext, new AuditService(auditLogRepository));
         SecurityPolicyService securityPolicyService =
                 new SecurityPolicyService(policyRepository, workspaceService);
         FolderService folderService = new FolderService(folderRepository, documentRepository,
