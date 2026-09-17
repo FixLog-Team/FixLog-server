@@ -100,7 +100,7 @@ class DocumentHistoryTest {
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
                 documentHistoryService, event -> {}, workspaceContext,
-                permissionEvaluator, permissionService, securityPolicyService);
+                permissionEvaluator, permissionService, securityPolicyService, userRepository);
     }
 
     @AfterEach

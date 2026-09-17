@@ -116,7 +116,7 @@ class TrashAndLabelTest {
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
                 new DocumentHistoryService(documentHistoryRepository, 50, evaluator),
-                event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService);
+                event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService, userRepository);
         trashService = new TrashService(documentRepository, folderRepository, documentHistoryRepository,
                 documentLabelRepository, documentFavoriteRepository, permissionRepository, workspaceMemberRepository,
                 workspaceContext, auditService);

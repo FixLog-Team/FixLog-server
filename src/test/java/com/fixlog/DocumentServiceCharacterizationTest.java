@@ -117,7 +117,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
                 new DocumentHistoryService(documentHistoryRepository, 50, permissionEvaluator),
-                publishedEvents::add, workspaceContext, permissionEvaluator, permissionService, securityPolicyService);
+                publishedEvents::add, workspaceContext, permissionEvaluator, permissionService, securityPolicyService, userRepository);
     }
 
     @AfterEach
