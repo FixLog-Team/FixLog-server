@@ -4,6 +4,7 @@ import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.UserRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
+import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.AuditAction;
@@ -12,6 +13,7 @@ import com.fixlog.domain.model.PermissionEntity;
 import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
+import com.fixlog.domain.model.WorkspaceEntity;
 import com.fixlog.presentation.dto.response.PermissionDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,7 @@ public class PermissionService {
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final GroupRepository groupRepository;
     private final UserRepository userRepository;
+    private final WorkspaceRepository workspaceRepository;
     private final PermissionEvaluator permissionEvaluator;
     private final WorkspaceContext workspaceContext;
     private final AuditService auditService;
@@ -38,6 +41,7 @@ public class PermissionService {
                              WorkspaceMemberRepository workspaceMemberRepository,
                              GroupRepository groupRepository,
                              UserRepository userRepository,
+                             WorkspaceRepository workspaceRepository,
                              PermissionEvaluator permissionEvaluator,
                              WorkspaceContext workspaceContext,
                              AuditService auditService) {
@@ -45,6 +49,7 @@ public class PermissionService {
         this.workspaceMemberRepository = workspaceMemberRepository;
         this.groupRepository = groupRepository;
         this.userRepository = userRepository;
+        this.workspaceRepository = workspaceRepository;
         this.permissionEvaluator = permissionEvaluator;
         this.workspaceContext = workspaceContext;
         this.auditService = auditService;
@@ -80,7 +85,13 @@ public class PermissionService {
         UUID workspaceId = permissionEvaluator.workspaceIdOf(resourceType, resourceId);
         UUID granter = workspaceContext.requireCurrentUserId();
 
-        requirePrincipalInWorkspace(workspaceId, principalType, principalId);
+        WorkspaceEntity workspace = workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
+        if (workspace.isPersonal()) {
+            requireRegisteredUser(principalType, principalId);
+        } else {
+            requirePrincipalInWorkspace(workspaceId, principalType, principalId);
+        }
 
         PermissionEntity saved = permissionRepository
                 .findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
@@ -134,6 +145,16 @@ public class PermissionService {
             case GROUP -> groupRepository.findById(permission.getPrincipalId())
                     .map(g -> g.getGroupName()).orElse(null);
         };
+    }
+
+    /** 개인 워크스페이스 공유: 워크스페이스 구성원 여부와 무관하게 등록된 사용자이기만 하면 된다. 그룹 공유는 미지원. */
+    private void requireRegisteredUser(PrincipalType principalType, UUID principalId) {
+        if (principalId == null)
+            throw new BusinessException(Code.INVALID_REQUEST, "공유 대상은 필수입니다.");
+        if (principalType == PrincipalType.GROUP)
+            throw new BusinessException(Code.INVALID_REQUEST, "개인 워크스페이스에서는 그룹 공유를 지원하지 않습니다.");
+        if (!userRepository.existsById(principalId))
+            throw new BusinessException(Code.NOT_FOUND, "사용자를 찾을 수 없습니다.");
     }
 
     /**
