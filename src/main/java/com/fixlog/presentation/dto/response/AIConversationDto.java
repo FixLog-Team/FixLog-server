@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record AIConversationDto(
         UUID conversationId,
+        UUID workspaceId,
         String title,
         Instant createTime,
         Instant updateTime
@@ -14,6 +15,7 @@ public record AIConversationDto(
     public static AIConversationDto from(AIConversationEntity entity) {
         return new AIConversationDto(
                 entity.getConversationId(),
+                entity.getWorkspaceId(),
                 entity.getTitle(),
                 entity.getCreateTime(),
                 entity.getUpdateTime()

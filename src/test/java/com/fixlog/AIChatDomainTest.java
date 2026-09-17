@@ -16,7 +16,7 @@ class AIChatDomainTest {
 
     @Test
     void reservesMessageSequencesWithoutDuplicates() {
-        AIConversationEntity conversation = new AIConversationEntity(UUID.randomUUID(), "새 대화");
+        AIConversationEntity conversation = new AIConversationEntity(UUID.randomUUID(), UUID.randomUUID(), "새 대화");
 
         int firstSequence = conversation.reserveMessageSequences(2);
         int thirdSequence = conversation.reserveMessageSequences(1);
@@ -28,7 +28,7 @@ class AIChatDomainTest {
 
     @Test
     void rejectsInvalidSequenceReservationCount() {
-        AIConversationEntity conversation = new AIConversationEntity(UUID.randomUUID(), "새 대화");
+        AIConversationEntity conversation = new AIConversationEntity(UUID.randomUUID(), UUID.randomUUID(), "새 대화");
 
         assertThatThrownBy(() -> conversation.reserveMessageSequences(0))
                 .isInstanceOf(IllegalArgumentException.class);

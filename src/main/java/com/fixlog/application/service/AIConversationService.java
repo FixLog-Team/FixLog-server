@@ -18,23 +18,27 @@ public class AIConversationService {
 
     private static final String DEFAULT_TITLE = "새 대화";
 
+    private final WorkspaceContext workspaceContext;
+
     private final AIConversationRepository conversationRepository;
 
-    public AIConversationService(AIConversationRepository conversationRepository) {
+    public AIConversationService(AIConversationRepository conversationRepository, WorkspaceContext workspaceContext) {
         this.conversationRepository = conversationRepository;
+        this.workspaceContext = workspaceContext;
     }
 
     @Transactional
     public AIConversationEntity create(AIConversationCreateRequest request) {
         UUID userId = requireUserId();
         String title = normalizeTitle(request.title());
-        return conversationRepository.save(new AIConversationEntity(userId, title));
+        return conversationRepository.save(new AIConversationEntity(
+                userId, workspaceContext.requireCurrentWorkspaceId(), title));
     }
 
     @Transactional(readOnly = true)
     public Page<AIConversationEntity> list(Pageable pageable) {
-        return conversationRepository.findByUserIdAndUsableOrderByUpdateTimeDesc(
-                requireUserId(), Integer.valueOf(1), pageable);
+        return conversationRepository.findByUserIdAndWorkspaceIdAndUsableOrderByUpdateTimeDesc(
+                requireUserId(), workspaceContext.requireCurrentWorkspaceId(), Integer.valueOf(1), pageable);
     }
 
     @Transactional(readOnly = true)
@@ -50,7 +54,7 @@ public class AIConversationService {
 
     private AIConversationEntity loadOwned(UUID conversationId) {
         return conversationRepository
-                .findByConversationIdAndUserIdAndUsable(conversationId, requireUserId(), Integer.valueOf(1))
+                .findByConversationIdAndUserIdAndWorkspaceIdAndUsable(conversationId, requireUserId(), workspaceContext.requireCurrentWorkspaceId(), Integer.valueOf(1))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "대화방을 찾을 수 없습니다."));
     }
 

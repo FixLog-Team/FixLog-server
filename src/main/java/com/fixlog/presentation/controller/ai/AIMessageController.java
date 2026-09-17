@@ -41,6 +41,9 @@ public class AIMessageController {
     }
 
     @PostMapping
+    @Parameter(name = "X-Workspace-Id", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER,
+            description = "현재 워크스페이스 UUID. 생략 시 개인 워크스페이스를 사용하며 본인 대화방만 접근 가능합니다.",
+            schema = @io.swagger.v3.oas.annotations.media.Schema(type = "string", format = "uuid"))
     @Operation(
             operationId = "sendMessage",
             summary = "AI 메시지 전송",
@@ -67,6 +70,9 @@ public class AIMessageController {
     }
 
     @GetMapping
+    @Parameter(name = "X-Workspace-Id", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER,
+            description = "현재 워크스페이스 UUID. 생략 시 개인 워크스페이스를 사용하며 본인 대화방만 접근 가능합니다.",
+            schema = @io.swagger.v3.oas.annotations.media.Schema(type = "string", format = "uuid"))
     @Operation(
             operationId = "listMessages",
             summary = "AI 메시지 기록 조회",
