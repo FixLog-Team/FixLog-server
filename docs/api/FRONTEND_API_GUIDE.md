@@ -1541,6 +1541,31 @@ Swagger:
 
 > 내가 직접 만든 문서는 포함하지 않습니다.
 
+```json
+{
+  "result": [
+    {
+      "documentId": "uuid",
+      "folderId": null,
+      "title": "공유받은 문서",
+      "blocks": "[...]",
+      "plainText": "...",
+      "contentHash": "...",
+      "ordinal": 0,
+      "createUser": "작성자-uuid",
+      "createUserName": "홍길동",
+      "createUserPictureUrl": "https://lh3.googleusercontent.com/...",
+      "createTime": "2026-09-01T00:00:00Z",
+      "updateUser": "작성자-uuid",
+      "updateTime": "2026-09-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+> `createUserName` / `createUserPictureUrl`은 작성자 표시에 사용합니다.
+> 작성자가 아직 Google 재로그인 전이면 `createUserPictureUrl`은 `null`일 수 있습니다.
+
 ---
 
 ## 10. 문서 히스토리 API
