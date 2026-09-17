@@ -38,6 +38,7 @@ import com.fixlog.domain.model.WorkspaceEntity;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import com.fixlog.presentation.dto.request.FolderRequest;
+import com.fixlog.presentation.dto.response.DocumentDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -286,7 +287,7 @@ class SharingTest {
         String mateOwn = newDocument("mate가 만든 문서");
 
         List<String> titles = documentService.sharedWithMe().stream()
-                .map(d -> d.getTitle()).toList();
+                .map(DocumentDto::title).toList();
 
         assertEquals(List.of("내가 만든 문서"), titles);
         assertTrue(documentService.getDocument(mateOwn) != null, "자기 문서는 여전히 볼 수 있다");
