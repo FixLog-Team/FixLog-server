@@ -334,6 +334,15 @@ public class PermissionEvaluator {
                     .filter(Decision::allowed).isPresent();
         }
 
+        /** 나에게 직접 ALLOW된 폴더 ID 목록 (조상 상속 제외). */
+        public List<String> directlySharedFolderIds() {
+            return permissions.stream()
+                    .filter(p -> p.getResourceType() == ResourceType.FOLDER
+                            && p.getPermissionType() == PermissionType.ALLOW)
+                    .map(PermissionEntity::getResourceId)
+                    .toList();
+        }
+
         private List<String> ancestorsOf(String folderId) {
             return folderId == null ? List.of()
                     : segmentsOf(folderInfo.containsKey(folderId) ? folderInfo.get(folderId).path() : null);
@@ -658,6 +667,19 @@ public class PermissionEvaluator {
                 .map(p -> documentRepository.findById(p.getResourceId()).orElse(null))
                 .filter(java.util.Objects::nonNull)
                 .filter(doc -> Integer.valueOf(1).equals(doc.getUsable()))
+                .toList();
+    }
+
+    /**
+     * 개인 워크스페이스에서 직접 공유받은 폴더 목록.
+     */
+    public List<FolderEntity> sharedFoldersFromPersonalWorkspaces(UUID currentWorkspaceId, UUID userId) {
+        return permissionRepository.findDirectFolderAllowsForUser(userId).stream()
+                .filter(p -> !p.getWorkspaceId().equals(currentWorkspaceId))
+                .filter(p -> !workspaceMemberRepository.existsByWorkspaceIdAndUserId(p.getWorkspaceId(), userId))
+                .map(p -> folderRepository.findById(p.getResourceId()).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
                 .toList();
     }
 

@@ -286,7 +286,7 @@ class SharingTest {
         loginAs(mate);
         String mateOwn = newDocument("mate가 만든 문서");
 
-        List<String> titles = documentService.sharedWithMe().stream()
+        List<String> titles = documentService.sharedWithMe().documents().stream()
                 .map(DocumentDto::title).toList();
 
         assertEquals(List.of("내가 만든 문서"), titles);
@@ -298,6 +298,7 @@ class SharingTest {
         newDocument("남의 문서");
 
         loginAs(mate);
-        assertTrue(documentService.sharedWithMe().isEmpty());
+        var result = documentService.sharedWithMe();
+        assertTrue(result.documents().isEmpty() && result.folders().isEmpty());
     }
 }

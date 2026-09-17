@@ -1533,33 +1533,47 @@ Swagger:
 ### GET /api/documents/shared-with-me
 > [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Share/sharedWithMe)
 
-내가 만들지 않았지만 권한을 받은 문서 목록.
+내가 만들지 않았지만 권한을 받은 **폴더·문서** 목록.
 
 두 가지 출처를 합산해서 반환합니다:
-- **현재 워크스페이스 내 공유**: `X-Workspace-Id`로 지정한 워크스페이스에서 나에게 명시적으로 ALLOW된 문서
-- **개인 워크스페이스 공유**: 다른 사용자의 개인 워크스페이스에서 나에게 직접 공유된 문서 (워크스페이스 구성원이 아니어도 포함)
+- **현재 워크스페이스 내 공유**: `X-Workspace-Id`로 지정한 워크스페이스에서 나에게 명시적으로 ALLOW된 폴더·문서
+- **개인 워크스페이스 공유**: 다른 사용자의 개인 워크스페이스에서 나에게 직접 공유된 폴더·문서 (워크스페이스 구성원이 아니어도 포함)
 
-> 내가 직접 만든 문서는 포함하지 않습니다.
+> 내가 직접 만든 항목은 포함하지 않습니다.
 
 ```json
 {
-  "result": [
-    {
-      "documentId": "uuid",
-      "folderId": null,
-      "title": "공유받은 문서",
-      "blocks": "[...]",
-      "plainText": "...",
-      "contentHash": "...",
-      "ordinal": 0,
-      "createUser": "작성자-uuid",
-      "createUserName": "홍길동",
-      "createUserPictureUrl": "https://lh3.googleusercontent.com/...",
-      "createTime": "2026-09-01T00:00:00Z",
-      "updateUser": "작성자-uuid",
-      "updateTime": "2026-09-01T00:00:00Z"
-    }
-  ]
+  "result": {
+    "folders": [
+      {
+        "folderId": "uuid",
+        "parentId": null,
+        "folderName": "공유받은 폴더",
+        "ordinal": 0,
+        "createUser": "작성자-uuid",
+        "createTime": "2026-09-01T00:00:00Z",
+        "updateUser": "작성자-uuid",
+        "updateTime": "2026-09-01T00:00:00Z"
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "uuid",
+        "folderId": null,
+        "title": "공유받은 문서",
+        "blocks": "[...]",
+        "plainText": "...",
+        "contentHash": "...",
+        "ordinal": 0,
+        "createUser": "작성자-uuid",
+        "createUserName": "홍길동",
+        "createUserPictureUrl": "https://lh3.googleusercontent.com/...",
+        "createTime": "2026-09-01T00:00:00Z",
+        "updateUser": "작성자-uuid",
+        "updateTime": "2026-09-01T00:00:00Z"
+      }
+    ]
+  }
 }
 ```
 
