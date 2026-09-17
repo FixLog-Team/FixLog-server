@@ -12,6 +12,6 @@ public record AskRequest(
         @Min(1) @Max(20) Integer topK
 ) {
     public AskRequest {
-        if (topK == null) topK = 5;
+        if (topK == null) topK = 3;
     }
 }
