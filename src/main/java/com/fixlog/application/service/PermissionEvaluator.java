@@ -6,6 +6,7 @@ import com.fixlog.application.repository.GroupMemberRepository;
 import com.fixlog.application.repository.GroupRepository;
 import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.WorkspaceMemberRepository;
+import com.fixlog.application.repository.WorkspaceRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.AuditAction;
@@ -20,6 +21,7 @@ import com.fixlog.domain.model.PermissionSource;
 import com.fixlog.domain.model.PermissionType;
 import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
+import com.fixlog.domain.model.WorkspaceEntity;
 import com.fixlog.domain.model.WorkspaceMemberEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +56,7 @@ public class PermissionEvaluator {
 
     private final PermissionRepository permissionRepository;
     private final WorkspaceMemberRepository workspaceMemberRepository;
+    private final WorkspaceRepository workspaceRepository;
     private final GroupMemberRepository groupMemberRepository;
     private final GroupRepository groupRepository;
     private final FolderRepository folderRepository;
@@ -64,6 +67,7 @@ public class PermissionEvaluator {
 
     public PermissionEvaluator(PermissionRepository permissionRepository,
                                WorkspaceMemberRepository workspaceMemberRepository,
+                               WorkspaceRepository workspaceRepository,
                                GroupMemberRepository groupMemberRepository,
                                GroupRepository groupRepository,
                                FolderRepository folderRepository,
@@ -73,6 +77,7 @@ public class PermissionEvaluator {
                                com.fixlog.application.repository.SecurityPolicyRepository policyRepository) {
         this.permissionRepository = permissionRepository;
         this.workspaceMemberRepository = workspaceMemberRepository;
+        this.workspaceRepository = workspaceRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.groupRepository = groupRepository;
         this.folderRepository = folderRepository;
@@ -182,11 +187,26 @@ public class PermissionEvaluator {
     public Decision evaluateFor(UUID targetUserId, ResourceType resourceType, String resourceId) {
         Target target = loadTarget(resourceType, resourceId);
 
-        WorkspaceMemberEntity membership = workspaceMemberRepository
-                .findByWorkspaceIdAndUserId(target.workspaceId(), targetUserId)
-                .orElseThrow(() -> notFound(resourceType));
+        Optional<WorkspaceMemberEntity> membership = workspaceMemberRepository
+                .findByWorkspaceIdAndUserId(target.workspaceId(), targetUserId);
 
-        return membership.isAdminOrOwner() ? adminDecision() : memberDecision();
+        if (membership.isPresent()) {
+            return membership.get().isAdminOrOwner() ? adminDecision() : memberDecision();
+        }
+
+        // 개인 워크스페이스: 직접 ALLOW 권한이 있으면 해당 리소스에 한해 접근 허용
+        WorkspaceEntity workspace = workspaceRepository.findById(target.workspaceId())
+                .orElseThrow(() -> notFound(resourceType));
+        if (workspace.isPersonal()) {
+            return permissionRepository
+                    .findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
+                            resourceType, resourceId, PrincipalType.USER, targetUserId)
+                    .filter(p -> p.getPermissionType() == PermissionType.ALLOW)
+                    .map(p -> new Decision(true, p.isCanDownload(), false, false))
+                    .orElseThrow(() -> notFound(resourceType));
+        }
+
+        throw notFound(resourceType);
     }
 
     /** 현재 로그인 유저의 권한 판정 + 출처 (프론트 UI 제어용). */
