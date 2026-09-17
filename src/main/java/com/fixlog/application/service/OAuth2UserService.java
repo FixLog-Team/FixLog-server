@@ -40,10 +40,11 @@ public class OAuth2UserService implements org.springframework.security.oauth2.cl
 		String providerId = (String) attributes.get("sub");
 		String email = (String) attributes.get("email");
 		String name = (String) attributes.get("name");
+		String picture = (String) attributes.get("picture");
 
 		UserEntity user = userOauthRepository.findByProviderAndProviderId(provider, providerId)
 			.map(oauth -> {
-				oauth.getUser().updateLoginInfo(name, email);
+				oauth.getUser().updateLoginInfo(name, email, picture);
 				return oauth.getUser();
 			})
 			.orElseGet(() -> {

@@ -87,7 +87,7 @@ public class DocumentController {
     @GetMapping("/{documentId}")
     @Operation(operationId = "getDocument")
     public Response getDocument(@PathVariable String documentId) {
-        return DataResponse.success(DocumentDto.from(documentService.getDocument(documentId)));
+        return DataResponse.success(documentService.getDocumentDto(documentId));
     }
 
     @PutMapping("/{documentId}")
