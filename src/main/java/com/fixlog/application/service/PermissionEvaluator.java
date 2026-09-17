@@ -201,7 +201,7 @@ public class PermissionEvaluator {
             PermissionEntity perm = findPersonalAllow(
                     resourceType, resourceId, target.ancestorFolderIds(), targetUserId);
             if (perm != null) {
-                return new Decision(true, perm.isCanDownload(), false, false);
+                return new Decision(true, perm.isCanDownload(), false, true);
             }
             throw notFound(resourceType);
         }
@@ -240,7 +240,7 @@ public class PermissionEvaluator {
                     resourceType, resourceId, target.ancestorFolderIds(), targetUserId);
             if (perm != null) {
                 return new DecisionWithSource(
-                        new Decision(true, perm.isCanDownload(), false, false),
+                        new Decision(true, perm.isCanDownload(), false, true),
                         PermissionSource.DIRECT, "개인 워크스페이스 직접 공유");
             }
             throw notFound(resourceType);
