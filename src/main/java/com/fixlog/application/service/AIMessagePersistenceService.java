@@ -16,12 +16,15 @@ import java.util.UUID;
 @Service
 public class AIMessagePersistenceService {
 
+    private final WorkspaceContext workspaceContext;
+
     private final AIConversationRepository conversationRepository;
     private final AIMessageRepository messageRepository;
 
     public AIMessagePersistenceService(AIConversationRepository conversationRepository,
-                                       AIMessageRepository messageRepository) {
+                                       AIMessageRepository messageRepository, WorkspaceContext workspaceContext) {
         this.conversationRepository = conversationRepository;
+        this.workspaceContext = workspaceContext;
         this.messageRepository = messageRepository;
     }
 
@@ -29,7 +32,8 @@ public class AIMessagePersistenceService {
     public PreparedMessages prepare(UUID conversationId, String content) {
         UUID userId = requireUserId();
         AIConversationEntity conversation = conversationRepository
-                .findActiveByIdAndUserIdForUpdate(conversationId, userId)
+                .findActiveByIdAndUserIdAndWorkspaceIdForUpdate(
+                        conversationId, userId, workspaceContext.requireCurrentWorkspaceId())
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "대화방을 찾을 수 없습니다."));
 
         int userSequence = conversation.reserveMessageSequences(2);

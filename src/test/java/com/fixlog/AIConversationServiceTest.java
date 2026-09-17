@@ -33,12 +33,17 @@ class AIConversationServiceTest {
     private AIConversationRepository conversationRepository;
 
     private AIConversationService conversationService;
+    @Mock
+    private com.fixlog.application.service.WorkspaceContext workspaceContext;
+
+    private final UUID workspaceId = UUID.randomUUID();
     private UUID userId;
 
     @BeforeEach
     void setUp() throws Exception {
-        conversationService = new AIConversationService(conversationRepository);
+        conversationService = new AIConversationService(conversationRepository, workspaceContext);
         userId = UUID.randomUUID();
+        when(workspaceContext.requireCurrentWorkspaceId()).thenReturn(workspaceId);
 
         UserEntity user = new UserEntity("tester", "tester@example.com");
         Field userIdField = UserEntity.class.getDeclaredField("userId");
@@ -63,6 +68,7 @@ class AIConversationServiceTest {
         AIConversationEntity conversation = conversationService.create(new AIConversationCreateRequest("  "));
 
         assertThat(conversation.getUserId()).isEqualTo(userId);
+        assertThat(conversation.getWorkspaceId()).isEqualTo(workspaceId);
         assertThat(conversation.getTitle()).isEqualTo("새 대화");
         verify(conversationRepository).save(conversation);
     }
@@ -70,7 +76,7 @@ class AIConversationServiceTest {
     @Test
     void cannotReadAnotherUsersConversation() {
         UUID conversationId = UUID.randomUUID();
-        when(conversationRepository.findByConversationIdAndUserIdAndUsable(conversationId, userId, 1))
+        when(conversationRepository.findByConversationIdAndUserIdAndWorkspaceIdAndUsable(conversationId, userId, workspaceId, 1))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> conversationService.get(conversationId))
@@ -81,8 +87,8 @@ class AIConversationServiceTest {
     @Test
     void softDeletesOwnedConversation() {
         UUID conversationId = UUID.randomUUID();
-        AIConversationEntity conversation = new AIConversationEntity(userId, "대화");
-        when(conversationRepository.findByConversationIdAndUserIdAndUsable(conversationId, userId, 1))
+        AIConversationEntity conversation = new AIConversationEntity(userId, workspaceId, "대화");
+        when(conversationRepository.findByConversationIdAndUserIdAndWorkspaceIdAndUsable(conversationId, userId, workspaceId, 1))
                 .thenReturn(Optional.of(conversation));
 
         conversationService.delete(conversationId);

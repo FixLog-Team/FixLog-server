@@ -14,20 +14,22 @@ import java.util.UUID;
 
 public interface AIConversationRepository extends JpaRepository<AIConversationEntity, UUID> {
 
-    Optional<AIConversationEntity> findByConversationIdAndUserIdAndUsable(
-            UUID conversationId, UUID userId, Integer usable);
+    Optional<AIConversationEntity> findByConversationIdAndUserIdAndWorkspaceIdAndUsable(
+            UUID conversationId, UUID userId, UUID workspaceId, Integer usable);
 
-    Page<AIConversationEntity> findByUserIdAndUsableOrderByUpdateTimeDesc(
-            UUID userId, Integer usable, Pageable pageable);
+    Page<AIConversationEntity> findByUserIdAndWorkspaceIdAndUsableOrderByUpdateTimeDesc(
+            UUID userId, UUID workspaceId, Integer usable, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select c from AIConversationEntity c
             where c.conversationId = :conversationId
               and c.userId = :userId
+              and c.workspaceId = :workspaceId
               and c.usable = 1
             """)
-    Optional<AIConversationEntity> findActiveByIdAndUserIdForUpdate(
+    Optional<AIConversationEntity> findActiveByIdAndUserIdAndWorkspaceIdForUpdate(
             @Param("conversationId") UUID conversationId,
-            @Param("userId") UUID userId);
+            @Param("userId") UUID userId,
+            @Param("workspaceId") UUID workspaceId);
 }

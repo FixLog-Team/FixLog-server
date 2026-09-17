@@ -37,11 +37,15 @@ class AIMessagePersistenceServiceTest {
     private AIMessageRepository messageRepository;
 
     private AIMessagePersistenceService persistenceService;
+    @Mock
+    private com.fixlog.application.service.WorkspaceContext workspaceContext;
+
+    private final UUID workspaceId = UUID.randomUUID();
     private UUID userId;
 
     @BeforeEach
     void setUp() throws Exception {
-        persistenceService = new AIMessagePersistenceService(conversationRepository, messageRepository);
+        persistenceService = new AIMessagePersistenceService(conversationRepository, messageRepository, workspaceContext);
         userId = UUID.randomUUID();
 
         UserEntity user = new UserEntity("tester", "tester@example.com");
@@ -58,10 +62,11 @@ class AIMessagePersistenceServiceTest {
 
     @Test
     void storesUserAndPendingAssistantMessagesTogether() throws Exception {
+        when(workspaceContext.requireCurrentWorkspaceId()).thenReturn(workspaceId);
         UUID conversationId = UUID.randomUUID();
-        AIConversationEntity conversation = new AIConversationEntity(userId, "대화");
+        AIConversationEntity conversation = new AIConversationEntity(userId, workspaceId, "대화");
         setField(conversation, "conversationId", conversationId);
-        when(conversationRepository.findActiveByIdAndUserIdForUpdate(conversationId, userId))
+        when(conversationRepository.findActiveByIdAndUserIdAndWorkspaceIdForUpdate(conversationId, userId, workspaceId))
                 .thenReturn(Optional.of(conversation));
         when(messageRepository.saveAll(anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));

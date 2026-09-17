@@ -22,6 +22,9 @@ public class AIConversationEntity {
     @Column(name = "user_id", columnDefinition = "uuid", updatable = false, nullable = false)
     private UUID userId;
 
+    @Column(name = "workspace_id", columnDefinition = "uuid", updatable = false, nullable = false)
+    private UUID workspaceId;
+
     @Column(name = "title", length = 255, nullable = false)
     private String title;
 
@@ -40,8 +43,9 @@ public class AIConversationEntity {
     protected AIConversationEntity() {
     }
 
-    public AIConversationEntity(UUID userId, String title) {
+    public AIConversationEntity(UUID userId, UUID workspaceId, String title) {
         this.userId = userId;
+        this.workspaceId = java.util.Objects.requireNonNull(workspaceId);
         this.title = title;
         this.nextMessageSequence = 1;
         this.usable = 1;
@@ -80,6 +84,10 @@ public class AIConversationEntity {
 
     public UUID getUserId() {
         return userId;
+    }
+
+    public UUID getWorkspaceId() {
+        return workspaceId;
     }
 
     public String getTitle() {
