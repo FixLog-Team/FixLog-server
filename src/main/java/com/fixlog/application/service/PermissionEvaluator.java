@@ -223,13 +223,30 @@ public class PermissionEvaluator {
     public DecisionWithSource evaluateForWithSource(UUID targetUserId, ResourceType resourceType, String resourceId) {
         Target target = loadTarget(resourceType, resourceId);
 
-        WorkspaceMemberEntity membership = workspaceMemberRepository
-                .findByWorkspaceIdAndUserId(target.workspaceId(), targetUserId)
-                .orElseThrow(() -> notFound(resourceType));
+        Optional<WorkspaceMemberEntity> membership = workspaceMemberRepository
+                .findByWorkspaceIdAndUserId(target.workspaceId(), targetUserId);
 
-        Decision d = membership.isAdminOrOwner() ? adminDecision() : memberDecision();
-        String detail = membership.isAdminOrOwner() ? "관리자 특권" : "구성원 전권";
-        return new DecisionWithSource(d, PermissionSource.DIRECT, detail);
+        if (membership.isPresent()) {
+            Decision d = membership.get().isAdminOrOwner() ? adminDecision() : memberDecision();
+            String detail = membership.get().isAdminOrOwner() ? "관리자 특권" : "구성원 전권";
+            return new DecisionWithSource(d, PermissionSource.DIRECT, detail);
+        }
+
+        // 개인 워크스페이스 직접 공유 폴백
+        WorkspaceEntity workspace = workspaceRepository.findById(target.workspaceId())
+                .orElseThrow(() -> notFound(resourceType));
+        if (workspace.isPersonal()) {
+            return permissionRepository
+                    .findByResourceTypeAndResourceIdAndPrincipalTypeAndPrincipalId(
+                            resourceType, resourceId, PrincipalType.USER, targetUserId)
+                    .filter(p -> p.getPermissionType() == PermissionType.ALLOW)
+                    .map(p -> new DecisionWithSource(
+                            new Decision(true, p.isCanDownload(), false, false),
+                            PermissionSource.DIRECT, "개인 워크스페이스 직접 공유"))
+                    .orElseThrow(() -> notFound(resourceType));
+        }
+
+        throw notFound(resourceType);
     }
 
     public record DecisionWithSource(Decision decision, PermissionSource source, String sourceDetail) {
