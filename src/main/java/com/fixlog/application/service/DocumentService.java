@@ -119,7 +119,16 @@ public class DocumentService {
      */
     @Transactional(readOnly = true)
     public Page<DocumentEntity> list(String folderId, Pageable pageable) {
-        UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
+        final UUID workspaceId;
+        if (folderId != null) {
+            // 폴더에서 워크스페이스를 가져온다 — 비구성원이 공유받은 폴더 안을 탐색할 수 있게 한다.
+            permissionEvaluator.require(ResourceType.FOLDER, folderId, PermissionAction.VIEW);
+            workspaceId = folderRepository.findByFolderIdAndUsable(folderId, Integer.valueOf(1))
+                    .map(FolderEntity::getWorkspaceId)
+                    .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
+        } else {
+            workspaceId = workspaceContext.requireCurrentWorkspaceId();
+        }
         PermissionEvaluator.Scope scope = permissionEvaluator.scopeFor(workspaceId);
 
         List<DocumentEntity> candidates = folderId != null

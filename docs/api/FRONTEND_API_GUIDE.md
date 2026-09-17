@@ -67,6 +67,11 @@ X-Workspace-Id: {workspaceId}
 | 워크스페이스 구성원이 아님 | `NOT_FOUND` — 리소스의 존재 자체를 알리지 않습니다 |
 | 구성원이지만 권한이 없음 | `FORBIDDEN` |
 
+> **개인 워크스페이스 교차 공유 예외**: 다른 사용자의 개인 워크스페이스에서 폴더·문서를 직접 공유받은 경우,
+> 해당 리소스와 그 **하위 콘텐츠 전체**에 접근할 수 있습니다 (워크스페이스 구성원이 아니어도).
+> - `GET /api/folders/{folderId}/contents`, `GET /api/documents?folderId=...` 에서 `X-Workspace-Id`를 공유한 쪽의 워크스페이스 ID로 설정하면 공유받은 범위 안의 내용만 필터링해서 반환합니다.
+> - 공유받지 않은 다른 폴더·문서는 보이지 않습니다.
+
 **목록도 걸러집니다.** `GET /api/documents`, `GET /api/folders/tree` 등은 볼 수 있는 것만
 돌려주며, 개수(`totalElements`)에도 잡히지 않습니다.
 
@@ -497,6 +502,10 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 > 사이드바 폴더 트리는 이 엔드포인트를 재귀 호출하지 말고 `GET /api/folders/tree`를 한 번 호출한다.
 > 이 엔드포인트는 특정 폴더를 열었을 때 그 안의 문서 목록까지 함께 받는 용도다.
+
+> **공유받은 폴더 탐색**: 개인 워크스페이스 교차 공유로 받은 폴더도 이 엔드포인트로 탐색합니다.
+> `X-Workspace-Id`를 공유한 쪽의 워크스페이스 ID로 설정하면, 해당 폴더 안의 하위 폴더·문서 중
+> 권한 범위 안의 것만 반환합니다.
 
 ---
 
