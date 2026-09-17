@@ -9,6 +9,6 @@ public record SemanticSearchRequest(
         @Min(1) @Max(20) Integer topK
 ) {
     public SemanticSearchRequest {
-        if (topK == null) topK = 5;
+        if (topK == null) topK = 3;
     }
 }

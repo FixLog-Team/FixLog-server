@@ -118,7 +118,7 @@ public class AIChatService {
                          TokenUsageLogger tokenUsageLogger,
                          @Value("${fixlog.ai.qa.similarity-threshold:0.35}") double similarityThreshold,
                          @Value("${fixlog.ai.chat.history-window:20}") int historyWindow,
-                         @Value("${fixlog.ai.chat.top-k:5}") int searchTopK) {
+                         @Value("${fixlog.ai.chat.top-k:3}") int searchTopK) {
         this.chatClient = ChatClient.builder(chatModel).build();
         this.messageRepository = messageRepository;
         this.persistenceService = persistenceService;
