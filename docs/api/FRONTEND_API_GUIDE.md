@@ -759,12 +759,12 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 | 필드 | 타입 | 필수 | 기본값 | 설명 |
 |---|---|---|---|---|
 | question | String | 예 | - | 질문 (`@NotBlank`, 최대 2,000자) |
-| topK | Integer | 아니오 | 5 | 참고할 문서 개수 (1~20) |
+| topK | Integer | 아니오 | 3 | 참고할 문서 개수 (1~20) |
 
 ```json
 {
   "question": "스프링 시큐리티 401 에러가 계속 나는데 원인이 뭐였지?",
-  "topK": 5
+  "topK": 3
 }
 ```
 
@@ -955,12 +955,12 @@ AI 대화방 삭제 (소프트 삭제)
 | 필드 | 타입 | 필수 | 기본값 | 설명 |
 |---|---|---|---|---|
 | query | String | 예 | - | 검색 문장 (`@NotBlank`) |
-| topK | Integer | 아니오 | 5 | 반환 개수 (1~20) |
+| topK | Integer | 아니오 | 3 | 반환 개수 (1~20) |
 
 ```json
 {
   "query": "스프링 시큐리티 401 에러 원인",
-  "topK": 5
+  "topK": 3
 }
 ```
 
