@@ -58,11 +58,18 @@ public class SharingController {
                 MyPermissionDto.of(permissionEvaluator.evaluateWithSource(ResourceType.FOLDER, folderId)));
     }
 
-    /** 내가 만들지 않았지만 권한을 받은 문서 (FR-SHR-005). {@code /{documentId}}보다 먼저 선언한다. */
+    /** 내가 만들지 않았지만 권한을 받은 문서·폴더. {@code /{documentId}}보다 먼저 선언한다. */
     @GetMapping("/documents/shared-with-me")
     @Operation(operationId = "sharedWithMe")
     public Response sharedWithMe() {
         return DataResponse.success(documentService.sharedWithMe());
+    }
+
+    /** 내가 다른 사용자에게 공유한 문서·폴더. */
+    @GetMapping("/documents/shared-by-me")
+    @Operation(operationId = "sharedByMe")
+    public Response sharedByMe() {
+        return DataResponse.success(documentService.sharedByMe());
     }
 
     @GetMapping("/documents/{documentId}/permissions")

@@ -5,6 +5,7 @@ import com.fixlog.application.event.DocumentDeletedEvent;
 import com.fixlog.application.event.DocumentSavedEvent;
 import com.fixlog.application.repository.DocumentRepository;
 import com.fixlog.application.repository.FolderRepository;
+import com.fixlog.application.repository.PermissionRepository;
 import com.fixlog.application.repository.UserRepository;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
@@ -13,6 +14,7 @@ import com.fixlog.domain.model.DocumentEntity;
 import com.fixlog.domain.model.DocumentHistoryEntity;
 import com.fixlog.domain.model.DocumentHistorySource;
 import com.fixlog.domain.model.PermissionAction;
+import com.fixlog.domain.model.PermissionEntity;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
 import com.fixlog.domain.model.FolderEntity;
@@ -36,7 +38,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -58,6 +62,7 @@ public class DocumentService {
     private final WorkspaceContext workspaceContext;
     private final PermissionEvaluator permissionEvaluator;
     private final PermissionService permissionService;
+    private final PermissionRepository permissionRepository;
     private final SecurityPolicyService securityPolicyService;
     private final UserRepository userRepository;
 
@@ -70,6 +75,7 @@ public class DocumentService {
                            WorkspaceContext workspaceContext,
                            PermissionEvaluator permissionEvaluator,
                            PermissionService permissionService,
+                           PermissionRepository permissionRepository,
                            SecurityPolicyService securityPolicyService,
                            UserRepository userRepository) {
         this.documentRepository = documentRepository;
@@ -81,6 +87,7 @@ public class DocumentService {
         this.workspaceContext = workspaceContext;
         this.permissionEvaluator = permissionEvaluator;
         this.permissionService = permissionService;
+        this.permissionRepository = permissionRepository;
         this.securityPolicyService = securityPolicyService;
         this.userRepository = userRepository;
     }
@@ -197,6 +204,40 @@ public class DocumentService {
                 .toList();
 
         List<FolderDto> folders = Stream.concat(foldersInWorkspace.stream(), foldersFromPersonal.stream())
+                .map(FolderDto::from)
+                .toList();
+
+        return new SharedWithMeDto(folders, documents);
+    }
+
+    /** 내가 다른 사용자에게 공유한 문서·폴더 목록. 같은 리소스를 여러 명에게 공유해도 한 번만 반환한다. */
+    @Transactional(readOnly = true)
+    public SharedWithMeDto sharedByMe() {
+        UUID myUserId = workspaceContext.requireCurrentUserId();
+
+        List<PermissionEntity> granted = permissionRepository.findGrantedByUser(myUserId);
+
+        Set<String> docIds = granted.stream()
+                .filter(p -> p.getResourceType() == ResourceType.DOCUMENT)
+                .map(PermissionEntity::getResourceId)
+                .collect(Collectors.toSet());
+        Set<String> folderIds = granted.stream()
+                .filter(p -> p.getResourceType() == ResourceType.FOLDER)
+                .map(PermissionEntity::getResourceId)
+                .collect(Collectors.toSet());
+
+        List<DocumentDto> documents = documentRepository.findAllById(docIds).stream()
+                .filter(doc -> Integer.valueOf(1).equals(doc.getUsable()))
+                .map(doc -> {
+                    UserEntity author = doc.getCreateUser() != null
+                            ? userRepository.findById(UUID.fromString(doc.getCreateUser())).orElse(null)
+                            : null;
+                    return DocumentDto.from(doc, author);
+                })
+                .toList();
+
+        List<FolderDto> folders = folderRepository.findAllById(folderIds).stream()
+                .filter(f -> Integer.valueOf(1).equals(f.getUsable()))
                 .map(FolderDto::from)
                 .toList();
 

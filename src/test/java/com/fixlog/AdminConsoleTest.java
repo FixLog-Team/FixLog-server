@@ -108,7 +108,7 @@ class AdminConsoleTest {
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
                 new DocumentHistoryService(documentHistoryRepository, 50, evaluator),
-                event -> {}, workspaceContext, evaluator, permissionService, securityPolicyService, userRepository);
+                event -> {}, workspaceContext, evaluator, permissionService, permissionRepository, securityPolicyService, userRepository);
         adminConsole = new AdminConsoleService(permissionRepository, auditLogRepository,
                 documentRepository, folderRepository, userRepository, groupRepository,
                 workspaceMemberRepository, workspaceService);
