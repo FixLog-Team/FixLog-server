@@ -1594,6 +1594,24 @@ Swagger:
 
 ---
 
+### GET /api/documents/shared-by-me
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Share/sharedByMe)
+
+내가 다른 사용자에게 공유한 문서·폴더 목록. 같은 리소스를 여러 명에게 공유해도 한 번만 반환합니다.
+
+응답 형식은 `shared-with-me`와 동일합니다:
+
+```json
+{
+  "result": {
+    "folders": [ { "folderId": "...", "folderName": "공유한 폴더", ... } ],
+    "documents": [ { "documentId": "...", "title": "공유한 문서", ... } ]
+  }
+}
+```
+
+---
+
 ## 10. 문서 히스토리 API
 
 저장할 때마다 히스토리가 쌓입니다. **내용이 직전과 같으면 만들지 않습니다** — 자동저장이
