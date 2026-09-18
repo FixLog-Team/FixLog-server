@@ -629,6 +629,11 @@ public class PermissionEvaluator {
         return loadTarget(resourceType, resourceId).workspaceId();
     }
 
+    @Transactional(readOnly = true)
+    public List<String> ancestorFolderIdsOf(ResourceType resourceType, String resourceId) {
+        return loadTarget(resourceType, resourceId).ancestorFolderIds();
+    }
+
     private record Target(UUID workspaceId, List<String> ancestorFolderIds) {
     }
 
