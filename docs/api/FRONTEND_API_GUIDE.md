@@ -1501,6 +1501,14 @@ if (pendingToken) {
 
 누구에게 공유돼 있는지. 소유자와 Admin만 볼 수 있습니다.
 
+직접 부여된 권한 + **상위 폴더에서 상속된 권한**을 함께 반환합니다.
+
+| 필드 | 설명 |
+|---|---|
+| `inheritedFromFolderId` | `null`이면 직접 부여된 권한. 값이 있으면 해당 폴더에서 상속된 권한 — 이 리소스에서는 회수 불가 |
+
+> 상속된 권한을 회수하려면 `inheritedFromFolderId`의 폴더에서 `DELETE /api/folders/{folderId}/permissions/{permissionId}`를 호출하세요.
+
 ---
 
 ### DELETE /api/documents/{documentId}/permissions/{permissionId}
@@ -1527,6 +1535,8 @@ Swagger:
 
 **폴더 권한은 하위 폴더·문서로 상속됩니다.** 폴더를 공유하면 그 안의 문서까지 열립니다.
 문서에 직접 준 권한이 상속보다 우선하고, 가까운 폴더가 먼 폴더를 이깁니다.
+
+`GET /api/folders/{folderId}/permissions`도 마찬가지로 직접 권한 + 상위 폴더에서 상속된 권한을 함께 반환합니다. `inheritedFromFolderId` 필드로 구분하세요.
 
 개인 워크스페이스에서 폴더를 공유하면 대상자는 **해당 폴더와 그 하위 문서에만** 접근 가능합니다.
 
