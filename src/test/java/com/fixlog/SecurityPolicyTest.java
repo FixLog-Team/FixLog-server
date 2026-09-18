@@ -102,7 +102,7 @@ class SecurityPolicyTest {
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
                 new DocumentHistoryService(documentHistoryRepository, 50, evaluator),
-                event -> {}, workspaceContext, evaluator, permissionService, policyService, userRepository);
+                event -> {}, workspaceContext, evaluator, permissionService, permissionRepository, policyService, userRepository);
 
         auditLogRepository.deleteAll();
 

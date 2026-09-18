@@ -90,4 +90,12 @@ public interface PermissionRepository extends JpaRepository<PermissionEntity, UU
     List<PermissionEntity> findDirectFolderAllowsForUser(@Param("userId") UUID userId);
 
     void deleteByWorkspaceId(UUID workspaceId);
+
+    /** 내가 직접 공유 설정한 권한 레코드 전체 (creator 소유권 레코드 제외). */
+    @Query("""
+            select p from PermissionEntity p
+            where p.grantedBy = :grantedBy
+              and p.canEdit = false
+            """)
+    List<PermissionEntity> findGrantedByUser(@Param("grantedBy") UUID grantedBy);
 }
