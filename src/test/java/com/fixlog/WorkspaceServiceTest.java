@@ -93,7 +93,7 @@ folderService = new FolderService(folderRepository, documentRepository, workspac
         documentService = new DocumentService(documentRepository, folderRepository,
                 new DocumentTextExtractor(), new DocumentPdfGenerator(),
                 new DocumentHistoryService(documentHistoryRepository, 50, permissionEvaluator),
-                event -> {}, workspaceContext, permissionEvaluator, permissionService, securityPolicyService, userRepository);
+                event -> {}, workspaceContext, permissionEvaluator, permissionService, permissionRepository, securityPolicyService, userRepository);
     }
 
     @AfterEach
