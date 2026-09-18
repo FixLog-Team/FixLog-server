@@ -18,7 +18,9 @@ import com.fixlog.presentation.dto.response.PermissionDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * 공유는 별도 개념이 아니라 <b>권한 레코드를 만드는 행위</b>다 (5.2).
@@ -131,12 +133,24 @@ public class PermissionService {
 
     /** 이 리소스가 누구에게 공유돼 있는지. 공유를 설정할 수 있는 사람만 볼 수 있다. */
     @Transactional(readOnly = true)
-    public java.util.List<PermissionDto> listFor(ResourceType resourceType, String resourceId) {
+    public List<PermissionDto> listFor(ResourceType resourceType, String resourceId) {
         permissionEvaluator.require(resourceType, resourceId, PermissionAction.SHARE);
-        return permissionRepository.findByResourceTypeAndResourceId(resourceType, resourceId).stream()
-                .filter(p -> !p.isCanEdit())   // creator 소유권 레코드는 공유 목록에서 제외
+
+        List<PermissionDto> direct = permissionRepository
+                .findByResourceTypeAndResourceId(resourceType, resourceId).stream()
+                .filter(p -> !p.isCanEdit())
                 .map(p -> PermissionDto.of(p, principalNameOf(p)))
                 .toList();
+
+        List<String> ancestorIds = permissionEvaluator.ancestorFolderIdsOf(resourceType, resourceId);
+        List<PermissionDto> inherited = ancestorIds.stream()
+                .flatMap(folderId -> permissionRepository
+                        .findByResourceTypeAndResourceId(ResourceType.FOLDER, folderId).stream()
+                        .filter(p -> !p.isCanEdit())
+                        .map(p -> PermissionDto.ofInherited(p, principalNameOf(p), folderId)))
+                .toList();
+
+        return Stream.concat(direct.stream(), inherited.stream()).toList();
     }
 
     /** 공유 목록은 사람이 읽는 화면이므로 주체의 이름을 붙여 준다. */
