@@ -59,6 +59,36 @@
 { "userId": "uuid", "userName": "string", "email": "string" }
 ```
 
+### `GET /login/app` — 모바일 앱 로그인 시작 (Custom Tabs)
+인증 불필요. 앱이 시스템 브라우저(Custom Tabs)로 연다.
+
+**Query**
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `redirect_uri` | O | 복귀 딥링크. 화이트리스트(`kr.co.fixlog://oauth2callback`)와 정확히 일치해야 하며 불일치 시 400 |
+| `state` | - | 앱이 만든 nonce. 복귀 딥링크에 그대로 되돌려준다 (앱에서 CSRF 검증) |
+
+**Response**
+```
+302 → Google 로그인 → 302 kr.co.fixlog://oauth2callback?code={app_code}&state={state}
+실패 시 302 kr.co.fixlog://oauth2callback?error={errorCode}&state={state}
+```
+딥링크에는 토큰이 실리지 않는다. `code`는 1회용이며 수명 60초.
+
+### `POST /auth/exchange` — 앱 로그인 코드 교환
+인증 불필요
+
+**Request**
+```json
+{ "code": "string" }
+```
+**Response**
+```json
+{ "accessToken": "string", "refreshToken": "string" }
+```
+코드가 없거나·만료됐거나·이미 사용됐으면 `400 INVALID_REQUEST`
+
 ---
 
 ## 2. 워크스페이스 (Workspace)
