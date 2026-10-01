@@ -21,6 +21,7 @@ public class SecurityConfig {
 
 	private final OAuth2UserService oAuth2UserService;
 	private final OAuth2SuccessHandler oAuth2SuccessHandler;
+	private final OAuth2FailureHandler oAuth2FailureHandler;
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
 	@Value("#{'${cors.allowed-origins}'.split(',')}")
@@ -28,9 +29,11 @@ public class SecurityConfig {
 
 	public SecurityConfig(OAuth2UserService oAuth2UserService,
 						  OAuth2SuccessHandler oAuth2SuccessHandler,
+						  OAuth2FailureHandler oAuth2FailureHandler,
 						  JwtAuthenticationFilter jwtAuthenticationFilter) {
 		this.oAuth2UserService = oAuth2UserService;
 		this.oAuth2SuccessHandler = oAuth2SuccessHandler;
+		this.oAuth2FailureHandler = oAuth2FailureHandler;
 		this.jwtAuthenticationFilter = jwtAuthenticationFilter;
 	}
 
@@ -42,7 +45,7 @@ public class SecurityConfig {
 				.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
 			)
 			.authorizeHttpRequests(auth -> auth
-				.requestMatchers("/oauth2/**", "/login/**", "/auth/token/refresh",
+				.requestMatchers("/oauth2/**", "/login/**", "/auth/token/refresh", "/auth/exchange",
 					"/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
 					"/api/workspaces/invitations/*/decline",
 					"/api/workspaces/invitations/*").permitAll()
@@ -50,6 +53,7 @@ public class SecurityConfig {
 			)
 			.oauth2Login(oauth2 -> oauth2
 				.successHandler(oAuth2SuccessHandler)
+				.failureHandler(oAuth2FailureHandler)
 				.userInfoEndpoint(userInfo -> userInfo
 					.userService(oAuth2UserService)
 				)

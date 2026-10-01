@@ -26,6 +26,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final JwtProvider jwtProvider;
     private final UserOauthRepository userOauthRepository;
     private final OAuth2AuthorizedClientService authorizedClientService;
+    private final AppAuthCodeStore appAuthCodeStore;
     private final String defaultRedirectUrl;
     private final String swagRedirectUrl;
     private final List<String> allowedOrigins;
@@ -34,6 +35,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             JwtProvider jwtProvider,
             UserOauthRepository userOauthRepository,
             OAuth2AuthorizedClientService authorizedClientService,
+            AppAuthCodeStore appAuthCodeStore,
             @Value("${oauth2.success-redirect-url}") String defaultRedirectUrl,
             @Value("${oauth2.swag-redirect-url:http://localhost:8080/fixlog/login/swag/callback}") String swagRedirectUrl,
             @Value("#{'${cors.allowed-origins}'.split(',')}") List<String> allowedOrigins
@@ -41,6 +43,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         this.jwtProvider = jwtProvider;
         this.userOauthRepository = userOauthRepository;
         this.authorizedClientService = authorizedClientService;
+        this.appAuthCodeStore = appAuthCodeStore;
         this.defaultRedirectUrl = defaultRedirectUrl;
         this.swagRedirectUrl = swagRedirectUrl;
         this.allowedOrigins = allowedOrigins;
@@ -59,6 +62,14 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         String accessToken = jwtProvider.generateAccessToken(user.getUserId());
         String refreshToken = jwtProvider.generateRefreshToken(user.getUserId());
+
+        // 모바일 앱은 딥링크로 돌아가므로 토큰 대신 1회용 코드만 넘긴다
+        AppLoginFlow.AppLogin appLogin = AppLoginFlow.consume(request);
+        if (appLogin != null) {
+            String appCode = appAuthCodeStore.issue(user.getUserId(), accessToken, refreshToken);
+            AppLoginFlow.sendCode(response, appLogin, appCode);
+            return;
+        }
 
         String baseUrl = resolveRedirectUrl(request);
 
