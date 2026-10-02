@@ -41,12 +41,12 @@ import java.util.stream.Collectors;
 /**
  * 접근 판정의 단일 지점 (FR-PRM-003).
  *
- * <p>판정 순서 (1차 MVP):
+ * <p>판정 순서:
  * <ol>
  *   <li>워크스페이스 구성원인가 → 아니면 {@code NOT_FOUND}</li>
- *   <li>구성원이면 전 권한 허용 (OWNER/ADMIN/MEMBER 모두 동일)</li>
+ *   <li>관리자/소유자 → 전 권한</li>
+ *   <li>일반 구성원 → 권한 레코드 조회 → 폴더 baseAccess → 워크스페이스 baseAccess</li>
  * </ol>
- * 세분화된 Allow/Deny 판정은 2차 MVP에서 활성화한다.
  */
 @Component
 public class PermissionEvaluator {
@@ -191,7 +191,19 @@ public class PermissionEvaluator {
                 .findByWorkspaceIdAndUserId(target.workspaceId(), targetUserId);
 
         if (membership.isPresent()) {
-            return membership.get().isAdminOrOwner() ? adminDecision() : memberDecision();
+            if (membership.get().isAdminOrOwner()) {
+                return adminDecision();
+            }
+            List<UUID> groupIds = groupIdsOf(targetUserId, target.workspaceId());
+            List<PermissionEntity> permissions = permissionRepository.findCandidates(
+                    target.workspaceId(), resourceType, resourceId,
+                    target.ancestorFolderIds().isEmpty() ? List.of(NO_ANCESTOR) : target.ancestorFolderIds(),
+                    targetUserId,
+                    groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
+            List<FolderEntity> ancestorFolders = loadAncestorFolders(target.ancestorFolderIds());
+            return resolveWithDeny(permissions, resourceType, resourceId,
+                    target.ancestorFolderIds(), ancestorFolders,
+                    workspaceContext.baseAccessOf(target.workspaceId()));
         }
 
         // 개인 워크스페이스: 리소스 자신 또는 조상 폴더에 직접 ALLOW 권한이 있으면 접근 허용
@@ -227,9 +239,18 @@ public class PermissionEvaluator {
                 .findByWorkspaceIdAndUserId(target.workspaceId(), targetUserId);
 
         if (membership.isPresent()) {
-            Decision d = membership.get().isAdminOrOwner() ? adminDecision() : memberDecision();
-            String detail = membership.get().isAdminOrOwner() ? "관리자 특권" : "구성원 전권";
-            return new DecisionWithSource(d, PermissionSource.DIRECT, detail);
+            if (membership.get().isAdminOrOwner()) {
+                return new DecisionWithSource(adminDecision(), PermissionSource.DIRECT, "관리자 특권");
+            }
+            List<UUID> groupIds = groupIdsOf(targetUserId, target.workspaceId());
+            List<PermissionEntity> permissions = permissionRepository.findCandidates(
+                    target.workspaceId(), resourceType, resourceId,
+                    target.ancestorFolderIds().isEmpty() ? List.of(NO_ANCESTOR) : target.ancestorFolderIds(),
+                    targetUserId,
+                    groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
+            List<FolderEntity> ancestorFolders = loadAncestorFolders(target.ancestorFolderIds());
+            return resolveWithSource(workspaceContext.baseAccessOf(target.workspaceId()), permissions,
+                    resourceType, resourceId, target.ancestorFolderIds(), ancestorFolders);
         }
 
         // 개인 워크스페이스: 리소스 자신 또는 조상 폴더에 직접 ALLOW 권한이 있으면 접근 허용
@@ -269,10 +290,6 @@ public class PermissionEvaluator {
 
         if (membership.isPresent()) {
             if (honorAdmin && membership.get().isAdminOrOwner()) {
-                return new Scope(true, List.of(), Map.of(), PermissionType.ALLOW);
-            }
-            // 1차 MVP: 비관리자 구성원도 전체 열람 허용 (honorAdmin=false는 shared-with-me 전용)
-            if (honorAdmin) {
                 return new Scope(true, List.of(), Map.of(), PermissionType.ALLOW);
             }
             List<UUID> groupIds = groupIdsOf(userId, workspaceId);
