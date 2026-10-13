@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-09-17
+> 최종 업데이트: 2026-10-13
 > Base URL (개발): `https://fixlog.art/fixlog`
 
 ---
@@ -22,10 +22,11 @@
 11. [휴지통 API](#11-휴지통-api)
 12. [라벨 API](#12-라벨-api)
 12-1. [즐겨찾기 API](#12-1-즐겨찾기-api)
-13. [관리자 콘솔 API](#13-관리자-콘솔-api)
-14. [보안 정책 API](#14-보안-정책-api)
-15. [에러 처리](#15-에러-처리)
-16. [Swagger UI](#16-swagger-ui)
+13. [이미지 API](#13-이미지-api)
+14. [관리자 콘솔 API](#14-관리자-콘솔-api)
+15. [보안 정책 API](#15-보안-정책-api)
+16. [에러 처리](#16-에러-처리)
+17. [Swagger UI](#17-swagger-ui)
 
 ---
 
@@ -1801,7 +1802,131 @@ Swagger:
 
 ---
 
-## 13. 관리자 콘솔 API
+## 13. 이미지 API
+
+> 모든 엔드포인트 **인증 필요**, **`X-Workspace-Id` 헤더 필요**
+
+문서 에디터에서 이미지 블록을 삽입할 때 사용합니다. 이미지는 OCI Object Storage(Private 버킷)에 저장되며, 조회 시 60분 유효한 Presigned URL로 리다이렉트됩니다.
+
+---
+
+### POST /api/images/upload
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Image/uploadImage)
+
+이미지 업로드
+
+**Content-Type**: `multipart/form-data`
+
+**Form Parameters**
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `file` | ✅ | 업로드할 이미지 파일 |
+
+**허용 형식**: `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/svg+xml`
+
+**최대 크기**: 10MB
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "imageId": "550e8400-e29b-41d4-a716-446655440000",
+    "url": "https://fixlog.art/fixlog/api/images/550e8400-e29b-41d4-a716-446655440000",
+    "originalName": "screenshot.png",
+    "contentType": "image/png",
+    "fileSize": 204800
+  }
+}
+```
+
+**에러**
+
+| 상황 | code |
+|---|---|
+| 파일 없음 / 비어있음 | `INVALID_REQUEST` |
+| 10MB 초과 | `INVALID_REQUEST` |
+| 허용되지 않는 형식 | `INVALID_REQUEST` |
+
+---
+
+### GET /api/images/{imageId}
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Image/getImage)
+
+이미지 조회. **302 리다이렉트**로 OCI Presigned URL을 반환합니다. URL 유효 시간은 **60분**입니다.
+
+```
+GET /api/images/{imageId}
+→ 302 Location: https://objectstorage.ap-chuncheon-1.oraclecloud.com/.../image.png?X-Amz-Signature=...
+```
+
+> `<img src="...">` 태그나 `fetch`로 직접 호출하면 브라우저가 자동으로 리다이렉트를 따라갑니다.
+> Presigned URL은 60분 후 만료되므로 문서 조회 시마다 `/api/images/{imageId}`를 호출하도록 구현해야 합니다 — OCI URL을 직접 저장하거나 캐시하지 마세요.
+
+---
+
+### 에디터 연동 가이드
+
+#### 1. 이미지 삽입 흐름
+
+```
+1. 사용자가 이미지 삽입 버튼 클릭 → 파일 선택
+2. POST /api/images/upload (multipart)
+   → 성공: result.url 반환
+3. 에디터에 이미지 블록 삽입
+   { "type": "image", "data": { "url": result.url, "caption": "" } }
+4. 문서 저장 시 blocks에 포함되어 서버에 저장됨
+```
+
+#### 2. blocks에서 이미지 블록 형식
+
+```json
+{
+  "type": "image",
+  "data": {
+    "url": "https://fixlog.art/fixlog/api/images/550e8400-...",
+    "caption": "에러 화면 캡처"
+  }
+}
+```
+
+#### 3. 이미지 렌더링 시 주의사항
+
+```ts
+// ✅ 올바른 방법: API URL을 src에 직접 사용 (브라우저가 302 리다이렉트 자동 처리)
+<img src="https://fixlog.art/fixlog/api/images/{imageId}" />
+
+// ❌ 잘못된 방법: OCI Presigned URL을 직접 저장하거나 캐시
+// → Presigned URL은 60분 후 만료됨
+```
+
+#### 4. 파일 업로드 예시 (TypeScript)
+
+```ts
+async function uploadImage(file: File, workspaceId: string): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch('/api/images/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'X-Workspace-Id': workspaceId,
+    },
+    body: formData,
+  });
+
+  const { result } = await res.json();
+  if (!res.ok) throw new Error(result.message);
+  return result.url; // 에디터 블록에 저장할 URL
+}
+```
+
+---
+
+## 14. 관리자 콘솔 API
 
 전부 **워크스페이스 Admin만** 호출할 수 있습니다 (`FORBIDDEN`).
 경로에 워크스페이스가 항상 들어가며, 워크스페이스를 가로지르는 조회는 제공하지 않습니다.
@@ -1961,7 +2086,7 @@ PATCH /api/workspaces/{id}/admin/permissions/resources/folders/{folderId}/settin
 
 ---
 
-## 14. 보안 정책 API
+## 15. 보안 정책 API
 
 ### GET /api/workspaces/{workspaceId}/security-policy
 > [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/SecurityPolicy/getSecurityPolicy)
@@ -1998,7 +2123,7 @@ PATCH /api/workspaces/{id}/admin/permissions/resources/folders/{folderId}/settin
 
 ---
 
-## 15. 에러 처리
+## 16. 에러 처리
 
 ### 401 처리 흐름 (토큰 재발급)
 
@@ -2035,7 +2160,7 @@ API 호출
 
 ---
 
-## 16. Swagger UI
+## 17. Swagger UI
 
 개발 환경에서 브라우저로 API를 직접 테스트할 수 있습니다.
 
