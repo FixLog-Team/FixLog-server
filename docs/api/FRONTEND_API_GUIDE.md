@@ -1968,7 +1968,7 @@ async function saveDocument(docId: string, blocks: Block[], workspaceId: string)
 
 #### 5. 주의사항
 
-- **자동저장(`PATCH /documents/{id}/draft`) 시에는 pending 블록을 포함하지 마세요.** 임시저장은 텍스트 블록만 저장하고, 이미지는 최종 저장 시점에만 업로드합니다.
+- **자동저장 구현 시 참고 (미구현)**: `PATCH /documents/{id}/draft` 호출 시 pending 블록은 포함하지 마세요. 이미지는 최종 저장 시점에만 업로드합니다.
 - 탭을 닫거나 페이지를 이탈하면 pending 이미지는 사라집니다. 이탈 전 경고(`beforeunload`)를 띄워 데이터 손실을 방지하세요.
 - 업로드 실패한 이미지가 있으면 저장 전체를 중단하고 사용자에게 알려야 합니다.
 
