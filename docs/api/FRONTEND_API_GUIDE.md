@@ -1869,18 +1869,38 @@ GET /api/images/{imageId}
 
 ### 에디터 연동 가이드
 
-#### 1. 이미지 삽입 흐름
+이미지 업로드는 **문서 저장 시점에 일괄 처리**합니다. 삽입 직후에는 파일을 로컬에만 보관하고, 저장 버튼을 누를 때 미업로드 이미지를 먼저 업로드한 뒤 문서를 저장합니다.
+
+#### 1. 전체 흐름
 
 ```
-1. 사용자가 이미지 삽입 버튼 클릭 → 파일 선택
-2. POST /api/images/upload (multipart)
-   → 성공: result.url 반환
-3. 에디터에 이미지 블록 삽입
-   { "type": "image", "data": { "url": result.url, "caption": "" } }
-4. 문서 저장 시 blocks에 포함되어 서버에 저장됨
+[삽입 시점]
+사용자가 이미지 삽입 → 파일을 blob URL로 에디터에 즉시 표시
+→ 에디터 내부 상태: { type: "image", data: { pending: true, blobUrl: "blob:...", file: File } }
+
+[저장 시점]
+사용자가 저장 클릭
+→ pending 블록 탐색 → POST /api/images/upload 일괄 호출
+→ blob URL → 실제 API URL로 교체
+→ PUT /api/documents/{documentId} 로 최종 저장
 ```
 
-#### 2. blocks에서 이미지 블록 형식
+#### 2. blocks 형식
+
+**에디터 내부 임시 상태** (서버에 저장하지 않음)
+
+```json
+{
+  "type": "image",
+  "data": {
+    "pending": true,
+    "blobUrl": "blob:https://...",
+    "caption": "에러 화면 캡처"
+  }
+}
+```
+
+**서버 저장 형식** (업로드 완료 후)
 
 ```json
 {
@@ -1892,37 +1912,65 @@ GET /api/images/{imageId}
 }
 ```
 
-#### 3. 이미지 렌더링 시 주의사항
+#### 3. 저장 함수 예시 (TypeScript)
+
+```ts
+async function saveDocument(docId: string, blocks: Block[], workspaceId: string) {
+  // 1. pending 이미지 일괄 업로드
+  const resolvedBlocks = await Promise.all(
+    blocks.map(async (block) => {
+      if (block.type !== 'image' || !block.data.pending) return block;
+
+      const formData = new FormData();
+      formData.append('file', block.data.file);
+
+      const res = await fetch('/api/images/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'X-Workspace-Id': workspaceId,
+        },
+        body: formData,
+      });
+      const { result } = await res.json();
+
+      // blob URL 해제 후 실제 URL로 교체
+      URL.revokeObjectURL(block.data.blobUrl);
+      return { ...block, data: { url: result.url, caption: block.data.caption } };
+    })
+  );
+
+  // 2. 업로드 완료된 blocks로 문서 저장
+  await fetch(`/api/documents/${docId}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'X-Workspace-Id': workspaceId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ blocks: resolvedBlocks }),
+  });
+}
+```
+
+#### 4. 이미지 렌더링 시 주의사항
 
 ```ts
 // ✅ 올바른 방법: API URL을 src에 직접 사용 (브라우저가 302 리다이렉트 자동 처리)
 <img src="https://fixlog.art/fixlog/api/images/{imageId}" />
 
+// ✅ 편집 중 미리보기: blob URL 사용 (로컬 임시 표시용)
+<img src={block.data.blobUrl} />
+
 // ❌ 잘못된 방법: OCI Presigned URL을 직접 저장하거나 캐시
 // → Presigned URL은 60분 후 만료됨
 ```
 
-#### 4. 파일 업로드 예시 (TypeScript)
+#### 5. 주의사항
 
-```ts
-async function uploadImage(file: File, workspaceId: string): Promise<string> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const res = await fetch('/api/images/upload', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'X-Workspace-Id': workspaceId,
-    },
-    body: formData,
-  });
-
-  const { result } = await res.json();
-  if (!res.ok) throw new Error(result.message);
-  return result.url; // 에디터 블록에 저장할 URL
-}
-```
+- **자동저장(`PATCH /documents/{id}/draft`) 시에는 pending 블록을 포함하지 마세요.** 임시저장은 텍스트 블록만 저장하고, 이미지는 최종 저장 시점에만 업로드합니다.
+- 탭을 닫거나 페이지를 이탈하면 pending 이미지는 사라집니다. 이탈 전 경고(`beforeunload`)를 띄워 데이터 손실을 방지하세요.
+- 업로드 실패한 이미지가 있으면 저장 전체를 중단하고 사용자에게 알려야 합니다.
 
 ---
 
