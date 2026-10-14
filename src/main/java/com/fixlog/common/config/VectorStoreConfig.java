@@ -16,6 +16,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import javax.sql.DataSource;
+import java.util.concurrent.ThreadPoolExecutor;
 
 @Configuration
 @EnableAsync
@@ -28,6 +29,28 @@ public class VectorStoreConfig {
         executor.setMaxPoolSize(5);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("embedding-");
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * 이미지 비전 분석 전용 실행기.
+     *
+     * <p>임베딩과 풀을 나누는 이유는, 한 문서에 이미지를 수십 장 넣고 저장하면 분석 작업이 큐를
+     * 가득 채워 문서 색인까지 밀리기 때문이다. 비전 호출은 임베딩보다 훨씬 오래 걸린다.
+     *
+     * <p>거부 정책을 {@code CallerRunsPolicy}로 둔다. 기본값({@code AbortPolicy})이면 큐가 넘칠 때
+     * 예외가 업로드 요청까지 전파돼 업로드가 실패하거나 분석이 조용히 사라진다.
+     * 느려지는 편이 유실되는 편보다 낫다.
+     */
+    @Bean(name = "imageAnalysisExecutor")
+    public TaskExecutor imageAnalysisExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("image-analysis-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
     }

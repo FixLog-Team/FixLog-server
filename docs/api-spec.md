@@ -554,6 +554,51 @@ PENDING 상태 초대만 취소 가능
 
 ---
 
+## 11-1. 이미지 (Image)
+
+### `POST /api/images/upload` — 이미지 업로드
+`multipart/form-data`, 폼 파라미터 `file`
+
+허용 형식 `image/jpeg` `image/png` `image/gif` `image/webp` `image/svg+xml` · 최대 10MB
+
+**Response**
+```json
+{
+  "imageId": "uuid",
+  "url": "https://fixlog.art/fixlog/api/images/{imageId}",
+  "originalName": "screenshot.png",
+  "contentType": "image/png",
+  "fileSize": 204800
+}
+```
+
+업로드 직후 **비동기로 비전 분석**이 시작된다 (글자·그래프·도표·그림의 의미 → 검색용 텍스트).
+같은 내용의 이미지가 이미 분석돼 있으면 그 결과를 재사용하고 모델을 다시 부르지 않는다.
+SVG는 비전 모델이 읽지 못해 분석 대상에서 제외되며, 업로드·조회 자체는 정상 동작한다.
+
+### `GET /api/images/{imageId}` — 원본 조회
+서버가 스토리지에서 읽어 **바이트를 직접 내려준다.** 버킷은 private 상태를 유지한다.
+
+서명 URL로 리다이렉트하지 않는 이유는 두 가지다. 서명 URL은 한 번 나가면 만료 전까지 권한을 회수할 수 없고,
+스토리지가 다른 origin이라 브라우저가 받으려면 버킷 CORS 설정이 필요하다.
+
+`Cache-Control: private, max-age=300` 과 내용 해시 기반 `ETag`를 내려준다.
+`If-None-Match`가 일치하면 **권한만 확인하고 304**로 끝내 스토리지를 읽지 않는다.
+
+> ⚠️ `Authorization` 헤더가 필요하므로 `<img src>` 에 주소를 그대로 꽂으면 **401**이다.
+> blob으로 받아 `URL.createObjectURL`로 바꿔 쓴다.
+
+**접근 권한**
+
+| 이미지 상태 | 볼 수 있는 사람 |
+|---|---|
+| 문서에 붙어 있음 | 그 **문서를 조회할 수 있는 사람**. 공유가 끊기면 이미지도 함께 막힌다 |
+| 아직 문서에 안 붙음 (업로드 직후) | 올린 본인만 |
+
+권한이 없으면 `403 FORBIDDEN`, 없는 이미지는 `404 NOT_FOUND`
+
+---
+
 ## 12. 검색 (Search)
 
 ### `POST /search` — 의미 기반 검색
@@ -568,9 +613,23 @@ PENDING 상태 초대만 취소 가능
   "title": "string",
   "folderId": "string",
   "excerpt": "string",
-  "score": 0.92
+  "score": 0.92,
+  "source": "text | image",
+  "imageId": "uuid | null",
+  "imageName": "string | null"
 }]
 ```
+
+문서 본문뿐 아니라 **첨부 이미지 안의 내용**(글자·그래프·도표·다이어그램)도 검색된다.
+
+| 필드 | 설명 |
+|---|---|
+| `source` | `text`면 본문, `image`면 첨부 이미지 분석 결과에서 나온 근거 |
+| `imageId` | `source`가 `image`일 때만 채워진다. `GET /api/images/{imageId}`로 원본을 볼 수 있다 |
+| `imageName` | 이미지 원본 파일명 |
+
+> 이미지 분석은 업로드 직후 비동기로 돌아간다. 올리자마자 저장한 문서는 분석이 끝난 시점에
+> 자동으로 다시 색인되므로, 검색에 잡히기까지 짧은 지연이 있을 수 있다.
 
 ---
 

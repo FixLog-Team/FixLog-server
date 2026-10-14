@@ -1806,7 +1806,7 @@ Swagger:
 
 > 모든 엔드포인트 **인증 필요**, **`X-Workspace-Id` 헤더 필요**
 
-문서 에디터에서 이미지 블록을 삽입할 때 사용합니다. 이미지는 OCI Object Storage(Private 버킷)에 저장되며, 조회 시 60분 유효한 Presigned URL로 리다이렉트됩니다.
+문서 에디터에서 이미지 블록을 삽입할 때 사용합니다. 이미지는 OCI Object Storage(Private 버킷)에 저장되고, 조회는 서버가 읽어 바이트를 직접 내려줍니다.
 
 ---
 
@@ -1855,52 +1855,51 @@ Swagger:
 ### GET /api/images/{imageId}
 > [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Image/getImage)
 
-이미지 조회. **302 리다이렉트**로 OCI Presigned URL을 반환합니다. URL 유효 시간은 **60분**입니다.
+이미지 조회. 서버가 스토리지에서 읽어 **바이트를 직접 내려줍니다.** 리다이렉트가 없어 요청이 전부 같은 origin에 머뭅니다.
 
 ```
 GET /api/images/{imageId}
-→ 302 Location: https://objectstorage.ap-chuncheon-1.oraclecloud.com/.../image.png?X-Amz-Signature=...
+→ 200 Content-Type: image/png
+  Cache-Control: private, max-age=300
+  ETag: "<내용 해시>"
 ```
 
-> `<img src="...">` 태그나 `fetch`로 직접 호출하면 브라우저가 자동으로 리다이렉트를 따라갑니다.
-> Presigned URL은 60분 후 만료되므로 문서 조회 시마다 `/api/images/{imageId}`를 호출하도록 구현해야 합니다 — OCI URL을 직접 저장하거나 캐시하지 마세요.
+`If-None-Match`로 재검증하면 **권한만 확인하고 304**로 끝나 전송이 없습니다. 같은 이미지는 바이트가 바뀌지 않아 재검증이 항상 304입니다.
+
+> ⚠️ **`<img src="/api/images/{id}">` 로는 불러올 수 없습니다.** 이 엔드포인트는 `Authorization` 헤더를
+> 요구하는데 브라우저는 `<img>` 요청에 헤더를 싣지 않아 **401**이 납니다.
+> `fetch`/`axios`로 **blob을 받아 `URL.createObjectURL`** 로 바꿔 쓰세요. (다 쓴 뒤 `revokeObjectURL` 필수)
+>
+> 문서에는 항상 `/api/images/{imageId}` 를 저장합니다 — 만료되지 않고 서버가 매 요청 권한을 확인합니다.
 
 ---
 
 ### 에디터 연동 가이드
 
-이미지 업로드는 **문서 저장 시점에 일괄 처리**합니다. 삽입 직후에는 파일을 로컬에만 보관하고, 저장 버튼을 누를 때 미업로드 이미지를 먼저 업로드한 뒤 문서를 저장합니다.
+이미지 업로드는 **삽입 즉시** 처리합니다. 사용자가 이미지를 넣으면 바로 올라가고, 문서 저장과는 무관하게 동작합니다.
+
+> 이전 문서에는 "저장 시 일괄 업로드"로 적혀 있었으나, 직렬화되지 않는 `File` 객체를 블록 상태에
+> 들고 있어야 해서 새로고침·임시저장에 취약하고 저장 전 이탈 시 이미지가 유실됩니다.
+> 삽입 즉시 방식으로 변경했습니다.
 
 #### 1. 전체 흐름
 
 ```
 [삽입 시점]
-사용자가 이미지 삽입 → 파일을 blob URL로 에디터에 즉시 표시
-→ 에디터 내부 상태: { type: "image", data: { pending: true, blobUrl: "blob:...", file: File } }
+사용자가 이미지 삽입(드래그·붙여넣기·슬래시 메뉴)
+→ POST /api/images/upload (multipart, 필드명 "file")
+→ 응답 result.url (= /api/images/{imageId}) 을 그대로 블록에 저장
+→ 서버는 업로드 직후 비동기로 이미지를 분석한다 (검색용)
 
 [저장 시점]
-사용자가 저장 클릭
-→ pending 블록 탐색 → POST /api/images/upload 일괄 호출
-→ blob URL → 실제 API URL로 교체
-→ PUT /api/documents/{documentId} 로 최종 저장
+PUT /api/documents/{documentId}
+→ blocks 에는 이미 실제 URL 만 들어있다. 추가 업로드 없음
+→ 서버가 blocks 에서 참조된 이미지에 document_id 를 연결하고 본문과 함께 색인
 ```
+
+**문서에 저장하는 값은 `/api/images/{imageId}` 입니다.** 서명 URL을 저장하면 만료 후 문서가 깨지고 권한 검사도 우회됩니다.
 
 #### 2. blocks 형식
-
-**에디터 내부 임시 상태** (서버에 저장하지 않음)
-
-```json
-{
-  "type": "image",
-  "data": {
-    "pending": true,
-    "blobUrl": "blob:https://...",
-    "caption": "에러 화면 캡처"
-  }
-}
-```
-
-**서버 저장 형식** (업로드 완료 후)
 
 ```json
 {
@@ -1912,65 +1911,61 @@ GET /api/images/{imageId}
 }
 ```
 
-#### 3. 저장 함수 예시 (TypeScript)
+캡션은 본문 텍스트로 추출되어 **검색에 함께 잡힙니다.**
+
+#### 3. 업로드 (TypeScript)
 
 ```ts
-async function saveDocument(docId: string, blocks: Block[], workspaceId: string) {
-  // 1. pending 이미지 일괄 업로드
-  const resolvedBlocks = await Promise.all(
-    blocks.map(async (block) => {
-      if (block.type !== 'image' || !block.data.pending) return block;
+const form = new FormData();
+form.append('file', file);
 
-      const formData = new FormData();
-      formData.append('file', block.data.file);
-
-      const res = await fetch('/api/images/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'X-Workspace-Id': workspaceId,
-        },
-        body: formData,
-      });
-      const { result } = await res.json();
-
-      // blob URL 해제 후 실제 URL로 교체
-      URL.revokeObjectURL(block.data.blobUrl);
-      return { ...block, data: { url: result.url, caption: block.data.caption } };
-    })
-  );
-
-  // 2. 업로드 완료된 blocks로 문서 저장
-  await fetch(`/api/documents/${docId}`, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'X-Workspace-Id': workspaceId,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ blocks: resolvedBlocks }),
-  });
-}
+// Content-Type 을 반드시 지운다. 클라이언트 기본값이 application/json 이면
+// axios 가 FormData 를 JSON 으로 직렬화해 파일이 조용히 사라진다.
+const res = await http.post('/api/images/upload', form, {
+  headers: { 'Content-Type': undefined },
+});
+const { url } = res.data.result;   // → 이 값을 블록에 저장
 ```
 
-#### 4. 이미지 렌더링 시 주의사항
+**BlockNote 를 쓴다면** `uploadFile` 훅에 그대로 연결하면 드래그·붙여넣기·슬래시 메뉴가 전부 동작합니다.
 
 ```ts
-// ✅ 올바른 방법: API URL을 src에 직접 사용 (브라우저가 302 리다이렉트 자동 처리)
+useCreateBlockNote({
+  uploadFile: async (file) => (await imagesApi.upload(file)).url,
+  resolveFileUrl: resolver.resolve,   // 아래 4번
+});
+```
+
+#### 4. 이미지 표시
+
+조회 엔드포인트가 인증 헤더를 요구하므로 **주소를 `<img src>` 에 그대로 꽂으면 401** 입니다.
+blob 으로 받아 object URL 로 바꿔야 합니다.
+
+```ts
+// ❌ 401 — 브라우저가 <img> 요청에 Authorization 헤더를 싣지 않는다
 <img src="https://fixlog.art/fixlog/api/images/{imageId}" />
 
-// ✅ 편집 중 미리보기: blob URL 사용 (로컬 임시 표시용)
-<img src={block.data.blobUrl} />
+// ✅ blob → object URL
+const blob = (await http.get(`/api/images/${imageId}`, { responseType: 'blob' })).data;
+const objectUrl = URL.createObjectURL(blob);
+// 화면에서 내릴 때 URL.revokeObjectURL(objectUrl) 로 해제
 
-// ❌ 잘못된 방법: OCI Presigned URL을 직접 저장하거나 캐시
-// → Presigned URL은 60분 후 만료됨
+// ❌ 스토리지 주소를 문서에 저장 — 권한 검사를 우회하게 된다
 ```
+
+BlockNote 는 `resolveFileUrl` 훅이 이 변환 지점입니다. 같은 주소를 반복해서 받지 않도록 캐시하고,
+에디터를 떠날 때 만들어 둔 object URL 을 모두 해제하세요.
 
 #### 5. 주의사항
 
-- **자동저장 구현 시 참고 (미구현)**: `PATCH /documents/{id}/draft` 호출 시 pending 블록은 포함하지 마세요. 이미지는 최종 저장 시점에만 업로드합니다.
-- 탭을 닫거나 페이지를 이탈하면 pending 이미지는 사라집니다. 이탈 전 경고(`beforeunload`)를 띄워 데이터 손실을 방지하세요.
-- 업로드 실패한 이미지가 있으면 저장 전체를 중단하고 사용자에게 알려야 합니다.
+- **버킷 CORS는 필요 없습니다.** 서버가 바이트를 직접 내려주므로 요청이 전부 같은 origin 에 머뭅니다.
+- **고아 이미지**: 삽입했다가 지우고 저장하지 않으면 어느 문서도 참조하지 않는 이미지가 남습니다.
+  매일 04:00 정비 작업이 24시간 지난 것부터 치웁니다. 프론트에서 따로 할 일은 없습니다.
+- **일일 분석 상한**: 워크스페이스당 하루 300건까지 비전 모델을 부릅니다. 상한에 걸려도
+  **업로드와 표시는 정상 동작**하고 검색 반영만 다음 날로 밀립니다.
+- **SVG**: 업로드·조회는 되지만 비전 모델이 읽지 못해 검색 분석에서는 제외됩니다. 캡션은 검색됩니다.
+- **검색 반영 지연**: 분석이 비동기라 업로드 직후 저장하면 조금 뒤에 검색에 잡힙니다.
+  서버가 분석 완료 시점에 해당 문서를 다시 색인하므로 별도 조치는 필요 없습니다.
 
 ---
 

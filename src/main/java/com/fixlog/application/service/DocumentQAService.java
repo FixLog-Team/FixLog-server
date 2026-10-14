@@ -17,26 +17,24 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 @Service
 public class DocumentQAService extends AbstractAIService {
 
     private static final String NO_REFERENCE_ANSWER = "질문과 관련된 문서를 찾지 못해 답변할 수 없습니다.";
 
-    /** 청크당 컨텍스트 상한. 비정상적으로 긴 청크가 프롬프트를 부풀리는 것을 방지한다. */
-    private static final int MAX_CONTEXT_CHARS_PER_CHUNK = 1000;
-
     private final DocumentSearchService searchService;
+    private final SearchContextFormatter contextFormatter;
     private final double similarityThreshold;
 
     public DocumentQAService(@Qualifier("googleGenAiChatModel") ChatModel chatModel,
                              TokenUsageLogger tokenUsageLogger,
                              DocumentSearchService searchService,
+                             SearchContextFormatter contextFormatter,
                              @Value("${fixlog.ai.qa.similarity-threshold:0.35}") double similarityThreshold) {
         super(ChatClient.builder(chatModel).build(), tokenUsageLogger);
         this.searchService = searchService;
+        this.contextFormatter = contextFormatter;
         this.similarityThreshold = similarityThreshold;
     }
 
@@ -46,26 +44,9 @@ public class DocumentQAService extends AbstractAIService {
             return new AskResponse(NO_REFERENCE_ANSWER, List.of());
         }
 
-        String answer = generateAnswer(question, buildContext(documents));
+        String answer = generateAnswer(question, contextFormatter.build(documents));
         List<SearchResultDto> references = searchService.toResults(documents);
         return new AskResponse(answer, references);
-    }
-
-    private String buildContext(List<Document> documents) {
-        return IntStream.range(0, documents.size())
-                .mapToObj(i -> {
-                    Document doc = documents.get(i);
-                    String title = (String) doc.getMetadata().get("title");
-                    return "[문서 %d: %s]\n%s".formatted(i + 1, title, truncate(doc.getText()));
-                })
-                .collect(Collectors.joining("\n\n"));
-    }
-
-    private String truncate(String text) {
-        if (text == null) return "";
-        return text.length() > MAX_CONTEXT_CHARS_PER_CHUNK
-                ? text.substring(0, MAX_CONTEXT_CHARS_PER_CHUNK) + "..."
-                : text;
     }
 
     private String generateAnswer(String question, String context) {

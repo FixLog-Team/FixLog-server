@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * AI 대화방 메시지 전송 + RAG 답변 생성.
@@ -99,13 +98,11 @@ public class AIChatService {
 
     private static final String EMPTY_HISTORY_PLACEHOLDER = "(이전 대화 없음)";
 
-    /** 청크당 컨텍스트 상한. 비정상적으로 긴 청크가 프롬프트를 부풀리는 것을 방지한다. */
-    private static final int MAX_CONTEXT_CHARS_PER_CHUNK = 1000;
-
     private final ChatClient chatClient;
     private final AIMessageRepository messageRepository;
     private final AIMessagePersistenceService persistenceService;
     private final DocumentSearchService searchService;
+    private final SearchContextFormatter contextFormatter;
     private final TokenUsageLogger tokenUsageLogger;
     private final double similarityThreshold;
     private final int historyWindow;
@@ -115,6 +112,7 @@ public class AIChatService {
                          AIMessageRepository messageRepository,
                          AIMessagePersistenceService persistenceService,
                          DocumentSearchService searchService,
+                         SearchContextFormatter contextFormatter,
                          TokenUsageLogger tokenUsageLogger,
                          @Value("${fixlog.ai.qa.similarity-threshold:0.35}") double similarityThreshold,
                          @Value("${fixlog.ai.chat.history-window:20}") int historyWindow,
@@ -123,6 +121,7 @@ public class AIChatService {
         this.messageRepository = messageRepository;
         this.persistenceService = persistenceService;
         this.searchService = searchService;
+        this.contextFormatter = contextFormatter;
         this.tokenUsageLogger = tokenUsageLogger;
         this.similarityThreshold = similarityThreshold;
         this.historyWindow = historyWindow;
@@ -163,7 +162,7 @@ public class AIChatService {
 
         String answer = callAndLog("chat", RAG_PROMPT, Map.of(
                 "history", historyText,
-                "context", buildContext(documents),
+                "context", contextFormatter.build(documents),
                 "question", question
         ));
         return new GeneratedAnswer(answer, searchService.toResults(documents));
@@ -232,23 +231,6 @@ public class AIChatService {
         return history.stream()
                 .map(this::formatMessage)
                 .collect(Collectors.joining("\n\n"));
-    }
-
-    private String buildContext(List<Document> documents) {
-        return IntStream.range(0, documents.size())
-                .mapToObj(i -> {
-                    Document doc = documents.get(i);
-                    String title = (String) doc.getMetadata().get("title");
-                    return "[문서 %d: %s]\n%s".formatted(i + 1, title, truncate(doc.getText()));
-                })
-                .collect(Collectors.joining("\n\n"));
-    }
-
-    private String truncate(String text) {
-        if (text == null) return "";
-        return text.length() > MAX_CONTEXT_CHARS_PER_CHUNK
-                ? text.substring(0, MAX_CONTEXT_CHARS_PER_CHUNK) + "..."
-                : text;
     }
 
     private String formatMessage(AIMessageEntity message) {
