@@ -84,7 +84,11 @@ public class DocumentSearchService {
                         (String) doc.getMetadata().get("title"),
                         (String) doc.getMetadata().get("folderId"),
                         truncate(doc.getText(), 200),
-                        doc.getScore()
+                        doc.getScore(),
+                        // source가 없는 청크는 이미지 검색 도입 전에 색인된 것이라 본문으로 본다
+                        (String) doc.getMetadata().getOrDefault("source", "text"),
+                        (String) doc.getMetadata().get("imageId"),
+                        (String) doc.getMetadata().get("imageName")
                 ))
                 .toList();
     }
