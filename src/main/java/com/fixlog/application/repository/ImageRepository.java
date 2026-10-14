@@ -3,7 +3,9 @@ package com.fixlog.application.repository;
 import com.fixlog.domain.model.ImageAnalysisStatus;
 import com.fixlog.domain.model.ImageEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,4 +22,14 @@ public interface ImageRepository extends JpaRepository<ImageEntity, String> {
      */
     Optional<ImageEntity> findFirstByContentHashAndAnalysisStatusOrderByAnalyzedAtAsc(
             String contentHash, ImageAnalysisStatus analysisStatus);
+
+    /** 정비 작업 대상. 막 올라온 이미지는 아직 문서에 붙기 전이라 유예 기간 밖의 것만 본다. */
+    List<ImageEntity> findByCreateTimeBefore(Instant threshold);
+
+    /**
+     * 분석이 아직 돌지 않은 이미지. 일일 상한에 걸려 보류된 건이 여기 남는다.
+     * 업로드 직후 분석 중인 건도 섞이지만, 재시도는 상태를 다시 보고 돌아가므로 중복 호출이 되지 않는다.
+     */
+    @Query("select i from ImageEntity i where i.analysisStatus = com.fixlog.domain.model.ImageAnalysisStatus.PENDING")
+    List<ImageEntity> findPendingAnalysis();
 }

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -162,6 +163,25 @@ public class ImageStorageService {
             throw new BusinessException(Code.FORBIDDEN, "이 이미지를 볼 권한이 없습니다.");
         }
         return image;
+    }
+
+    /**
+     * 원본과 메타데이터를 함께 지운다. 정비 작업에서 참조가 사라진 이미지를 치울 때 쓴다.
+     *
+     * <p>스토리지 삭제가 실패해도 레코드는 지운다. 조회 경로가 사라진 파일이 남는 편이,
+     * 보이지도 않는 레코드가 남아 다음 정비마다 같은 실패를 반복하는 것보다 낫다.
+     */
+    public void delete(ImageEntity image) {
+        try {
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(image.getObjectName())
+                    .build());
+        } catch (Exception e) {
+            log.warn("이미지 원본 삭제 실패: imageId={}, objectName={}",
+                    image.getImageId(), image.getObjectName(), e);
+        }
+        imageRepository.delete(image);
     }
 
     /** 문서 저장 시 호출한다. 편집 권한은 호출부(문서 저장)에서 이미 확인된 상태다. */

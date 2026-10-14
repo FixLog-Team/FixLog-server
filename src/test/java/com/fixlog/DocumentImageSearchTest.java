@@ -6,6 +6,7 @@ import com.fixlog.application.repository.ImageRepository;
 import com.fixlog.application.service.DocumentImageAnalyzer;
 import com.fixlog.application.service.DocumentImageReferenceExtractor;
 import com.fixlog.application.service.DocumentTextExtractor;
+import com.fixlog.application.service.ImageAnalysisQuotaService;
 import com.fixlog.application.service.ImageAnalysisService;
 import com.fixlog.application.service.ImageStorageService;
 import com.fixlog.domain.model.ImageAnalysisStatus;
@@ -41,6 +42,7 @@ class DocumentImageSearchTest {
     @Mock ImageRepository imageRepository;
     @Mock ImageStorageService imageStorageService;
     @Mock DocumentImageAnalyzer analyzer;
+    @Mock ImageAnalysisQuotaService quotaService;
     @Mock ApplicationEventPublisher eventPublisher;
 
     private ImageAnalysisService analysisService;
@@ -48,8 +50,9 @@ class DocumentImageSearchTest {
     @BeforeEach
     void setUp() {
         analysisService = new ImageAnalysisService(
-                imageRepository, imageStorageService, analyzer, eventPublisher);
+                imageRepository, imageStorageService, analyzer, quotaService, eventPublisher);
         given(imageRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+        given(quotaService.tryConsume(any())).willReturn(true);
     }
 
     // --- 블록에서 이미지 참조 찾기 ---
@@ -163,6 +166,21 @@ class DocumentImageSearchTest {
         analysisService.analyze("img-1");
 
         verify(analyzer, never()).analyze(any(), any());
+    }
+
+    @Test
+    void 일일_상한에_걸리면_분석을_보류하고_PENDING으로_남긴다() {
+        ImageEntity image = image("img-1", "doc-1");
+        given(imageRepository.findById("img-1")).willReturn(Optional.of(image));
+        given(analyzer.canAnalyze("image/png")).willReturn(true);
+        given(quotaService.tryConsume(any())).willReturn(false);
+
+        analysisService.analyze("img-1");
+
+        // 실패가 아니라 보류다. 다음 날 정비 작업이 다시 집어가야 하므로 상태를 바꾸지 않는다
+        assertThat(image.getAnalysisStatus()).isEqualTo(ImageAnalysisStatus.PENDING);
+        verify(analyzer, never()).analyze(any(), any());
+        verify(imageStorageService, never()).download(any());
     }
 
     @Test

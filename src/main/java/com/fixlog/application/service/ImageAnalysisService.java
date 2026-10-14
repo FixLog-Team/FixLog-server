@@ -26,15 +26,18 @@ public class ImageAnalysisService {
     private final ImageRepository imageRepository;
     private final ImageStorageService imageStorageService;
     private final DocumentImageAnalyzer analyzer;
+    private final ImageAnalysisQuotaService quotaService;
     private final ApplicationEventPublisher eventPublisher;
 
     public ImageAnalysisService(ImageRepository imageRepository,
                                 ImageStorageService imageStorageService,
                                 DocumentImageAnalyzer analyzer,
+                                ImageAnalysisQuotaService quotaService,
                                 ApplicationEventPublisher eventPublisher) {
         this.imageRepository = imageRepository;
         this.imageStorageService = imageStorageService;
         this.analyzer = analyzer;
+        this.quotaService = quotaService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -52,6 +55,13 @@ public class ImageAnalysisService {
 
         if (!analyzer.canAnalyze(image.getContentType())) {
             markSkipped(imageId, "비전 모델이 읽을 수 없는 형식: " + image.getContentType());
+            return;
+        }
+
+        // 상한에 걸리면 PENDING 으로 남겨둔다. 이미지 사용은 막지 않고, 다음 날 정비 작업이 다시 집어간다.
+        if (!quotaService.tryConsume(image.getWorkspaceId())) {
+            log.warn("일일 이미지 분석 상한 도달로 분석 보류: workspaceId={}, imageId={}, 상한={}",
+                    image.getWorkspaceId(), imageId, quotaService.getDailyLimit());
             return;
         }
 
