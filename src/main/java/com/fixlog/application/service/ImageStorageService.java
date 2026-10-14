@@ -17,14 +17,10 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Set;
 import java.util.UUID;
@@ -40,7 +36,6 @@ public class ImageStorageService {
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024L; // 10MB
 
     private final S3Client s3Client;
-    private final S3Presigner s3Presigner;
     private final ImageRepository imageRepository;
     private final WorkspaceContext workspaceContext;
     private final PermissionEvaluator permissionEvaluator;
@@ -49,17 +44,12 @@ public class ImageStorageService {
     @Value("${oci.storage.bucket}")
     private String bucketName;
 
-    @Value("${oci.storage.presign-expiry-minutes:60}")
-    private long presignExpiryMinutes;
-
     public ImageStorageService(S3Client s3Client,
-                               S3Presigner s3Presigner,
                                ImageRepository imageRepository,
                                WorkspaceContext workspaceContext,
                                PermissionEvaluator permissionEvaluator,
                                ApplicationEventPublisher eventPublisher) {
         this.s3Client = s3Client;
-        this.s3Presigner = s3Presigner;
         this.imageRepository = imageRepository;
         this.workspaceContext = workspaceContext;
         this.permissionEvaluator = permissionEvaluator;
@@ -127,25 +117,6 @@ public class ImageStorageService {
                 .ifPresent(analyzed -> image.completeAnalysis(analyzed.getAnalysisText()));
     }
 
-    /**
-     * 만료 시간이 있는 Presigned URL을 생성한다. 버킷은 private 상태를 유지한다.
-     *
-     * <p>서명 URL은 한 번 나가면 만료 전까지 누구나 쓸 수 있으므로, 발급 전에 반드시 접근 권한을 확인한다.
-     */
-    public String generatePresignedUrl(String imageId) {
-        ImageEntity image = requireReadable(imageId);
-
-        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofMinutes(presignExpiryMinutes))
-                .getObjectRequest(req -> req
-                        .bucket(bucketName)
-                        .key(image.getObjectName()))
-                .build();
-
-        PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(presignRequest);
-        return presigned.url().toString();
-    }
-
     /** 분석에 쓸 원본 바이트를 읽는다. 서버 내부 호출이라 권한 검사 대상이 아니다. */
     public byte[] download(ImageEntity image) {
         try {
@@ -161,15 +132,18 @@ public class ImageStorageService {
     }
 
     /**
-     * 이미지를 볼 수 있는지 판정한다.
+     * 이미지를 볼 수 있는지 판정하고 메타데이터를 돌려준다.
      *
      * <p>문서에 붙은 이미지는 <b>그 문서의 조회 권한을 그대로 따른다</b>. 공유가 끊기면 이미지도 함께 막힌다.
      * 아직 문서에 붙지 않은 이미지(업로드 직후)는 올린 본인만 볼 수 있다.
      *
+     * <p>바이트를 읽기 전에 이것만 먼저 부를 수 있도록 분리했다. 브라우저 캐시가 유효하면
+     * 권한만 확인하고 304로 끝내 스토리지를 건드리지 않는다.
+     *
      * <p>감사 로그는 남기지 않는다. 문서 하나에 이미지가 여러 장이면 열람 한 번에 기록이 장수만큼 쌓여
      * 실제 문서 열람 기록이 묻히기 때문이다.
      */
-    private ImageEntity requireReadable(String imageId) {
+    public ImageEntity requireReadable(String imageId) {
         ImageEntity image = imageRepository.findById(imageId)
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "이미지를 찾을 수 없습니다."));
 

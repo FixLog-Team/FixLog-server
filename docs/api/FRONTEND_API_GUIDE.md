@@ -1806,7 +1806,7 @@ Swagger:
 
 > 모든 엔드포인트 **인증 필요**, **`X-Workspace-Id` 헤더 필요**
 
-문서 에디터에서 이미지 블록을 삽입할 때 사용합니다. 이미지는 OCI Object Storage(Private 버킷)에 저장되며, 조회 시 60분 유효한 Presigned URL로 리다이렉트됩니다.
+문서 에디터에서 이미지 블록을 삽입할 때 사용합니다. 이미지는 OCI Object Storage(Private 버킷)에 저장되고, 조회는 서버가 읽어 바이트를 직접 내려줍니다.
 
 ---
 
@@ -1855,21 +1855,22 @@ Swagger:
 ### GET /api/images/{imageId}
 > [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Image/getImage)
 
-이미지 조회. **302 리다이렉트**로 OCI Presigned URL을 반환합니다. URL 유효 시간은 **60분**입니다.
+이미지 조회. 서버가 스토리지에서 읽어 **바이트를 직접 내려줍니다.** 리다이렉트가 없어 요청이 전부 같은 origin에 머뭅니다.
 
 ```
 GET /api/images/{imageId}
-→ 302 Location: https://objectstorage.ap-chuncheon-1.oraclecloud.com/.../image.png?X-Amz-Signature=...
+→ 200 Content-Type: image/png
+  Cache-Control: private, max-age=300
+  ETag: "<내용 해시>"
 ```
+
+`If-None-Match`로 재검증하면 **권한만 확인하고 304**로 끝나 전송이 없습니다. 같은 이미지는 바이트가 바뀌지 않아 재검증이 항상 304입니다.
 
 > ⚠️ **`<img src="/api/images/{id}">` 로는 불러올 수 없습니다.** 이 엔드포인트는 `Authorization` 헤더를
 > 요구하는데 브라우저는 `<img>` 요청에 헤더를 싣지 않아 **401**이 납니다.
 > `fetch`/`axios`로 **blob을 받아 `URL.createObjectURL`** 로 바꿔 쓰세요. (다 쓴 뒤 `revokeObjectURL` 필수)
 >
-> Presigned URL은 60분 후 만료되므로 **OCI URL을 문서에 저장하거나 캐시하지 마세요.**
-> 문서에는 항상 `/api/images/{imageId}` 를 저장합니다 — 만료되지 않고 서버가 권한을 확인합니다.
->
-> 서명 URL은 OCI 도메인이라 브라우저가 리다이렉트를 따라갈 때 **버킷 CORS가 프론트 origin을 허용**해야 합니다.
+> 문서에는 항상 `/api/images/{imageId}` 를 저장합니다 — 만료되지 않고 서버가 매 요청 권한을 확인합니다.
 
 ---
 
@@ -1949,7 +1950,7 @@ const blob = (await http.get(`/api/images/${imageId}`, { responseType: 'blob' })
 const objectUrl = URL.createObjectURL(blob);
 // 화면에서 내릴 때 URL.revokeObjectURL(objectUrl) 로 해제
 
-// ❌ OCI Presigned URL 을 저장·캐시 — 60분 후 만료
+// ❌ 스토리지 주소를 문서에 저장 — 권한 검사를 우회하게 된다
 ```
 
 BlockNote 는 `resolveFileUrl` 훅이 이 변환 지점입니다. 같은 주소를 반복해서 받지 않도록 캐시하고,
@@ -1957,8 +1958,7 @@ BlockNote 는 `resolveFileUrl` 훅이 이 변환 지점입니다. 같은 주소�
 
 #### 5. 주의사항
 
-- **버킷 CORS**: 서버가 다른 origin 의 서명 URL 로 302 하므로, 버킷이 프론트 origin 을 허용하지 않으면
-  이미지를 받지 못합니다. 설정이 어려우면 서버가 바이트를 직접 흘려보내는 방식으로 바꿀 수 있습니다.
+- **버킷 CORS는 필요 없습니다.** 서버가 바이트를 직접 내려주므로 요청이 전부 같은 origin 에 머뭅니다.
 - **고아 이미지**: 삽입했다가 지우고 저장하지 않으면 어느 문서도 참조하지 않는 이미지가 남습니다.
   주기적인 정리 작업이 필요합니다(미구현).
 - **SVG**: 업로드·조회는 되지만 비전 모델이 읽지 못해 검색 분석에서는 제외됩니다. 캡션은 검색됩니다.

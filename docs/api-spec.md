@@ -577,7 +577,16 @@ PENDING 상태 초대만 취소 가능
 SVG는 비전 모델이 읽지 못해 분석 대상에서 제외되며, 업로드·조회 자체는 정상 동작한다.
 
 ### `GET /api/images/{imageId}` — 원본 조회
-만료 시간이 있는 Presigned URL로 302 리다이렉트. 버킷은 private 상태를 유지한다.
+서버가 스토리지에서 읽어 **바이트를 직접 내려준다.** 버킷은 private 상태를 유지한다.
+
+서명 URL로 리다이렉트하지 않는 이유는 두 가지다. 서명 URL은 한 번 나가면 만료 전까지 권한을 회수할 수 없고,
+스토리지가 다른 origin이라 브라우저가 받으려면 버킷 CORS 설정이 필요하다.
+
+`Cache-Control: private, max-age=300` 과 내용 해시 기반 `ETag`를 내려준다.
+`If-None-Match`가 일치하면 **권한만 확인하고 304**로 끝내 스토리지를 읽지 않는다.
+
+> ⚠️ `Authorization` 헤더가 필요하므로 `<img src>` 에 주소를 그대로 꽂으면 **401**이다.
+> blob으로 받아 `URL.createObjectURL`로 바꿔 쓴다.
 
 **접근 권한**
 

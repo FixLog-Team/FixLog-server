@@ -24,12 +24,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,7 +40,6 @@ import static org.mockito.Mockito.verify;
 class ImageStorageServiceTest {
 
     @Mock S3Client s3Client;
-    @Mock S3Presigner s3Presigner;
     @Mock ImageRepository imageRepository;
     @Mock WorkspaceContext workspaceContext;
     @Mock PermissionEvaluator permissionEvaluator;
@@ -58,9 +52,8 @@ class ImageStorageServiceTest {
     @BeforeEach
     void setUp() {
         service = new ImageStorageService(
-                s3Client, s3Presigner, imageRepository, workspaceContext, permissionEvaluator, eventPublisher);
+                s3Client, imageRepository, workspaceContext, permissionEvaluator, eventPublisher);
         ReflectionTestUtils.setField(service, "bucketName", "test-bucket");
-        ReflectionTestUtils.setField(service, "presignExpiryMinutes", 60L);
 
         given(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .willReturn(PutObjectResponse.builder().build());
@@ -135,36 +128,34 @@ class ImageStorageServiceTest {
     // --- 조회 권한 ---
 
     @Test
-    void 문서에_붙은_이미지는_문서_조회_권한이_있으면_볼_수_있다() throws MalformedURLException {
+    void 문서에_붙은_이미지는_문서_조회_권한이_있으면_볼_수_있다() {
         ImageEntity image = image("img-1", UUID.randomUUID(), "doc-1");
         given(imageRepository.findById("img-1")).willReturn(Optional.of(image));
         given(permissionEvaluator.evaluate(ResourceType.DOCUMENT, "doc-1"))
                 .willReturn(new PermissionEvaluator.Decision(true, true, false, true));
-        givenPresignedUrl();
 
-        assertThat(service.generatePresignedUrl("img-1")).contains("X-Amz-Signature");
+        assertThat(service.requireReadable("img-1").getImageId()).isEqualTo("img-1");
     }
 
     @Test
-    void 문서_조회_권한이_없으면_서명_URL을_받을_수_없다() {
+    void 문서_조회_권한이_없으면_이미지를_볼_수_없다() {
         ImageEntity image = image("img-1", UUID.randomUUID(), "doc-1");
         given(imageRepository.findById("img-1")).willReturn(Optional.of(image));
         given(permissionEvaluator.evaluate(ResourceType.DOCUMENT, "doc-1"))
                 .willReturn(new PermissionEvaluator.Decision(false, false, false, false));
 
-        assertThatThrownBy(() -> service.generatePresignedUrl("img-1"))
+        assertThatThrownBy(() -> service.requireReadable("img-1"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getCode())
                 .isEqualTo(Code.FORBIDDEN);
     }
 
     @Test
-    void 아직_문서에_붙지_않은_이미지는_올린_본인만_볼_수_있다() throws MalformedURLException {
+    void 아직_문서에_붙지_않은_이미지는_올린_본인만_볼_수_있다() {
         ImageEntity image = image("img-1", UUID.randomUUID(), null);
         given(imageRepository.findById("img-1")).willReturn(Optional.of(image));
-        givenPresignedUrl();
 
-        assertThat(service.generatePresignedUrl("img-1")).contains("X-Amz-Signature");
+        assertThat(service.requireReadable("img-1").getImageId()).isEqualTo("img-1");
     }
 
     @Test
@@ -174,17 +165,17 @@ class ImageStorageServiceTest {
                 "image/png", "img.png", 100L, "hash", UUID.randomUUID().toString());
         given(imageRepository.findById("img-1")).willReturn(Optional.of(image));
 
-        assertThatThrownBy(() -> service.generatePresignedUrl("img-1"))
+        assertThatThrownBy(() -> service.requireReadable("img-1"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getCode())
                 .isEqualTo(Code.FORBIDDEN);
     }
 
     @Test
-    void generatePresignedUrl_없는_이미지면_예외() {
+    void 없는_이미지면_예외() {
         given(imageRepository.findById(any())).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.generatePresignedUrl("not-exist"))
+        assertThatThrownBy(() -> service.requireReadable("not-exist"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getCode())
                 .isEqualTo(Code.NOT_FOUND);
@@ -200,9 +191,4 @@ class ImageStorageServiceTest {
         return image;
     }
 
-    private void givenPresignedUrl() throws MalformedURLException {
-        PresignedGetObjectRequest presigned = org.mockito.Mockito.mock(PresignedGetObjectRequest.class);
-        given(presigned.url()).willReturn(new URL("https://oci.example.com/signed-url?X-Amz-Signature=abc"));
-        given(s3Presigner.presignGetObject(any(GetObjectPresignRequest.class))).willReturn(presigned);
-    }
 }
