@@ -4,8 +4,6 @@ import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.DocumentService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
-import com.fixlog.presentation.dto.request.BulkDocumentDeleteRequest;
-import com.fixlog.presentation.dto.request.BulkDocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentReorderRequest;
@@ -19,8 +17,6 @@ import com.fixlog.presentation.dto.response.DocumentPageDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -155,29 +151,4 @@ public class DocumentController {
                 .body(result.bytes());
     }
 
-    @DeleteMapping("/bulk")
-    @Operation(operationId = "bulkDeleteDocuments")
-    public Response bulkDelete(@Valid @RequestBody BulkDocumentDeleteRequest req) {
-        return DataResponse.success(documentService.bulkDelete(req.documentIds()));
-    }
-
-    @PatchMapping("/bulk/move")
-    @Operation(operationId = "bulkMoveDocuments")
-    public Response bulkMove(@Valid @RequestBody BulkDocumentMoveRequest req) {
-        return DataResponse.success(documentService.bulkMove(req.documentIds(), req.targetFolderId()));
-    }
-
-    @GetMapping("/bulk/download")
-    @Operation(operationId = "bulkDownloadDocuments")
-    public ResponseEntity<byte[]> bulkDownload(
-            @RequestParam @NotEmpty(message = "문서 ID 목록이 비어있습니다.")
-            @Size(max = 100, message = "한 번에 최대 100개까지 다운로드할 수 있습니다.")
-            List<String> ids) {
-        DocumentService.BulkDownloadResult result = documentService.bulkDownload(ids);
-        String filename = URLEncoder.encode("documents.zip", StandardCharsets.UTF_8);
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/zip"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
-                .body(result.zipBytes());
-    }
 }
