@@ -22,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 휴지통 (FR-TRS-001~008).
@@ -70,16 +72,26 @@ public class TrashService {
         String me = workspaceContext.requireCurrentUserId().toString();
         boolean admin = isAdmin(workspaceId);
 
+        List<FolderEntity> trashedFolders =
+                folderRepository.findByWorkspaceIdAndUsableOrderByDeletedAtDesc(workspaceId, Integer.valueOf(0))
+                        .stream()
+                        .filter(f -> admin || me.equals(f.getDeletedBy()))
+                        .toList();
+
+        // 휴지통 폴더 ID 집합 — 부모가 이 안에 있으면 trashedParentId를 채운다.
+        Set<String> trashedFolderIds = trashedFolders.stream()
+                .map(FolderEntity::getFolderId)
+                .collect(Collectors.toSet());
+
         List<TrashItemDto> items = new ArrayList<>();
-        folderRepository.findByWorkspaceIdAndUsableOrderByDeletedAtDesc(workspaceId, Integer.valueOf(0))
-                .stream()
-                .filter(f -> admin || me.equals(f.getDeletedBy()))
-                .map(TrashItemDto::from)
+        trashedFolders.stream()
+                .map(f -> TrashItemDto.from(f, resolveParentInTrash(f.getParentId(), trashedFolderIds)))
                 .forEach(items::add);
+
         documentRepository.findByWorkspaceIdAndUsableOrderByDeletedAtDesc(workspaceId, Integer.valueOf(0))
                 .stream()
                 .filter(d -> admin || me.equals(d.getDeletedBy()))
-                .map(TrashItemDto::from)
+                .map(d -> TrashItemDto.from(d, resolveParentInTrash(d.getFolderId(), trashedFolderIds)))
                 .forEach(items::add);
 
         items.sort(Comparator.comparing(TrashItemDto::deletedAt,
@@ -87,37 +99,91 @@ public class TrashService {
         return items;
     }
 
+    /** 부모 ID가 휴지통 폴더 집합 안에 있으면 그 ID를, 아니면 null을 돌려준다. */
+    private String resolveParentInTrash(String parentId, Set<String> trashedFolderIds) {
+        if (parentId == null) return null;
+        return trashedFolderIds.contains(parentId) ? parentId : null;
+    }
+
     /**
-     * 복원. 부모 폴더가 아직 휴지통에 있으면 루트로 되돌린다 (FR-TRS-005).
-     * 삭제된 폴더 안으로 되살리면 트리에서 보이지 않는 고아가 된다.
+     * 복원. 부모 폴더가 아직 휴지통에 있으면 targetFolderId 위치로, 없으면 루트로 되돌린다.
+     *
+     * <p>FOLDER 복원 시에는 하위 폴더/문서를 모두 함께 복원한다 (cascade).
+     * 단, 직계 부모가 여전히 휴지통에 있는 하위 항목의 부모 참조는 이미 이 호출로 복원됐으므로
+     * 트리 구조가 유지된다.
+     *
+     * @param targetFolderId 부모가 휴지통에 있을 때 복원될 위치. null이면 루트로 복원.
      */
     @Transactional
-    public void restore(ResourceType resourceType, String resourceId) {
+    public void restore(ResourceType resourceType, String resourceId, String targetFolderId) {
         UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
         String me = workspaceContext.requireCurrentUserId().toString();
 
         switch (resourceType) {
-            case DOCUMENT -> {
-                DocumentEntity doc = trashedDocument(workspaceId, resourceId);
-                requireRestorer(workspaceId, doc.getDeletedBy(), me);
-                if (doc.getFolderId() != null && isFolderTrashed(doc.getFolderId())) {
-                    doc.moveTo(null, doc.getOrdinal() == null ? 0 : doc.getOrdinal(), me);
-                }
-                doc.restore(me);
-                documentRepository.save(doc);
-            }
-            case FOLDER -> {
-                FolderEntity folder = trashedFolder(workspaceId, resourceId);
-                requireRestorer(workspaceId, folder.getDeletedBy(), me);
-                if (folder.getParentId() != null && isFolderTrashed(folder.getParentId())) {
-                    folder.moveTo(null, folder.getOrdinal() == null ? 0 : folder.getOrdinal(), me);
-                    folder.applyPath(FolderEntity.pathUnder("/", folder.getFolderId()));
-                }
-                folder.restore(me);
-                folderRepository.save(folder);
-            }
+            case DOCUMENT -> restoreDocument(workspaceId, resourceId, me, targetFolderId);
+            case FOLDER -> restoreFolder(workspaceId, resourceId, me, targetFolderId);
         }
         audit(workspaceId, AuditAction.RESTORE, resourceType, resourceId);
+    }
+
+    private void restoreDocument(UUID workspaceId, String resourceId, String me, String targetFolderId) {
+        DocumentEntity doc = trashedDocument(workspaceId, resourceId);
+        requireRestorer(workspaceId, doc.getDeletedBy(), me);
+        if (doc.getFolderId() != null && isFolderTrashed(doc.getFolderId())) {
+            // 부모가 아직 휴지통 — targetFolderId로 이동하거나 루트로 올린다.
+            doc.moveTo(targetFolderId, doc.getOrdinal() == null ? 0 : doc.getOrdinal(), me);
+        } else if (targetFolderId != null) {
+            doc.moveTo(targetFolderId, doc.getOrdinal() == null ? 0 : doc.getOrdinal(), me);
+        }
+        doc.restore(me);
+        documentRepository.save(doc);
+    }
+
+    private void restoreFolder(UUID workspaceId, String resourceId, String me, String targetFolderId) {
+        FolderEntity folder = trashedFolder(workspaceId, resourceId);
+        requireRestorer(workspaceId, folder.getDeletedBy(), me);
+
+        boolean parentTrashed = folder.getParentId() != null && isFolderTrashed(folder.getParentId());
+        if (parentTrashed || targetFolderId != null) {
+            String dest = targetFolderId; // null이면 루트
+            String parentPath = dest == null ? "/" : resolveActiveFolderPath(workspaceId, dest);
+            folder.moveTo(dest, folder.getOrdinal() == null ? 0 : folder.getOrdinal(), me);
+            folder.applyPath(FolderEntity.pathUnder(parentPath, folder.getFolderId()));
+        }
+
+        // 하위 폴더/문서 cascade 복원
+        String subtreePrefix = folder.getPath(); // 자기 path로 자손을 찾는다.
+        List<FolderEntity> descendants =
+                folderRepository.findByPathStartingWithAndUsable(subtreePrefix, Integer.valueOf(0))
+                        .stream()
+                        .filter(f -> !f.getFolderId().equals(folder.getFolderId()))
+                        .toList();
+
+        List<String> allFolderIds = new ArrayList<>();
+        allFolderIds.add(folder.getFolderId());
+        descendants.stream().map(FolderEntity::getFolderId).forEach(allFolderIds::add);
+
+        for (FolderEntity desc : descendants) {
+            desc.restore(me);
+        }
+        folderRepository.saveAll(descendants);
+
+        List<DocumentEntity> childDocs = documentRepository.findTrashedByFolderIds(allFolderIds);
+        for (DocumentEntity doc : childDocs) {
+            doc.restore(me);
+        }
+        documentRepository.saveAll(childDocs);
+
+        folder.restore(me);
+        folderRepository.save(folder);
+    }
+
+    /** 활성 폴더의 path를 가져온다. 존재하지 않거나 삭제됐으면 루트("/") 반환. */
+    private String resolveActiveFolderPath(UUID workspaceId, String folderId) {
+        return folderRepository.findByFolderIdAndUsable(folderId, Integer.valueOf(1))
+                .filter(f -> f.getWorkspaceId().equals(workspaceId))
+                .map(FolderEntity::getPath)
+                .orElse("/");
     }
 
     /**

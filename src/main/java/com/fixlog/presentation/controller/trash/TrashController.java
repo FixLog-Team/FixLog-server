@@ -7,6 +7,7 @@ import com.fixlog.common.response.Response;
 import com.fixlog.domain.model.LabelEntity;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.request.LabelRequest;
+import com.fixlog.presentation.dto.request.TrashRestoreRequest;
 import com.fixlog.presentation.dto.response.DocumentDto;
 import com.fixlog.presentation.dto.response.LabelDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,8 +45,11 @@ public class TrashController {
 
     @PostMapping("/trash/{resourceType}/{resourceId}/restore")
     @Operation(operationId = "restoreFromTrash")
-    public Response restore(@PathVariable ResourceType resourceType, @PathVariable String resourceId) {
-        trashService.restore(resourceType, resourceId);
+    public Response restore(@PathVariable ResourceType resourceType,
+                            @PathVariable String resourceId,
+                            @RequestBody(required = false) TrashRestoreRequest request) {
+        String targetFolderId = request != null ? request.targetFolderId() : null;
+        trashService.restore(resourceType, resourceId, targetFolderId);
         return Response.success("복원했습니다.");
     }
 
