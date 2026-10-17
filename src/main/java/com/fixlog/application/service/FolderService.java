@@ -11,6 +11,7 @@ import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.request.FolderRequest;
 import com.fixlog.presentation.dto.response.DocumentDto;
+import com.fixlog.presentation.dto.response.BulkOperationResultDto;
 import com.fixlog.presentation.dto.response.FolderContentsDto;
 import com.fixlog.presentation.dto.response.FolderDto;
 import com.fixlog.presentation.dto.response.FolderTreeDto;
@@ -291,14 +292,51 @@ public class FolderService {
     @Transactional
     public void deleteFolder(String folderId) {
         FolderEntity folder = loadPermitted(folderId, PermissionAction.DELETE);
-        UUID workspaceId = folder.getWorkspaceId();
-        String userId = requireUserId();
+        deleteSubtree(folder, requireUserId());
+    }
 
-        // 대상 폴더와 모든 하위 폴더 트리를 수집한다.
+    @Transactional
+    public BulkOperationResultDto bulkDelete(List<String> folderIds) {
+        String userId = requireUserId();
+        List<String> succeededIds = new ArrayList<>();
+        List<BulkOperationResultDto.FailedItem> failures = new ArrayList<>();
+        List<FolderEntity> candidates = new ArrayList<>();
+        Set<String> candidateIds = new LinkedHashSet<>();
+
+        for (String folderId : folderIds) {
+            try {
+                FolderEntity folder = loadPermitted(folderId, PermissionAction.DELETE);
+                candidates.add(folder);
+                candidateIds.add(folderId);
+            } catch (BusinessException e) {
+                failures.add(new BulkOperationResultDto.FailedItem(folderId, e.getMessage()));
+            }
+        }
+
+        // 이미 요청된 조상 폴더의 서브트리로 처리될 항목은 중복 삭제되지 않도록 걸러낸다.
+        List<FolderEntity> roots = candidates.stream()
+                .filter(folder -> {
+                    List<String> segments = folder.pathSegments();
+                    return segments.subList(0, Math.max(0, segments.size() - 1))
+                            .stream().noneMatch(candidateIds::contains);
+                })
+                .toList();
+
+        for (FolderEntity root : roots) {
+            deleteSubtree(root, userId);
+            succeededIds.add(root.getFolderId());
+        }
+
+        return BulkOperationResultDto.of(succeededIds, failures, folderIds.size());
+    }
+
+    private void deleteSubtree(FolderEntity root, String userId) {
+        UUID workspaceId = root.getWorkspaceId();
+
         List<FolderEntity> subtree = new ArrayList<>();
         Deque<String> queue = new ArrayDeque<>();
-        subtree.add(folder);
-        queue.add(folder.getFolderId());
+        subtree.add(root);
+        queue.add(root.getFolderId());
         while (!queue.isEmpty()) {
             List<FolderEntity> children = folderRepository
                     .findByWorkspaceIdAndParentIdAndUsableOrderByOrdinalAscCreateTimeAsc(
@@ -309,7 +347,6 @@ public class FolderService {
             }
         }
 
-        // 폴더 트리와 그 안의 문서를 모두 소프트 삭제한다.
         List<DocumentEntity> documents = new ArrayList<>();
         for (FolderEntity f : subtree) {
             f.softDelete(userId);
