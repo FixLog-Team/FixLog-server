@@ -13,14 +13,18 @@ import com.fixlog.domain.model.ResourceType;
 import com.fixlog.presentation.dto.response.BulkOperationResultDto;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
@@ -29,9 +33,14 @@ import java.util.zip.ZipOutputStream;
 /**
  * 문서·폴더 혼합 일괄 작업 서비스.
  *
- * <p>UI에서 같은 레벨(같은 부모 폴더)에 있는 문서와 폴더를 함께 선택해
- * 삭제·이동·다운로드할 때 사용한다. 개별 권한 확인은 기존 서비스의
- * package-private 헬퍼를 재사용하고, 트랜잭션은 이 서비스가 직접 관리한다.
+ * <p>bulkDelete / bulkMove는 의도적으로 @Transactional을 달지 않는다.
+ * permissionEvaluator.require()가 @Transactional(readOnly=true)이므로,
+ * 외부 트랜잭션 안에서 호출 후 BusinessException을 catch하면
+ * Spring이 해당 트랜잭션을 rollback-only로 마킹해 UnexpectedRollbackException이 발생한다.
+ *
+ * <p>해결 방법: 두 단계로 분리.
+ * Phase 1 — 권한 검증(트랜잭션 없음): permissionEvaluator 호출이 각자 독립 read-only 트랜잭션에서 실행.
+ * Phase 2 — 실제 저장(TransactionTemplate): 검증된 항목만 하나의 쓰기 트랜잭션으로 처리.
  */
 @Service
 public class BulkService {
@@ -43,6 +52,7 @@ public class BulkService {
     private final PermissionEvaluator permissionEvaluator;
     private final DocumentPdfGenerator pdfGenerator;
     private final ApplicationEventPublisher eventPublisher;
+    private final TransactionTemplate transactionTemplate;
 
     public BulkService(DocumentRepository documentRepository,
                        FolderRepository folderRepository,
@@ -50,7 +60,8 @@ public class BulkService {
                        FolderService folderService,
                        PermissionEvaluator permissionEvaluator,
                        DocumentPdfGenerator pdfGenerator,
-                       ApplicationEventPublisher eventPublisher) {
+                       ApplicationEventPublisher eventPublisher,
+                       PlatformTransactionManager transactionManager) {
         this.documentRepository = documentRepository;
         this.folderRepository = folderRepository;
         this.documentService = documentService;
@@ -58,9 +69,10 @@ public class BulkService {
         this.permissionEvaluator = permissionEvaluator;
         this.pdfGenerator = pdfGenerator;
         this.eventPublisher = eventPublisher;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    @Transactional
+    // @Transactional 없음 — 이유는 클래스 JavaDoc 참조
     public BulkOperationResultDto bulkDelete(List<String> documentIds, List<String> folderIds) {
         if (safe(documentIds).isEmpty() && safe(folderIds).isEmpty()) {
             throw new BusinessException(Code.INVALID_REQUEST, "삭제할 문서 또는 폴더가 없습니다.");
@@ -71,28 +83,17 @@ public class BulkService {
         List<BulkOperationResultDto.FailedItem> failures = new ArrayList<>();
         int total = safe(documentIds).size() + safe(folderIds).size();
 
-        // 문서 삭제
-        List<DocumentEntity> docsToDelete = new ArrayList<>();
-        List<String> deletedDocIds = new ArrayList<>();
+        // Phase 1: 권한 검증 — 실패해도 외부 트랜잭션이 없으므로 rollback-only 오염 없음
+        List<String> validDocIds = new ArrayList<>();
         for (String docId : safe(documentIds)) {
             try {
                 permissionEvaluator.require(ResourceType.DOCUMENT, docId, PermissionAction.DELETE);
-                docsToDelete.add(documentService.load(docId));
-                deletedDocIds.add(docId);
-                succeededIds.add(docId);
+                validDocIds.add(docId);
             } catch (BusinessException e) {
                 failures.add(new BulkOperationResultDto.FailedItem(docId, e.getMessage()));
             }
         }
-        for (DocumentEntity doc : docsToDelete) {
-            doc.softDelete(userId);
-        }
-        documentRepository.saveAll(docsToDelete);
-        for (String docId : deletedDocIds) {
-            eventPublisher.publishEvent(new DocumentDeletedEvent(docId));
-        }
 
-        // 폴더 삭제 — 조상이 같은 요청에 포함된 경우 자손은 건너뜀
         List<FolderEntity> folderCandidates = new ArrayList<>();
         Set<String> folderCandidateIds = new LinkedHashSet<>();
         for (String folderId : safe(folderIds)) {
@@ -104,22 +105,47 @@ public class BulkService {
                 failures.add(new BulkOperationResultDto.FailedItem(folderId, e.getMessage()));
             }
         }
-        List<FolderEntity> folderRoots = folderCandidates.stream()
+
+        // 조상이 같은 요청에 포함된 경우 자손은 건너뜀 (엔티티의 path 필드는 detached 후에도 접근 가능)
+        List<String> folderRootIds = folderCandidates.stream()
                 .filter(f -> {
                     List<String> segs = f.pathSegments();
                     return segs.subList(0, Math.max(0, segs.size() - 1)).stream()
                             .noneMatch(folderCandidateIds::contains);
                 })
+                .map(FolderEntity::getFolderId)
                 .toList();
-        for (FolderEntity root : folderRoots) {
-            folderService.deleteSubtree(root, userId);
-            succeededIds.add(root.getFolderId());
-        }
+
+        // Phase 2: 실제 삭제를 하나의 쓰기 트랜잭션에서 처리
+        transactionTemplate.execute(status -> {
+            List<DocumentEntity> docs = validDocIds.stream()
+                    .map(id -> documentRepository.findByDocumentIdAndUsable(id, Integer.valueOf(1)).orElse(null))
+                    .filter(d -> d != null)
+                    .toList();
+            for (DocumentEntity doc : docs) {
+                doc.softDelete(userId);
+            }
+            documentRepository.saveAll(docs);
+            for (DocumentEntity doc : docs) {
+                eventPublisher.publishEvent(new DocumentDeletedEvent(doc.getDocumentId()));
+                succeededIds.add(doc.getDocumentId());
+            }
+
+            for (String folderId : folderRootIds) {
+                FolderEntity root = folderRepository
+                        .findByFolderIdAndUsable(folderId, Integer.valueOf(1)).orElse(null);
+                if (root != null) {
+                    folderService.deleteSubtree(root, userId);
+                    succeededIds.add(folderId);
+                }
+            }
+            return null;
+        });
 
         return BulkOperationResultDto.of(succeededIds, failures, total);
     }
 
-    @Transactional
+    // @Transactional 없음 — 이유는 클래스 JavaDoc 참조
     public BulkOperationResultDto bulkMove(List<String> documentIds, List<String> folderIds, String targetFolderId) {
         if (safe(documentIds).isEmpty() && safe(folderIds).isEmpty()) {
             throw new BusinessException(Code.INVALID_REQUEST, "이동할 문서 또는 폴더가 없습니다.");
@@ -130,7 +156,7 @@ public class BulkService {
         List<BulkOperationResultDto.FailedItem> failures = new ArrayList<>();
         int total = safe(documentIds).size() + safe(folderIds).size();
 
-        // 대상 폴더 검증
+        // Phase 1: 대상 폴더 검증 및 항목별 권한/순환 이동 검증
         UUID targetWorkspaceId = null;
         String targetParentPath = "/";
         if (targetFolderId != null) {
@@ -142,29 +168,28 @@ public class BulkService {
             targetParentPath = targetFolder.getPath();
         }
 
-        // 문서 이동
-        List<DocumentEntity> docsToMove = new ArrayList<>();
+        final UUID finalTargetWorkspaceId = targetWorkspaceId;
+        final String finalTargetParentPath = targetParentPath;
+
+        List<String> validDocIds = new ArrayList<>();
+        Map<String, UUID> docWorkspaceMap = new LinkedHashMap<>();
         for (String docId : safe(documentIds)) {
             try {
                 permissionEvaluator.require(ResourceType.DOCUMENT, docId, PermissionAction.EDIT);
                 DocumentEntity doc = documentService.load(docId);
-                if (targetFolderId != null && !doc.getWorkspaceId().equals(targetWorkspaceId)) {
+                if (targetFolderId != null && !doc.getWorkspaceId().equals(finalTargetWorkspaceId)) {
                     failures.add(new BulkOperationResultDto.FailedItem(docId, "대상 폴더가 같은 워크스페이스에 없습니다."));
                     continue;
                 }
-                docsToMove.add(doc);
-                succeededIds.add(docId);
+                validDocIds.add(docId);
+                docWorkspaceMap.put(docId, doc.getWorkspaceId());
             } catch (BusinessException e) {
                 failures.add(new BulkOperationResultDto.FailedItem(docId, e.getMessage()));
             }
         }
-        for (DocumentEntity doc : docsToMove) {
-            int ordinal = documentRepository.maxOrdinal(targetFolderId, doc.getWorkspaceId()) + 1;
-            doc.moveTo(targetFolderId, ordinal, userId);
-        }
-        documentRepository.saveAll(docsToMove);
 
-        // 폴더 이동
+        List<String> validFolderIds = new ArrayList<>();
+        Map<String, UUID> folderWorkspaceMap = new LinkedHashMap<>();
         for (String folderId : safe(folderIds)) {
             try {
                 if (folderId.equals(targetFolderId)) {
@@ -174,7 +199,7 @@ public class BulkService {
                 FolderEntity folder = folderService.loadPermitted(folderId, PermissionAction.EDIT);
                 UUID workspaceId = folder.getWorkspaceId();
                 if (targetFolderId != null) {
-                    if (targetWorkspaceId != null && !workspaceId.equals(targetWorkspaceId)) {
+                    if (!workspaceId.equals(finalTargetWorkspaceId)) {
                         failures.add(new BulkOperationResultDto.FailedItem(folderId, "대상 폴더가 같은 워크스페이스에 없습니다."));
                         continue;
                     }
@@ -183,15 +208,39 @@ public class BulkService {
                         continue;
                     }
                 }
-                int ordinal = folderService.nextOrdinal(targetFolderId, workspaceId);
-                folder.moveTo(targetFolderId, ordinal, userId);
-                folderService.repath(folder, targetParentPath);
-                folderRepository.save(folder);
-                succeededIds.add(folderId);
+                validFolderIds.add(folderId);
+                folderWorkspaceMap.put(folderId, workspaceId);
             } catch (BusinessException e) {
                 failures.add(new BulkOperationResultDto.FailedItem(folderId, e.getMessage()));
             }
         }
+
+        // Phase 2: 실제 이동을 하나의 쓰기 트랜잭션에서 처리
+        transactionTemplate.execute(status -> {
+            for (String docId : validDocIds) {
+                DocumentEntity doc = documentRepository
+                        .findByDocumentIdAndUsable(docId, Integer.valueOf(1)).orElse(null);
+                if (doc == null) continue;
+                UUID ws = docWorkspaceMap.getOrDefault(docId, doc.getWorkspaceId());
+                int ordinal = documentRepository.maxOrdinal(targetFolderId, ws) + 1;
+                doc.moveTo(targetFolderId, ordinal, userId);
+                documentRepository.save(doc);
+                succeededIds.add(docId);
+            }
+
+            for (String folderId : validFolderIds) {
+                FolderEntity folder = folderRepository
+                        .findByFolderIdAndUsable(folderId, Integer.valueOf(1)).orElse(null);
+                if (folder == null) continue;
+                UUID ws = folderWorkspaceMap.getOrDefault(folderId, folder.getWorkspaceId());
+                int ordinal = folderService.nextOrdinal(targetFolderId, ws);
+                folder.moveTo(targetFolderId, ordinal, userId);
+                folderService.repath(folder, finalTargetParentPath);
+                folderRepository.save(folder);
+                succeededIds.add(folderId);
+            }
+            return null;
+        });
 
         return BulkOperationResultDto.of(succeededIds, failures, total);
     }
@@ -206,7 +255,6 @@ public class BulkService {
         try (ZipOutputStream zos = new ZipOutputStream(baos)) {
             Set<String> rootNames = new HashSet<>();
 
-            // 직접 선택된 문서
             for (String docId : safe(documentIds)) {
                 DocumentEntity doc = documentService.loadForDownload(docId);
                 byte[] pdf = pdfGenerator.generate(doc, documentService.watermarkFor(doc));
@@ -215,7 +263,6 @@ public class BulkService {
                 zos.closeEntry();
             }
 
-            // 선택된 폴더 — 하위 문서를 폴더명/문서명.pdf 구조로 포함
             for (String folderId : safe(folderIds)) {
                 permissionEvaluator.require(ResourceType.FOLDER, folderId, PermissionAction.VIEW);
                 FolderEntity folder = folderRepository
@@ -231,7 +278,6 @@ public class BulkService {
         return new DocumentService.BulkDownloadResult(baos.toByteArray());
     }
 
-    /** 폴더 안의 문서와 하위 폴더를 재귀적으로 ZIP에 추가한다. */
     private void addFolderContentsToZip(FolderEntity folder, String basePath, ZipOutputStream zos) throws IOException {
         UUID workspaceId = folder.getWorkspaceId();
         Set<String> usedNames = new HashSet<>();
