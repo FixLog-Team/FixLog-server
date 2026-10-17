@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-10-13
+> 최종 업데이트: 2026-10-17
 > Base URL (개발): `https://fixlog.art/fixlog`
 
 ---
@@ -457,6 +457,95 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 
 ---
 
+### DELETE /api/documents/bulk
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/bulkDeleteDocuments)
+
+여러 문서를 한 번에 소프트 삭제합니다.
+
+**Request Body**
+```json
+{
+  "documentIds": ["uuid-1", "uuid-2", "uuid-3"]
+}
+```
+
+| 필드 | 제한 | 설명 |
+|---|---|---|
+| `documentIds` | 최대 100개 | 삭제할 문서 ID 목록 |
+
+**Response**: `BulkOperationResultDto`
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "totalRequested": 3,
+    "succeededCount": 2,
+    "failedCount": 1,
+    "succeededIds": ["uuid-1", "uuid-2"],
+    "failures": [
+      { "id": "uuid-3", "reason": "문서를 찾을 수 없습니다." }
+    ]
+  }
+}
+```
+
+> **부분 성공을 허용합니다.** 권한이 없거나 존재하지 않는 ID는 `failures`에 수집되고, 나머지는 정상 삭제됩니다.
+> `failures`가 비어 있으면 전체 성공입니다.
+
+---
+
+### PATCH /api/documents/bulk/move
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/bulkMoveDocuments)
+
+여러 문서를 한 번에 같은 폴더로 이동합니다.
+
+**Request Body**
+```json
+{
+  "documentIds": ["uuid-1", "uuid-2"],
+  "targetFolderId": "target-folder-uuid"
+}
+```
+
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `documentIds` | ✅ | 이동할 문서 ID 목록 (최대 100개) |
+| `targetFolderId` | ❌ | 이동할 대상 폴더 ID. `null`이면 루트로 이동 |
+
+> **대상 폴더 검증은 fail-fast입니다.** `targetFolderId`가 유효하지 않거나 편집 권한이 없으면 어떤 문서도 이동되지 않습니다.
+> 개별 문서는 부분 성공을 허용합니다 — 대상 폴더와 워크스페이스가 다른 문서나 편집 권한이 없는 문서는 `failures`에 수집됩니다.
+
+**Response**: `BulkOperationResultDto` (위와 동일한 형식)
+
+---
+
+### GET /api/documents/bulk/download
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Document/bulkDownloadDocuments)
+
+여러 문서를 PDF로 변환해 ZIP 파일로 다운로드합니다.
+
+**Query Params**
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `ids` | ✅ | 다운로드할 문서 ID 목록 (최대 100개, 반복 파라미터) |
+
+```
+GET /api/documents/bulk/download?ids=uuid-1&ids=uuid-2&ids=uuid-3
+```
+
+**Response**: `application/zip` 바이너리
+```
+Content-Disposition: attachment; filename*=UTF-8''documents.zip
+```
+
+ZIP 내 파일명은 `문서제목.pdf`이며, 같은 제목이 여러 개면 `문서제목 (1).pdf`처럼 순번이 붙습니다.
+
+> **다운로드는 fail-fast입니다.** 목록에 다운로드 권한이 없는 문서가 하나라도 있으면 전체 요청이 `FORBIDDEN`으로 실패합니다. ZIP 일부만 내려가는 상황을 방지하기 위함입니다.
+
+---
+
 ## 5. 폴더 API
 
 > 모든 엔드포인트 **인증 필요**
@@ -647,6 +736,45 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
   "message": "폴더가 삭제되었습니다."
 }
 ```
+
+---
+
+### DELETE /api/folders/bulk
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Folder/bulkDeleteFolders)
+
+여러 폴더를 한 번에 소프트 삭제합니다. 각 폴더의 하위 폴더·문서도 함께 삭제됩니다.
+
+**Request Body**
+```json
+{
+  "folderIds": ["uuid-a", "uuid-b"]
+}
+```
+
+| 필드 | 제한 | 설명 |
+|---|---|---|
+| `folderIds` | 최대 50개 | 삭제할 폴더 ID 목록 |
+
+**Response**: `BulkOperationResultDto`
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "totalRequested": 2,
+    "succeededCount": 1,
+    "failedCount": 1,
+    "succeededIds": ["uuid-a"],
+    "failures": [
+      { "id": "uuid-b", "reason": "폴더를 찾을 수 없습니다." }
+    ]
+  }
+}
+```
+
+> **부분 성공을 허용합니다.** 권한이 없거나 존재하지 않는 폴더는 `failures`에 수집되고, 나머지는 정상 삭제됩니다.
+>
+> **중복 삭제 방지**: 목록에 조상–자손 관계의 폴더가 함께 있으면 조상 삭제 시 자손이 함께 지워지므로, 자손은 `succeededIds`가 아닌 조용히 처리됩니다. 따라서 `succeededIds`의 수가 `totalRequested - failedCount`보다 작을 수 있습니다.
 
 ---
 
