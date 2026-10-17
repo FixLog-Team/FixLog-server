@@ -514,7 +514,7 @@ public class DocumentService {
      * 정책이 워터마크를 강제하면 내려받는 사람을 각인한다 (FR-SEC-003).
      * 반출을 막지는 못하지만 유출 시 경로를 남긴다.
      */
-    private String watermarkFor(DocumentEntity doc) {
+    String watermarkFor(DocumentEntity doc) {
         if (!securityPolicyService.effectivePolicy(doc.getWorkspaceId()).isEnforceWatermark()) {
             return null;
         }
@@ -524,7 +524,7 @@ public class DocumentService {
     }
 
     /** 다운로드는 레벨이 아니라 별도 플래그로 막힌다 (FR-PRM-002). */
-    private DocumentEntity loadForDownload(String documentId) {
+    DocumentEntity loadForDownload(String documentId) {
         permissionEvaluator.requireDownload(ResourceType.DOCUMENT, documentId);
         return load(documentId);
     }
@@ -534,7 +534,7 @@ public class DocumentService {
         return load(documentId);
     }
 
-    private DocumentEntity load(String documentId) {
+    DocumentEntity load(String documentId) {
         return documentRepository
                 .findByDocumentIdAndUsable(documentId, Integer.valueOf(1))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "문서를 찾을 수 없습니다."));

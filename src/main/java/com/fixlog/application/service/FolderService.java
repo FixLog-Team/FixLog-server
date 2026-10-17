@@ -97,12 +97,12 @@ public class FolderService {
     }
 
     /** 같은 부모 안에서 마지막 폴더 다음 순번. 형제가 없으면 0. */
-    private int nextOrdinal(String parentId, UUID workspaceId) {
+    int nextOrdinal(String parentId, UUID workspaceId) {
         return folderRepository.maxOrdinal(parentId, workspaceId) + 1;
     }
 
     /** 루트 아래면 "/", 아니면 부모의 경로. */
-    private String parentPath(String parentId, UUID workspaceId) {
+    String parentPath(String parentId, UUID workspaceId) {
         if (parentId == null) {
             return "/";
         }
@@ -274,7 +274,7 @@ public class FolderService {
      * 폴더를 옮기면 그 아래 모든 폴더의 경로도 함께 바뀐다. 하나라도 빠지면 권한 상속이
      * 옛 조상을 따라가므로, 서브트리 일괄 갱신은 반드시 이 메서드 하나를 통한다 (R-04).
      */
-    private void repath(FolderEntity folder, String newParentPath) {
+    void repath(FolderEntity folder, String newParentPath) {
         String oldPath = folder.getPath();
         String newPath = FolderEntity.pathUnder(newParentPath, folder.getFolderId());
         if (newPath.equals(oldPath)) {
@@ -330,7 +330,7 @@ public class FolderService {
         return BulkOperationResultDto.of(succeededIds, failures, folderIds.size());
     }
 
-    private void deleteSubtree(FolderEntity root, String userId) {
+    void deleteSubtree(FolderEntity root, String userId) {
         UUID workspaceId = root.getWorkspaceId();
 
         List<FolderEntity> subtree = new ArrayList<>();
@@ -361,7 +361,7 @@ public class FolderService {
         documentRepository.saveAll(documents);
     }
 
-    private boolean isDescendantOf(String ancestorId, String candidateId, UUID workspaceId) {
+    boolean isDescendantOf(String ancestorId, String candidateId, UUID workspaceId) {
         String current = candidateId;
         int guard = 0;
         while (current != null && guard++ < 10000) {
@@ -415,7 +415,7 @@ public class FolderService {
         return new FolderContentsDto(folders, documents);
     }
 
-    private FolderEntity loadPermitted(String folderId, PermissionAction action) {
+    FolderEntity loadPermitted(String folderId, PermissionAction action) {
         permissionEvaluator.require(ResourceType.FOLDER, folderId, action);
         return folderRepository.findByFolderIdAndUsable(folderId, Integer.valueOf(1))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
