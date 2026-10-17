@@ -57,6 +57,10 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
 
     long countByWorkspaceIdAndUsable(UUID workspaceId, Integer usable);
 
+    /** 폴더 ID 목록 안의 soft-delete 문서. 휴지통 폴더 복원 시 자식 문서를 일괄 복원할 때 쓴다. */
+    @Query("SELECT d FROM DocumentEntity d WHERE d.folderId IN :folderIds AND d.usable = 0")
+    List<DocumentEntity> findTrashedByFolderIds(@Param("folderIds") List<String> folderIds);
+
     /** 관리자 콘솔의 사용자별 분포. */
     @Query("""
             select d.createUser as userId, count(d) as documentCount from DocumentEntity d

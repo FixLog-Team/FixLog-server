@@ -199,7 +199,7 @@ class TrashAndLabelTest {
         String docId = newDocument("지울 문서");
         documentService.delete(docId);
 
-        trashService.restore(ResourceType.DOCUMENT, docId);
+        trashService.restore(ResourceType.DOCUMENT, docId, null);
 
         assertEquals("지울 문서", documentService.getDocument(docId).getTitle());
         assertTrue(trashService.list().isEmpty());
@@ -213,7 +213,7 @@ class TrashAndLabelTest {
                 new DocumentCreateRequest(folder.getFolderId(), "문서")).getDocumentId();
 
         folderService.deleteFolder(folder.getFolderId());
-        trashService.restore(ResourceType.DOCUMENT, docId);
+        trashService.restore(ResourceType.DOCUMENT, docId, null);
 
         DocumentEntity restored = documentService.getDocument(docId);
         assertNull(restored.getFolderId(), "삭제된 폴더 안으로 되살아나면 안 된다");
@@ -230,6 +230,56 @@ class TrashAndLabelTest {
     }
 
     @Test
+    void 폴더_안_항목은_휴지통_목록에서_부모폴더_아래에_속한다() {
+        FolderEntity parent = folderService.createFolder(new FolderRequest(null, "부모"));
+        String docId = documentService.create(
+                new DocumentCreateRequest(parent.getFolderId(), "자식 문서")).getDocumentId();
+
+        folderService.deleteFolder(parent.getFolderId());
+
+        List<TrashItemDto> items = trashService.list();
+        TrashItemDto docItem = items.stream()
+                .filter(i -> i.resourceId().equals(docId))
+                .findFirst().orElseThrow();
+        assertEquals(parent.getFolderId(), docItem.trashedParentId(),
+                "자식 문서의 trashedParentId가 삭제된 부모 폴더여야 한다");
+
+        TrashItemDto folderItem = items.stream()
+                .filter(i -> i.resourceId().equals(parent.getFolderId()))
+                .findFirst().orElseThrow();
+        assertNull(folderItem.trashedParentId(), "최상위 삭제 폴더의 trashedParentId는 null이어야 한다");
+    }
+
+    @Test
+    void 폴더_복원_시_안의_문서도_함께_복원된다() {
+        FolderEntity folder = folderService.createFolder(new FolderRequest(null, "폴더"));
+        String docId = documentService.create(
+                new DocumentCreateRequest(folder.getFolderId(), "안의 문서")).getDocumentId();
+
+        folderService.deleteFolder(folder.getFolderId());
+        trashService.restore(ResourceType.FOLDER, folder.getFolderId(), null);
+
+        assertTrue(trashService.list().isEmpty(), "복원 후 휴지통이 비어야 한다");
+        assertFalse(documentRepository.findById(docId)
+                .map(d -> d.isTrashed()).orElse(true), "문서도 복원돼 있어야 한다");
+    }
+
+    @Test
+    void 부모가_휴지통에_있을_때_문서를_targetFolderId로_복원할_수_있다() {
+        FolderEntity folder = folderService.createFolder(new FolderRequest(null, "원래폴더"));
+        FolderEntity target = folderService.createFolder(new FolderRequest(null, "대상폴더"));
+        String docId = documentService.create(
+                new DocumentCreateRequest(folder.getFolderId(), "문서")).getDocumentId();
+
+        folderService.deleteFolder(folder.getFolderId());
+        // 대상 폴더는 살아있고, 문서만 targetFolderId로 복원한다.
+        trashService.restore(ResourceType.DOCUMENT, docId, target.getFolderId());
+
+        DocumentEntity restored = documentService.getDocument(docId);
+        assertEquals(target.getFolderId(), restored.getFolderId(), "지정한 폴더로 복원돼야 한다");
+    }
+
+    @Test
     void 남이_지운_항목은_휴지통에_보이지_않는다() {
         String docId = newDocument("author의 문서");
         documentService.delete(docId);
@@ -237,7 +287,7 @@ class TrashAndLabelTest {
         loginAs(mate);
         assertTrue(trashService.list().isEmpty());
         assertEquals(Code.FORBIDDEN, assertThrows(BusinessException.class,
-                () -> trashService.restore(ResourceType.DOCUMENT, docId)).getCode());
+                () -> trashService.restore(ResourceType.DOCUMENT, docId, null)).getCode());
     }
 
     @Test
@@ -247,7 +297,7 @@ class TrashAndLabelTest {
 
         loginAs(admin);
         assertEquals(1, trashService.list().size());
-        trashService.restore(ResourceType.DOCUMENT, docId);
+        trashService.restore(ResourceType.DOCUMENT, docId, null);
         assertTrue(trashService.list().isEmpty());
     }
 

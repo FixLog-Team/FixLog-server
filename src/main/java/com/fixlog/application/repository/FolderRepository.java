@@ -44,6 +44,9 @@ public interface FolderRepository extends JpaRepository<FolderEntity, String> {
      */
     List<FolderEntity> findByPathStartingWith(String pathPrefix);
 
+    /** 휴지통 안 서브트리. 경로 접두사 + soft-delete 조건. */
+    List<FolderEntity> findByPathStartingWithAndUsable(String pathPrefix, Integer usable);
+
     /** 워크스페이스 삭제 시 내부 폴더 일괄 soft-delete. */
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query(

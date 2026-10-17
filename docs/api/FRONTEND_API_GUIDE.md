@@ -1671,15 +1671,28 @@ Swagger:
 
 폴더와 문서를 한 목록에 섞어 최근 삭제순으로 돌려줍니다.
 
+각 항목은 `trashedParentId` 필드를 포함합니다. **직계 부모 폴더도 휴지통에 있으면** 그 폴더 ID가
+채워지므로, 프론트엔드는 이 값으로 휴지통 내 트리 구조(폴더 안에 하위 항목 중첩)를 구성할 수
+있습니다. 최상위 항목은 `trashedParentId`가 `null`입니다.
+
 ```json
 {
   "result": [
     {
-      "resourceType": "DOCUMENT",
-      "resourceId": "...",
-      "name": "지운 문서",
+      "resourceType": "FOLDER",
+      "resourceId": "folder-uuid",
+      "name": "지운 폴더",
       "deletedBy": "user-uuid",
-      "deletedAt": "2026-09-08T07:00:00Z"
+      "deletedAt": "2026-09-08T07:00:00Z",
+      "trashedParentId": null
+    },
+    {
+      "resourceType": "DOCUMENT",
+      "resourceId": "doc-uuid",
+      "name": "폴더 안 문서",
+      "deletedBy": "user-uuid",
+      "deletedAt": "2026-09-08T07:00:00Z",
+      "trashedParentId": "folder-uuid"
     }
   ]
 }
@@ -1694,8 +1707,26 @@ Swagger:
 
 `resourceType`은 `DOCUMENT` 또는 `FOLDER`.
 
-**부모 폴더가 아직 휴지통에 있으면 루트로 복원됩니다.** 삭제된 폴더 안으로 되살리면
-트리에서 보이지 않는 항목이 되기 때문입니다.
+#### FOLDER 복원 (cascade)
+
+**폴더를 복원하면 그 안의 하위 폴더와 문서가 모두 함께 복원됩니다.**
+
+#### 부모가 아직 휴지통에 있을 때
+
+`trashedParentId`가 `null`이 아닌 항목(부모도 삭제된 상태)을 단독으로 복원할 때는
+`targetFolderId`로 복원될 위치를 지정할 수 있습니다.
+
+- `targetFolderId`를 지정하면 해당 폴더로 이동하여 복원됩니다 (이동 + 복원).
+- `targetFolderId`를 생략하면 루트로 복원됩니다.
+
+```json
+// 요청 body (선택)
+{
+  "targetFolderId": "살아있는-폴더-uuid"
+}
+```
+
+body 없이 요청해도 되고, `targetFolderId: null`이어도 루트로 복원됩니다.
 
 ---
 
