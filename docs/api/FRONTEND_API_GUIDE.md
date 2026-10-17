@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-10-17
+> 최종 업데이트: 2026-10-17 (사용자 프로필 API 추가)
 > Base URL (개발): `https://fixlog.art/fixlog`
 
 ---
@@ -10,6 +10,7 @@
 1. [공통 규칙](#1-공통-규칙)
 2. [인증 플로우](#2-인증-플로우)
 3. [인증 API](#3-인증-api)
+3-1. [사용자 API](#3-1-사용자-api)
 4. [문서 API](#4-문서-api)
 5. [폴더 API](#5-폴더-api)
 6. [AI API](#6-ai-api)
@@ -215,6 +216,76 @@ Google OAuth 로그인 시작 (페이지 이동)
   }
 }
 ```
+
+---
+
+## 3-1. 사용자 API
+
+> 모든 엔드포인트 **인증 필요**
+
+### GET /users/me
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/User/getMyProfile)
+
+현재 로그인 사용자의 프로필 조회
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "displayName": "홍길동",
+    "email": "user@gmail.com",
+    "pictureUrl": "https://lh3.googleusercontent.com/..."
+  }
+}
+```
+
+> `displayName`은 사용자가 닉네임을 설정했으면 그 값을, 아직 설정하지 않았으면 Google 계정 이름을 반환합니다.
+> `pictureUrl`은 Google 프로필 사진이 없으면 `null`일 수 있습니다.
+
+---
+
+### PATCH /users/me
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/User/updateMyProfile)
+
+프로필 이름(닉네임) 변경
+
+**Request Body**
+```json
+{
+  "nickname": "내가 원하는 이름"
+}
+```
+
+| 필드 | 필수 | 제한 | 설명 |
+|---|---|---|---|
+| `nickname` | ✅ | 최대 50자, 공백 불허 | 변경할 닉네임 |
+
+**Response**: 변경 반영된 `UserProfileResponse`
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "displayName": "내가 원하는 이름",
+    "email": "user@gmail.com",
+    "pictureUrl": "https://lh3.googleusercontent.com/..."
+  }
+}
+```
+
+**에러**
+
+| 상황 | code |
+|---|---|
+| nickname이 비어 있거나 공백만 있는 경우 | `INVALID_REQUEST` |
+| nickname이 50자 초과 | `INVALID_REQUEST` |
+
+> **닉네임과 Google 이름의 관계**: OAuth 재로그인을 해도 닉네임은 덮어써지지 않습니다.
+> 닉네임을 초기화(Google 이름으로 되돌리기)하는 기능은 현재 제공하지 않습니다.
 
 ---
 
