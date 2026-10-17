@@ -778,6 +778,123 @@ ZIP 내 파일명은 `문서제목.pdf`이며, 같은 제목이 여러 개면 `�
 
 ---
 
+## 5-3. 혼합 일괄 작업 (문서 + 폴더)
+
+> 모든 엔드포인트 **인증 필요**
+>
+> 같은 레벨(같은 부모 폴더)에 있는 문서와 폴더를 함께 선택해 한 번에 처리하는 API입니다.
+> UI에서 체크박스로 선택한 항목을 한 번의 요청으로 처리할 때 사용합니다.
+
+### DELETE /api/bulk
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Bulk/bulkDeleteMixed)
+
+문서와 폴더를 함께 일괄 소프트 삭제합니다. 폴더 삭제 시 하위 폴더·문서도 함께 삭제됩니다.
+
+**Request Body**
+```json
+{
+  "documentIds": ["uuid-1", "uuid-2"],
+  "folderIds": ["uuid-a", "uuid-b"]
+}
+```
+
+| 필드 | 제한 | 설명 |
+|---|---|---|
+| `documentIds` | 최대 100개 (null 허용) | 삭제할 문서 ID 목록 |
+| `folderIds` | 최대 50개 (null 허용) | 삭제할 폴더 ID 목록 |
+
+두 필드 모두 null이거나 빈 배열이면 `INVALID_REQUEST`로 실패합니다.
+
+**Response**: `BulkOperationResultDto`
+```json
+{
+  "code": "SUCCESS",
+  "message": "",
+  "result": {
+    "totalRequested": 4,
+    "succeededCount": 3,
+    "failedCount": 1,
+    "succeededIds": ["uuid-1", "uuid-2", "uuid-a"],
+    "failures": [
+      { "id": "uuid-b", "reason": "폴더를 찾을 수 없습니다." }
+    ]
+  }
+}
+```
+
+> **부분 성공을 허용합니다.** 권한이 없거나 존재하지 않는 항목은 `failures`에 수집되고 나머지는 정상 삭제됩니다.
+
+---
+
+### PATCH /api/bulk/move
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Bulk/bulkMoveMixed)
+
+문서와 폴더를 함께 대상 폴더로 이동합니다. 폴더 이동 시 하위 폴더의 경로도 함께 갱신됩니다.
+
+**Request Body**
+```json
+{
+  "documentIds": ["uuid-1", "uuid-2"],
+  "folderIds": ["uuid-a"],
+  "targetFolderId": "uuid-target"
+}
+```
+
+| 필드 | 제한 | 설명 |
+|---|---|---|
+| `documentIds` | 최대 100개 (null 허용) | 이동할 문서 ID 목록 |
+| `folderIds` | 최대 50개 (null 허용) | 이동할 폴더 ID 목록 |
+| `targetFolderId` | - | 이동 대상 폴더 ID. `null`이면 루트(최상위)로 이동 |
+
+**Response**: `BulkOperationResultDto` (위 삭제 예시와 동일 구조)
+
+> **부분 성공을 허용합니다.** 다음 항목은 `failures`에 수집됩니다:
+> - 권한 없는 항목
+> - 존재하지 않는 항목
+> - 폴더를 자기 자신으로 이동
+> - 폴더를 자신의 하위 폴더로 이동 (순환 이동)
+> - 다른 워크스페이스의 대상 폴더
+
+---
+
+### GET /api/bulk/download
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Bulk/bulkDownloadMixed)
+
+문서와 폴더를 함께 ZIP으로 다운로드합니다. 선택된 문서는 루트에, 선택된 폴더의 문서는 `폴더명/` 하위 디렉토리에 계층 구조로 포함됩니다.
+
+**Request**
+```
+GET /api/bulk/download?documentIds=uuid-1&documentIds=uuid-2&folderIds=uuid-a
+```
+
+| 파라미터 | 제한 | 설명 |
+|---|---|---|
+| `documentIds` | 최대 100개 (optional) | 직접 다운로드할 문서 ID 목록 |
+| `folderIds` | 최대 50개 (optional) | 포함할 폴더 ID 목록 (재귀적으로 하위 문서 전체 포함) |
+
+두 파라미터 모두 생략하면 `INVALID_REQUEST`로 실패합니다.
+
+**Response**: `application/zip` 바이너리 스트림 (`fixlog-bulk.zip`)
+
+**ZIP 내부 구조 예시**
+
+선택 항목: `[문서A, 문서B, 폴더X]`, 폴더X 안에 `[문서C, 하위폴더Y[문서D]]`
+
+```
+문서A.pdf
+문서B.pdf
+폴더X/
+  문서C.pdf
+  하위폴더Y/
+    문서D.pdf
+```
+
+> **다운로드는 fail-fast입니다.** 직접 선택한 문서 중 다운로드 권한이 없는 문서가 있으면 전체 요청이 실패합니다. 폴더 내부 문서도 각 문서에 대한 다운로드 권한이 없으면 실패합니다.
+>
+> ZIP 내 같은 이름이 겹치면 `문서제목 (1).pdf`, `문서제목 (2).pdf`처럼 순번이 붙습니다 (디렉토리별로 독립 적용).
+
+---
+
 ## 6. AI API
 
 > 모든 엔드포인트 **인증 필요**
