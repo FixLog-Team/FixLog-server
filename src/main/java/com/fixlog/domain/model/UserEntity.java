@@ -36,6 +36,9 @@ public class UserEntity {
 	@Column(name = "picture_url")
 	private String pictureUrl;
 
+	@Column(name = "nickname", length = 50)
+	private String nickname;
+
 	protected UserEntity() {
 	}
 
@@ -82,6 +85,19 @@ public class UserEntity {
 
 	public String getPictureUrl() {
 		return pictureUrl;
+	}
+
+	public String getNickname() {
+		return nickname;
+	}
+
+	public String getDisplayName() {
+		return nickname != null ? nickname : userName;
+	}
+
+	public void updateNickname(String nickname) {
+		this.nickname = nickname;
+		this.updateAt = Instant.now();
 	}
 
 	public boolean isDeleted() {
