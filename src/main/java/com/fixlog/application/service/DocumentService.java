@@ -25,6 +25,7 @@ import com.fixlog.presentation.dto.request.DocumentCreateRequest;
 import com.fixlog.presentation.dto.request.DocumentMoveRequest;
 import com.fixlog.presentation.dto.request.DocumentSaveRequest;
 import com.fixlog.presentation.dto.request.DocumentTitleRequest;
+import com.fixlog.presentation.dto.response.BulkOperationResultDto;
 import com.fixlog.presentation.dto.response.DocumentSaveStateDto;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -33,15 +34,20 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * 문서 서비스.
@@ -391,6 +397,112 @@ public class DocumentService {
     }
 
     public record PdfResult(String title, byte[] bytes) {}
+
+    public record BulkDownloadResult(byte[] zipBytes) {}
+
+    @Transactional
+    public BulkOperationResultDto bulkDelete(List<String> documentIds) {
+        String userId = requireUserId();
+        List<String> succeededIds = new ArrayList<>();
+        List<BulkOperationResultDto.FailedItem> failures = new ArrayList<>();
+        List<DocumentEntity> toDelete = new ArrayList<>();
+
+        for (String docId : documentIds) {
+            try {
+                permissionEvaluator.require(ResourceType.DOCUMENT, docId, PermissionAction.DELETE);
+                DocumentEntity doc = load(docId);
+                toDelete.add(doc);
+                succeededIds.add(docId);
+            } catch (BusinessException e) {
+                failures.add(new BulkOperationResultDto.FailedItem(docId, e.getMessage()));
+            }
+        }
+
+        for (DocumentEntity doc : toDelete) {
+            doc.softDelete(userId);
+        }
+        documentRepository.saveAll(toDelete);
+
+        for (String docId : succeededIds) {
+            eventPublisher.publishEvent(new DocumentDeletedEvent(docId));
+        }
+
+        return BulkOperationResultDto.of(succeededIds, failures, documentIds.size());
+    }
+
+    @Transactional
+    public BulkOperationResultDto bulkMove(List<String> documentIds, String targetFolderId) {
+        String userId = requireUserId();
+
+        if (targetFolderId != null) {
+            permissionEvaluator.require(ResourceType.FOLDER, targetFolderId, PermissionAction.EDIT);
+            folderRepository.findByFolderIdAndUsable(targetFolderId, Integer.valueOf(1))
+                    .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "대상 폴더를 찾을 수 없습니다."));
+        }
+
+        List<String> succeededIds = new ArrayList<>();
+        List<BulkOperationResultDto.FailedItem> failures = new ArrayList<>();
+        List<DocumentEntity> toMove = new ArrayList<>();
+
+        for (String docId : documentIds) {
+            try {
+                permissionEvaluator.require(ResourceType.DOCUMENT, docId, PermissionAction.EDIT);
+                DocumentEntity doc = load(docId);
+
+                if (targetFolderId != null) {
+                    folderRepository.findByFolderIdAndUsable(targetFolderId, Integer.valueOf(1))
+                            .filter(f -> f.getWorkspaceId().equals(doc.getWorkspaceId()))
+                            .orElseThrow(() -> new BusinessException(Code.INVALID_REQUEST,
+                                    "대상 폴더가 같은 워크스페이스에 없습니다."));
+                }
+
+                toMove.add(doc);
+                succeededIds.add(docId);
+            } catch (BusinessException e) {
+                failures.add(new BulkOperationResultDto.FailedItem(docId, e.getMessage()));
+            }
+        }
+
+        for (DocumentEntity doc : toMove) {
+            int ordinal = documentRepository.maxOrdinal(targetFolderId, doc.getWorkspaceId()) + 1;
+            doc.moveTo(targetFolderId, ordinal, userId);
+        }
+        documentRepository.saveAll(toMove);
+
+        return BulkOperationResultDto.of(succeededIds, failures, documentIds.size());
+    }
+
+    @Transactional(readOnly = true)
+    public BulkDownloadResult bulkDownload(List<String> documentIds) {
+        List<PdfResult> pdfs = new ArrayList<>();
+        for (String docId : documentIds) {
+            DocumentEntity doc = loadForDownload(docId);
+            pdfs.add(new PdfResult(doc.getTitle(), pdfGenerator.generate(doc, watermarkFor(doc))));
+        }
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            Set<String> usedNames = new HashSet<>();
+            for (PdfResult pdf : pdfs) {
+                String entryName = deduplicatedEntryName(pdf.title(), usedNames) + ".pdf";
+                zos.putNextEntry(new ZipEntry(entryName));
+                zos.write(pdf.bytes());
+                zos.closeEntry();
+            }
+        } catch (IOException e) {
+            throw new BusinessException(Code.UNKNOWN, "ZIP 파일 생성에 실패했습니다.");
+        }
+
+        return new BulkDownloadResult(baos.toByteArray());
+    }
+
+    private String deduplicatedEntryName(String title, Set<String> usedNames) {
+        String safe = (title == null || title.isBlank()) ? "문서" : title.replaceAll("[/\\\\:*?\"<>|]", "_");
+        if (usedNames.add(safe)) return safe;
+        int i = 1;
+        while (!usedNames.add(safe + " (" + i + ")")) i++;
+        return safe + " (" + i + ")";
+    }
 
     @Transactional(readOnly = true)
     public PdfResult downloadPdfResult(String documentId) {

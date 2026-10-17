@@ -4,6 +4,7 @@ import com.fixlog.application.service.FolderService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
 import com.fixlog.domain.model.FolderEntity;
+import com.fixlog.presentation.dto.request.BulkFolderDeleteRequest;
 import com.fixlog.presentation.dto.request.FolderMoveRequest;
 import com.fixlog.presentation.dto.request.FolderReorderRequest;
 import com.fixlog.presentation.dto.request.FolderRequest;
@@ -11,6 +12,7 @@ import com.fixlog.presentation.dto.response.FolderContentsDto;
 import com.fixlog.presentation.dto.response.FolderDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -89,5 +91,11 @@ public class FolderController {
     public Response deleteFolder(@PathVariable String folderId) {
         folderService.deleteFolder(folderId);
         return Response.success("폴더가 삭제되었습니다. 하위 폴더와 문서도 함께 삭제됩니다.");
+    }
+
+    @DeleteMapping("/bulk")
+    @Operation(operationId = "bulkDeleteFolders")
+    public Response bulkDelete(@Valid @RequestBody BulkFolderDeleteRequest req) {
+        return DataResponse.success(folderService.bulkDelete(req.folderIds()));
     }
 }
