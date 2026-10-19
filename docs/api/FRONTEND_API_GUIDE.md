@@ -1751,7 +1751,11 @@ if (pendingToken) {
 
 | 필드 | 설명 |
 |---|---|
+| `principalName` | 권한 대상자의 이름 |
+| `principalEmail` | 권한 대상자의 이메일. `principalType`이 `USER`일 때만 값이 있음. 동명이인 구별에 사용 |
 | `inheritedFromFolderId` | `null`이면 직접 부여된 권한. 값이 있으면 해당 폴더에서 상속된 권한 — 이 리소스에서는 회수 불가 |
+
+> 이름이 같은 사용자가 여러 명일 때 `principalEmail`로 구별할 수 있습니다. UI에서 이름 옆 괄호에 이메일을 표시하는 것을 권장합니다.
 
 > 상속된 권한을 회수하려면 `inheritedFromFolderId`의 폴더에서 `DELETE /api/folders/{folderId}/permissions/{permissionId}`를 호출하세요.
 
@@ -1782,7 +1786,7 @@ Swagger:
 **폴더 권한은 하위 폴더·문서로 상속됩니다.** 폴더를 공유하면 그 안의 문서까지 열립니다.
 문서에 직접 준 권한이 상속보다 우선하고, 가까운 폴더가 먼 폴더를 이깁니다.
 
-`GET /api/folders/{folderId}/permissions`도 마찬가지로 직접 권한 + 상위 폴더에서 상속된 권한을 함께 반환합니다. `inheritedFromFolderId` 필드로 구분하세요.
+`GET /api/folders/{folderId}/permissions`도 마찬가지로 직접 권한 + 상위 폴더에서 상속된 권한을 함께 반환합니다. 응답 구조는 문서 권한과 동일하며 `principalEmail`, `inheritedFromFolderId` 필드를 포함합니다.
 
 개인 워크스페이스에서 폴더를 공유하면 대상자는 **해당 폴더와 그 하위 문서에만** 접근 가능합니다.
 
