@@ -1,8 +1,18 @@
 package com.fixlog.application.service;
 
 import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.FolderRepository;
+import com.fixlog.common.code.Code;
+import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.DocumentEntity;
+import com.fixlog.domain.model.FolderEntity;
+import com.fixlog.presentation.dto.response.DocumentDto;
+import com.fixlog.presentation.dto.response.FolderDto;
 import com.fixlog.presentation.dto.response.SearchResultDto;
+import com.fixlog.presentation.dto.response.TitleSearchResultDto;
+
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -23,15 +33,18 @@ public class DocumentSearchService {
 
     private final VectorStore vectorStore;
     private final DocumentRepository documentRepository;
+    private final FolderRepository folderRepository;
     private final WorkspaceContext workspaceContext;
     private final PermissionEvaluator permissionEvaluator;
 
     public DocumentSearchService(VectorStore vectorStore,
                                  DocumentRepository documentRepository,
+                                 FolderRepository folderRepository,
                                  WorkspaceContext workspaceContext,
                                  PermissionEvaluator permissionEvaluator) {
         this.vectorStore = vectorStore;
         this.documentRepository = documentRepository;
+        this.folderRepository = folderRepository;
         this.workspaceContext = workspaceContext;
         this.permissionEvaluator = permissionEvaluator;
     }
@@ -92,5 +105,50 @@ public class DocumentSearchService {
     private String truncate(String text, int max) {
         if (text == null) return "";
         return text.length() > max ? text.substring(0, max) + "..." : text;
+    }
+
+    /**
+     * 제목 기반 통합 검색. folderId가 있으면 해당 폴더의 서브트리(하위 폴더·문서 전체)로 범위를 제한한다.
+     */
+    public TitleSearchResultDto titleSearch(String q, String folderId) {
+        UUID workspaceId = workspaceContext.requireCurrentWorkspaceId();
+        PermissionEvaluator.Scope scope = permissionEvaluator.scopeFor(workspaceId);
+        String keyword = q == null ? "" : q.toLowerCase();
+
+        List<FolderEntity> candidateFolders;
+        List<DocumentEntity> candidateDocuments;
+
+        if (folderId != null) {
+            FolderEntity root = folderRepository.findByFolderIdAndUsable(folderId, Integer.valueOf(1))
+                    .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
+            // path prefix로 서브트리 전체(루트 포함) 조회
+            candidateFolders = folderRepository.findByPathStartingWith(root.getPath());
+            Set<String> subtreeFolderIds = candidateFolders.stream()
+                    .map(FolderEntity::getFolderId)
+                    .collect(Collectors.toSet());
+            candidateDocuments = documentRepository
+                    .findByWorkspaceIdAndUsableOrderByOrdinalAscCreateTimeAsc(workspaceId, Integer.valueOf(1))
+                    .stream()
+                    .filter(d -> subtreeFolderIds.contains(d.getFolderId()))
+                    .toList();
+        } else {
+            candidateFolders = folderRepository.findByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1));
+            candidateDocuments = documentRepository
+                    .findByWorkspaceIdAndUsableOrderByOrdinalAscCreateTimeAsc(workspaceId, Integer.valueOf(1));
+        }
+
+        List<FolderDto> folders = candidateFolders.stream()
+                .filter(f -> scope.canViewFolder(f.getFolderId()))
+                .filter(f -> f.getFolderName() != null && f.getFolderName().toLowerCase().contains(keyword))
+                .map(FolderDto::from)
+                .toList();
+
+        List<DocumentDto> documents = candidateDocuments.stream()
+                .filter(d -> scope.canViewDocument(d.getDocumentId(), d.getFolderId()))
+                .filter(d -> d.getTitle() != null && d.getTitle().toLowerCase().contains(keyword))
+                .map(DocumentDto::from)
+                .toList();
+
+        return new TitleSearchResultDto(folders, documents);
     }
 }
