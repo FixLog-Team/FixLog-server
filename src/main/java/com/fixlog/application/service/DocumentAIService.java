@@ -2,11 +2,13 @@ package com.fixlog.application.service;
 
 import com.fixlog.application.repository.DocumentAiSummaryRepository;
 import com.fixlog.application.repository.DocumentRepository;
+import com.fixlog.application.repository.ImageRepository;
 import com.fixlog.common.ai.TokenUsageLogger;
 import com.fixlog.common.code.Code;
 import com.fixlog.common.exception.BusinessException;
 import com.fixlog.domain.model.DocumentAiSummaryEntity;
 import com.fixlog.domain.model.DocumentEntity;
+import com.fixlog.domain.model.ImageEntity;
 import com.fixlog.domain.model.PermissionAction;
 import com.fixlog.domain.model.ResourceType;
 import org.slf4j.Logger;
@@ -16,6 +18,8 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class DocumentAIService extends AbstractAIService {
 
@@ -23,16 +27,22 @@ public class DocumentAIService extends AbstractAIService {
 
     private final DocumentRepository documentRepository;
     private final DocumentAiSummaryRepository summaryRepository;
+    private final ImageRepository imageRepository;
+    private final DocumentImageReferenceExtractor referenceExtractor;
     private final PermissionEvaluator permissionEvaluator;
 
     public DocumentAIService(@Qualifier("googleGenAiChatModel") ChatModel chatModel,
                              TokenUsageLogger tokenUsageLogger,
                              DocumentRepository documentRepository,
                              DocumentAiSummaryRepository summaryRepository,
+                             ImageRepository imageRepository,
+                             DocumentImageReferenceExtractor referenceExtractor,
                              PermissionEvaluator permissionEvaluator) {
         super(ChatClient.builder(chatModel).build(), tokenUsageLogger);
         this.documentRepository = documentRepository;
         this.summaryRepository = summaryRepository;
+        this.imageRepository = imageRepository;
+        this.referenceExtractor = referenceExtractor;
         this.permissionEvaluator = permissionEvaluator;
     }
 
@@ -49,9 +59,33 @@ public class DocumentAIService extends AbstractAIService {
             return cached.getSummary();
         }
 
-        String summary = super.summarizeDocument(doc.getPlainText());
+        String contentForSummary = buildContentWithImages(doc);
+        String summary = super.summarizeDocument(contentForSummary);
         saveSummaryCache(cached, doc, summary);
         return summary;
+    }
+
+    /**
+     * 문서 본문 + 첨부 이미지 분석 텍스트를 합쳐 요약 입력을 만든다.
+     * 이미지에서 읽어낸 내용도 요약에 반영되어야 문서 전체를 아우르는 요약이 나온다.
+     */
+    private String buildContentWithImages(DocumentEntity doc) {
+        List<String> imageIds = referenceExtractor.extract(doc.getBlocks());
+        if (imageIds.isEmpty()) {
+            return doc.getPlainText();
+        }
+
+        List<ImageEntity> images = imageRepository.findByImageIdIn(imageIds);
+        StringBuilder sb = new StringBuilder(doc.getPlainText());
+        for (ImageEntity image : images) {
+            if (!image.hasSearchableText()) continue;
+            sb.append("\n\n[첨부 이미지");
+            if (image.getOriginalName() != null) {
+                sb.append(": ").append(image.getOriginalName());
+            }
+            sb.append("]\n").append(image.getAnalysisText());
+        }
+        return sb.toString();
     }
 
     private void saveSummaryCache(DocumentAiSummaryEntity cached, DocumentEntity doc, String summary) {
