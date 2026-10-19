@@ -120,6 +120,6 @@ public class SharingController {
                 : permissionService.shareWithEmail(resourceType, resourceId,
                         request.email(), request.allowsDownload());
 
-        return PermissionDto.of(saved, null);
+        return PermissionDto.of(saved, null, null);
     }
 }

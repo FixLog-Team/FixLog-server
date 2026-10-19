@@ -139,7 +139,7 @@ public class PermissionService {
         List<PermissionDto> direct = permissionRepository
                 .findByResourceTypeAndResourceId(resourceType, resourceId).stream()
                 .filter(p -> !p.isCanEdit())
-                .map(p -> PermissionDto.of(p, principalNameOf(p)))
+                .map(p -> PermissionDto.of(p, principalNameOf(p), principalEmailOf(p)))
                 .toList();
 
         List<String> ancestorIds = permissionEvaluator.ancestorFolderIdsOf(resourceType, resourceId);
@@ -147,7 +147,7 @@ public class PermissionService {
                 .flatMap(folderId -> permissionRepository
                         .findByResourceTypeAndResourceId(ResourceType.FOLDER, folderId).stream()
                         .filter(p -> !p.isCanEdit())
-                        .map(p -> PermissionDto.ofInherited(p, principalNameOf(p), folderId)))
+                        .map(p -> PermissionDto.ofInherited(p, principalNameOf(p), principalEmailOf(p), folderId)))
                 .toList();
 
         return Stream.concat(direct.stream(), inherited.stream()).toList();
@@ -161,6 +161,13 @@ public class PermissionService {
             case GROUP -> groupRepository.findById(permission.getPrincipalId())
                     .map(g -> g.getGroupName()).orElse(null);
         };
+    }
+
+    /** USER 타입일 때 이메일을 반환한다. GROUP은 이메일 개념이 없으므로 null. */
+    private String principalEmailOf(PermissionEntity permission) {
+        if (permission.getPrincipalType() != PrincipalType.USER) return null;
+        return userRepository.findById(permission.getPrincipalId())
+                .map(u -> u.getEmail()).orElse(null);
     }
 
     /** 개인 워크스페이스 공유: 워크스페이스 구성원 여부와 무관하게 등록된 사용자이기만 하면 된다. 그룹 공유는 미지원. */

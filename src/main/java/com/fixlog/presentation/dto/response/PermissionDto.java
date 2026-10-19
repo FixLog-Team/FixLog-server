@@ -12,6 +12,8 @@ public record PermissionDto(
         PrincipalType principalType,
         UUID principalId,
         String principalName,
+        /** 동명이인 구별용. USER 타입일 때만 값이 있다. */
+        String principalEmail,
         PermissionType permissionType,
         boolean canDownload,
         boolean canEdit,
@@ -19,12 +21,13 @@ public record PermissionDto(
         String inheritedFromFolderId,
         Instant createAt
 ) {
-    public static PermissionDto of(PermissionEntity entity, String principalName) {
+    public static PermissionDto of(PermissionEntity entity, String principalName, String principalEmail) {
         return new PermissionDto(
                 entity.getId(),
                 entity.getPrincipalType(),
                 entity.getPrincipalId(),
                 principalName,
+                principalEmail,
                 entity.getPermissionType(),
                 entity.isCanDownload(),
                 entity.isCanEdit(),
@@ -34,12 +37,13 @@ public record PermissionDto(
     }
 
     public static PermissionDto ofInherited(PermissionEntity entity, String principalName,
-                                             String fromFolderId) {
+                                             String principalEmail, String fromFolderId) {
         return new PermissionDto(
                 entity.getId(),
                 entity.getPrincipalType(),
                 entity.getPrincipalId(),
                 principalName,
+                principalEmail,
                 entity.getPermissionType(),
                 entity.isCanDownload(),
                 entity.isCanEdit(),
