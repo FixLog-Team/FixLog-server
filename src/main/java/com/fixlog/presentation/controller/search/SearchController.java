@@ -4,12 +4,15 @@ import com.fixlog.application.service.DocumentSearchService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.presentation.dto.request.SemanticSearchRequest;
 import com.fixlog.presentation.dto.response.SearchResultDto;
+import com.fixlog.presentation.dto.response.TitleSearchResultDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -30,5 +33,12 @@ public class SearchController {
     public DataResponse<List<SearchResultDto>> search(@Valid @RequestBody SemanticSearchRequest request) {
         return DataResponse.success("검색이 완료되었습니다.",
                 searchService.search(request.query(), request.topK()));
+    }
+
+    @GetMapping("/title")
+    @Operation(operationId = "titleSearch")
+    public DataResponse<TitleSearchResultDto> titleSearch(@RequestParam(required = false) String q,
+                                                          @RequestParam(required = false) String folderId) {
+        return DataResponse.success("검색이 완료되었습니다.", searchService.titleSearch(q, folderId));
     }
 }
