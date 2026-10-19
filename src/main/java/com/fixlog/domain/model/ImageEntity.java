@@ -93,6 +93,14 @@ public class ImageEntity {
         }
     }
 
+    /**
+     * 기존 연결이 끊어졌을 때 새 문서로 재연결한다.
+     * 원래 문서가 삭제됐거나 이 이미지를 더 이상 참조하지 않을 때 정비 작업이 호출한다.
+     */
+    public void relinkToDocument(String documentId) {
+        this.documentId = documentId;
+    }
+
     public void completeAnalysis(String analysisText) {
         this.analysisText = analysisText;
         this.analysisStatus = ImageAnalysisStatus.COMPLETED;

@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import org.springframework.data.domain.Pageable;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
@@ -106,18 +108,41 @@ public class ImageMaintenanceService {
      *
      * <p>휴지통에 있는 문서도 참조로 친다. 복원하면 다시 쓰이는데 그 사이에 원본을 지우면
      * 복원된 문서에 깨진 이미지가 남는다.
+     *
+     * <p>기록된 문서({@code document_id})만 보면 문서 복제·블록 복사로 같은 이미지가 여러 문서에
+     * 쓰일 때 원본 문서가 삭제되면 다른 문서가 아직 쓰는데도 고아로 판정해 이미지를 지운다.
+     * 빠른 경로가 실패하면 전체 문서에서 이 이미지 URL을 찾아 참조를 확인한다.
      */
     private boolean isReferenced(ImageEntity image) {
-        if (image.getDocumentId() == null) {
-            return false;
+        // 빠른 경로: 기록된 문서가 아직 이 이미지를 쓰고 있는지 본다
+        if (image.getDocumentId() != null) {
+            Optional<DocumentEntity> document = documentRepository.findById(image.getDocumentId());
+            if (document.isPresent()) {
+                Set<String> referenced = new HashSet<>(referenceExtractor.extract(document.get().getBlocks()));
+                if (referenced.contains(image.getImageId())) {
+                    return true;
+                }
+            }
         }
 
-        Optional<DocumentEntity> document = documentRepository.findById(image.getDocumentId());
-        if (document.isEmpty()) {
+        // 기록된 문서가 없거나, 삭제됐거나, 이 이미지를 뺐다.
+        // 다른 문서가 쓰고 있는지 전체에서 찾는다.
+        return searchAndRelink(image);
+    }
+
+    /**
+     * 전체 문서에서 이 이미지 URL을 포함하는 문서를 찾는다.
+     * 찾으면 {@code document_id}를 갱신해 다음 정비 때 빠른 경로를 타게 한다.
+     */
+    private boolean searchAndRelink(ImageEntity image) {
+        String pattern = "%/api/images/" + image.getImageId() + "%";
+        List<DocumentEntity> docs = documentRepository.findByBlocksContaining(pattern, Pageable.ofSize(1));
+        if (docs.isEmpty()) {
             return false;
         }
-
-        Set<String> referenced = new HashSet<>(referenceExtractor.extract(document.get().getBlocks()));
-        return referenced.contains(image.getImageId());
+        image.relinkToDocument(docs.get(0).getDocumentId());
+        imageRepository.save(image);
+        log.info("이미지 문서 재연결: imageId={}, newDocumentId={}", image.getImageId(), docs.get(0).getDocumentId());
+        return true;
     }
 }

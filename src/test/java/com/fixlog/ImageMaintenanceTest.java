@@ -19,6 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import org.springframework.data.domain.Pageable;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -133,11 +135,64 @@ class ImageMaintenanceTest {
         ImageEntity removed = image("550e8400-e29b-41d4-a716-446655440000", "doc-1");
         given(imageRepository.findByCreateTimeBefore(any())).willReturn(List.of(removed));
         given(documentRepository.findById("doc-1")).willReturn(Optional.of(
-                document("[{\"type\":\"paragraph\",\"data\":{\"text\":\"이미지를 뺐다\"}}]")));
+                document("doc-1", "[{\"type\":\"paragraph\",\"data\":{\"text\":\"이미지를 뺐다\"}}]")));
+        given(documentRepository.findByBlocksContaining(any(), any())).willReturn(List.of());
 
         maintenanceService.cleanupOrphans();
 
         verify(imageStorageService).delete(removed);
+    }
+
+    @Test
+    void 최초_문서가_삭제돼도_다른_문서가_쓰면_지우지_않는다() {
+        String imageId = "550e8400-e29b-41d4-a716-446655440000";
+        ImageEntity used = image(imageId, "doc-1");
+        given(imageRepository.findByCreateTimeBefore(any())).willReturn(List.of(used));
+        // 최초 문서(doc-1)는 삭제됨
+        given(documentRepository.findById("doc-1")).willReturn(Optional.empty());
+        // 다른 문서(doc-2)가 이 이미지를 쓰고 있음
+        DocumentEntity otherDoc = document("doc-2",
+                "[{\"type\":\"image\",\"data\":{\"url\":\"/api/images/" + imageId + "\"}}]");
+        given(documentRepository.findByBlocksContaining(any(), any())).willReturn(List.of(otherDoc));
+        given(imageRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        maintenanceService.cleanupOrphans();
+
+        verify(imageStorageService, never()).delete(any());
+        // document_id가 새 문서로 갱신돼야 한다
+        assertThat(used.getDocumentId()).isEqualTo("doc-2");
+    }
+
+    @Test
+    void 최초_문서에서_빠졌지만_다른_문서가_쓰면_지우지_않는다() {
+        String imageId = "550e8400-e29b-41d4-a716-446655440000";
+        ImageEntity used = image(imageId, "doc-1");
+        given(imageRepository.findByCreateTimeBefore(any())).willReturn(List.of(used));
+        // 최초 문서(doc-1)는 있지만 이 이미지를 뺌
+        given(documentRepository.findById("doc-1")).willReturn(Optional.of(
+                document("doc-1", "[{\"type\":\"paragraph\",\"data\":{\"text\":\"이미지 제거\"}}]")));
+        // 다른 문서(doc-2)가 이 이미지를 쓰고 있음
+        DocumentEntity otherDoc = document("doc-2",
+                "[{\"type\":\"image\",\"data\":{\"url\":\"/api/images/" + imageId + "\"}}]");
+        given(documentRepository.findByBlocksContaining(any(), any())).willReturn(List.of(otherDoc));
+        given(imageRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
+
+        maintenanceService.cleanupOrphans();
+
+        verify(imageStorageService, never()).delete(any());
+        assertThat(used.getDocumentId()).isEqualTo("doc-2");
+    }
+
+    @Test
+    void 최초_문서가_삭제되고_아무도_쓰지_않으면_지운다() {
+        ImageEntity orphan = image("550e8400-e29b-41d4-a716-446655440000", "doc-1");
+        given(imageRepository.findByCreateTimeBefore(any())).willReturn(List.of(orphan));
+        given(documentRepository.findById("doc-1")).willReturn(Optional.empty());
+        given(documentRepository.findByBlocksContaining(any(), any())).willReturn(List.of());
+
+        maintenanceService.cleanupOrphans();
+
+        verify(imageStorageService).delete(orphan);
     }
 
     @Test
@@ -195,7 +250,11 @@ class ImageMaintenanceTest {
     }
 
     private DocumentEntity document(String blocks) {
+        return document("doc-1", blocks);
+    }
+
+    private DocumentEntity document(String documentId, String blocks) {
         return new DocumentEntity(
-                "doc-1", workspaceId, null, "문서", blocks, "", "hash", 1, "user-1");
+                documentId, workspaceId, null, "문서", blocks, "", "hash", 1, "user-1");
     }
 }
