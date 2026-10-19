@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-10-17 (사용자 프로필 API 추가)
+> 최종 업데이트: 2026-10-19 (폴더·문서 통합 제목 검색 API 추가, folderId 서브트리 범위 지원)
 > Base URL (개발): `https://fixlog.art/fixlog`
 
 ---
@@ -15,7 +15,7 @@
 5. [폴더 API](#5-폴더-api)
 6. [AI API](#6-ai-api)
 6-1. [AI 대화방 API](#6-1-ai-대화방-api)
-7. [검색 API](#7-검색-api)
+7. [검색 API](#7-검색-api) — 제목 검색 (`GET /search/title`), 의미 기반 검색 (`POST /search`)
 8. [워크스페이스 API](#8-워크스페이스-api)
 8-1. [초대 API (이메일 기반)](#8-1-초대-api--이메일-기반)
 9. [공유 API](#9-공유-api)
@@ -1148,6 +1148,63 @@ AI 대화방 삭제 (소프트 삭제)
 ## 7. 검색 API
 
 > 모든 엔드포인트 **인증 필요**
+
+### GET /search/title
+> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Search/titleSearch)
+
+폴더 이름 + 문서 제목 통합 키워드 검색. 내용은 검색하지 않는다.
+
+**Query Params**
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `q` | 아니오 | 검색 키워드. 대소문자 무시 부분 일치. 생략 시 전체 반환 |
+| `folderId` | 아니오 | 검색 범위를 해당 폴더의 **서브트리 전체**(하위 폴더·문서 재귀)로 제한. 생략 시 워크스페이스 전체 |
+
+**Response**
+```json
+{
+  "code": "SUCCESS",
+  "message": "검색이 완료되었습니다.",
+  "result": {
+    "folders": [
+      {
+        "folderId": "uuid",
+        "parentId": "uuid",
+        "folderName": "스프링 트러블슈팅",
+        "ordinal": 0,
+        "createUser": "user-uuid",
+        "createTime": "2026-05-19T07:00:00Z",
+        "updateUser": "user-uuid",
+        "updateTime": "2026-05-19T07:00:00Z"
+      }
+    ],
+    "documents": [
+      {
+        "documentId": "uuid",
+        "folderId": "uuid",
+        "title": "스프링 시큐리티 401 에러 해결",
+        "blocks": "...",
+        "plainText": "...",
+        "contentHash": "sha256hex",
+        "ordinal": 0,
+        "createUser": "user-uuid",
+        "createUserName": null,
+        "createUserPictureUrl": null,
+        "createTime": "2026-05-19T07:00:00Z",
+        "updateUser": "user-uuid",
+        "updateTime": "2026-05-19T07:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+> 권한 필터가 동일하게 적용됩니다. 접근 불가 폴더·문서는 결과에 포함되지 않습니다.
+> `createUserName` / `createUserPictureUrl`은 목록 조회와 동일하게 `null`로 반환됩니다.
+> `folderId`에 존재하지 않는 폴더를 지정하면 `NOT_FOUND`를 반환합니다.
+
+---
 
 ### POST /search
 > [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Search/search)
