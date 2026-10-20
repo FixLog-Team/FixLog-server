@@ -32,7 +32,7 @@ public class AIConversationService {
         UUID userId = requireUserId();
         String title = normalizeTitle(request.title());
         return conversationRepository.save(new AIConversationEntity(
-                userId, workspaceContext.requireCurrentWorkspaceId(), title));
+                userId, workspaceContext.requireCurrentWorkspaceId(), title, request.documentId()));
     }
 
     @Transactional(readOnly = true)

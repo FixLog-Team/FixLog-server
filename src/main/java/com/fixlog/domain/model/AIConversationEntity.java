@@ -40,13 +40,22 @@ public class AIConversationEntity {
     @Column(name = "update_time", nullable = false)
     private Instant updateTime;
 
+    /** 문서 전용 대화방이면 해당 문서 ID, 일반 검색 대화방이면 null. */
+    @Column(name = "document_id", length = 36)
+    private String documentId;
+
     protected AIConversationEntity() {
     }
 
     public AIConversationEntity(UUID userId, UUID workspaceId, String title) {
+        this(userId, workspaceId, title, null);
+    }
+
+    public AIConversationEntity(UUID userId, UUID workspaceId, String title, String documentId) {
         this.userId = userId;
         this.workspaceId = java.util.Objects.requireNonNull(workspaceId);
         this.title = title;
+        this.documentId = documentId;
         this.nextMessageSequence = 1;
         this.usable = 1;
         this.createTime = Instant.now();
@@ -108,5 +117,14 @@ public class AIConversationEntity {
 
     public Instant getUpdateTime() {
         return updateTime;
+    }
+
+    public String getDocumentId() {
+        return documentId;
+    }
+
+    /** 문서 전용 대화방인지 여부. */
+    public boolean isDocumentScoped() {
+        return documentId != null;
     }
 }

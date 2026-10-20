@@ -66,13 +66,47 @@ public class DocumentTextExtractor {
                         }
                     }
                     case "code" -> appendLine(sb, data.path("code").asText(""));
-                    default -> { /* image, table, unknown → skip */ }
+                    // 이미지 본문은 비전 분석이 따로 다루지만, 사용자가 쓴 캡션은 그 자체로 검색 단서다
+                    case "image" -> appendLine(sb, imageCaptionOf(data));
+                    case "table" -> appendLine(sb, tableTextOf(data));
+                    default -> { /* unknown → skip */ }
                 }
             }
             return stripHtml(sb.toString()).trim();
         } catch (Exception e) {
             return "";
         }
+    }
+
+    /** 캡션 위치가 에디터마다 달라(BlockNote {@code caption}, Editor.js {@code caption}/{@code alt}) 둘 다 본다. */
+    private String imageCaptionOf(JsonNode data) {
+        String caption = data.path("caption").asText("");
+        if (caption.isEmpty()) {
+            caption = data.path("alt").asText("");
+        }
+        return caption;
+    }
+
+    /**
+     * 표를 행 단위로 펼친다. 셀 구분은 공백이면 열 경계가 뭉개지고, 줄바꿈이면 행이 쪼개져
+     * 청킹에서 서로 다른 행이 섞인다. 그래서 셀은 공백, 행은 줄바꿈으로 나눈다.
+     */
+    private String tableTextOf(JsonNode data) {
+        JsonNode rows = data.path("content");
+        if (!rows.isArray()) {
+            return "";
+        }
+        List<String> lines = new ArrayList<>();
+        for (JsonNode row : rows) {
+            if (!row.isArray()) continue;
+            List<String> cells = new ArrayList<>();
+            row.forEach(cell -> {
+                String text = cell.asText("").trim();
+                if (!text.isEmpty()) cells.add(text);
+            });
+            if (!cells.isEmpty()) lines.add(String.join(" ", cells));
+        }
+        return String.join("\n", lines);
     }
 
     private void appendLine(StringBuilder sb, String s) {

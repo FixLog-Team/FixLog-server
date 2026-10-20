@@ -75,6 +75,14 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, String
         long getDocumentCount();
     }
 
+    /**
+     * blocks 컬럼에 특정 패턴을 포함하는 문서를 찾는다.
+     * 이미지 정비 작업에서 기록된 문서가 삭제됐을 때 다른 문서가 이 이미지를 쓰고 있는지 확인하는 데 쓴다.
+     * 하나만 찾으면 충분하므로 {@code Pageable.ofSize(1)}과 함께 호출한다.
+     */
+    @Query("SELECT d FROM DocumentEntity d WHERE d.blocks LIKE :pattern")
+    List<DocumentEntity> findByBlocksContaining(@Param("pattern") String pattern, Pageable pageable);
+
     /** 워크스페이스 삭제 시 내부 문서 일괄 soft-delete. */
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE DocumentEntity d SET d.usable = 0 WHERE d.workspaceId = :workspaceId AND d.usable = 1")

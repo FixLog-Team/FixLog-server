@@ -19,7 +19,13 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -30,6 +36,8 @@ import java.util.UUID;
  */
 @Service
 public class DocumentSearchService {
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentSearchService.class);
 
     private final VectorStore vectorStore;
     private final DocumentRepository documentRepository;
@@ -72,13 +80,17 @@ public class DocumentSearchService {
                 .map(DocumentEntity::getDocumentId)
                 .toList();
 
+        log.info("벡터 검색 시작: workspaceId={}, query='{}', topK={}, threshold={}, accessible={}",
+                workspaceId, query, topK, similarityThreshold, accessible);
+
         // 볼 수 있는 문서가 없으면 벡터 조회 자체를 돌리지 않는다
         if (accessible.isEmpty()) {
+            log.warn("벡터 검색 스킵: 접근 가능 문서 없음");
             return List.of();
         }
 
         FilterExpressionBuilder b = new FilterExpressionBuilder();
-        return vectorStore.similaritySearch(
+        List<Document> results = vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(query)
                         .topK(topK)
@@ -88,18 +100,87 @@ public class DocumentSearchService {
                                 b.in("documentId", accessible.toArray())).build())
                         .build()
         );
+        log.info("벡터 검색 결과: {}건", results.size());
+        return results;
     }
 
+    /**
+     * 청크 목록을 문서 단위로 합쳐 반환한다.
+     * 같은 문서의 텍스트·이미지 청크가 따로 나가지 않도록 documentId 기준으로 병합한다.
+     * 점수는 가장 높은 청크의 값을 쓰고, 이미지는 images 목록에 모은다.
+     */
     public List<SearchResultDto> toResults(List<Document> documents) {
-        return documents.stream()
-                .map(doc -> new SearchResultDto(
-                        (String) doc.getMetadata().get("documentId"),
+        // LinkedHashMap으로 검색 점수 순서(벡터 DB가 돌려준 순서)를 유지한다
+        Map<String, MergeAccumulator> accumulators = new LinkedHashMap<>();
+
+        for (Document doc : documents) {
+            String documentId = (String) doc.getMetadata().get("documentId");
+            String source = (String) doc.getMetadata().getOrDefault("source", "text");
+            String excerpt = truncate(doc.getText(), 200);
+
+            MergeAccumulator acc = accumulators.get(documentId);
+            if (acc == null) {
+                acc = new MergeAccumulator(
+                        documentId,
                         (String) doc.getMetadata().get("title"),
-                        (String) doc.getMetadata().get("folderId"),
-                        truncate(doc.getText(), 200),
-                        doc.getScore()
-                ))
-                .toList();
+                        (String) doc.getMetadata().get("folderId"));
+                accumulators.put(documentId, acc);
+            }
+
+            acc.addChunk(source, excerpt, doc.getScore(),
+                    (String) doc.getMetadata().get("imageId"),
+                    (String) doc.getMetadata().get("imageName"));
+        }
+
+        return accumulators.values().stream().map(MergeAccumulator::toDto).toList();
+    }
+
+    private static class MergeAccumulator {
+        private final String documentId;
+        private final String title;
+        private final String folderId;
+        private final StringBuilder excerptBuilder = new StringBuilder();
+        private double bestScore;
+        private boolean hasText;
+        private boolean hasImage;
+        private final List<SearchResultDto.ImageRef> images = new ArrayList<>();
+
+        MergeAccumulator(String documentId, String title, String folderId) {
+            this.documentId = documentId;
+            this.title = title;
+            this.folderId = folderId;
+        }
+
+        void addChunk(String source, String excerpt, Double score,
+                      String imageId, String imageName) {
+            if (score != null && score > bestScore) bestScore = score;
+            if (!excerptBuilder.isEmpty()) excerptBuilder.append(" … ");
+            excerptBuilder.append(excerpt);
+
+            if ("image".equals(source) && imageId != null) {
+                hasImage = true;
+                images.add(new SearchResultDto.ImageRef(imageId, imageName));
+            } else {
+                hasText = true;
+            }
+        }
+
+        SearchResultDto toDto() {
+            String source = (hasText && hasImage) ? "mixed" : hasImage ? "image" : "text";
+            String firstImageId = images.isEmpty() ? null : images.get(0).imageId();
+            String firstImageName = images.isEmpty() ? null : images.get(0).imageName();
+            return new SearchResultDto(
+                    documentId, title, folderId,
+                    truncateStatic(excerptBuilder.toString(), 400),
+                    bestScore, source,
+                    firstImageId, firstImageName,
+                    List.copyOf(images));
+        }
+    }
+
+    private static String truncateStatic(String text, int max) {
+        if (text == null) return "";
+        return text.length() > max ? text.substring(0, max) + "..." : text;
     }
 
     private String truncate(String text, int max) {
