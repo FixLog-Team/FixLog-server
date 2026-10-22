@@ -65,7 +65,7 @@ class AIConversationServiceTest {
         when(conversationRepository.save(any(AIConversationEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        AIConversationEntity conversation = conversationService.create(new AIConversationCreateRequest("  "));
+        AIConversationEntity conversation = conversationService.create(new AIConversationCreateRequest("  ", null));
 
         assertThat(conversation.getUserId()).isEqualTo(userId);
         assertThat(conversation.getWorkspaceId()).isEqualTo(workspaceId);
