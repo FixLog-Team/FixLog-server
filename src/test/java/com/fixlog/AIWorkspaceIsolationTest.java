@@ -72,12 +72,12 @@ class AIWorkspaceIsolationTest {
 
     @Test
     void createsAndListsOnlyCurrentUsersActiveConversationsInCurrentWorkspace() {
-        AIConversationEntity personal = conversationService.create(new AIConversationCreateRequest("personal"));
+        AIConversationEntity personal = conversationService.create(new AIConversationCreateRequest("personal", null));
         assertThat(personal.getWorkspaceId()).isEqualTo(personalId);
         selectWorkspace(sharedId.toString());
-        AIConversationEntity shared = conversationService.create(new AIConversationCreateRequest("shared"));
+        AIConversationEntity shared = conversationService.create(new AIConversationCreateRequest("shared", null));
         assertThat(shared.getWorkspaceId()).isEqualTo(sharedId);
-        AIConversationEntity deleted = conversationService.create(new AIConversationCreateRequest("deleted"));
+        AIConversationEntity deleted = conversationService.create(new AIConversationCreateRequest("deleted", null));
         conversationService.delete(deleted.getConversationId());
         UserEntity other = users.save(new UserEntity("other", "other-chat@example.com"));
         conversations.save(new AIConversationEntity(other.getUserId(), sharedId, "other"));
@@ -91,7 +91,7 @@ class AIWorkspaceIsolationTest {
 
     @Test
     void rejectsCrossWorkspaceReadDeleteMessageHistoryAndSendWithoutMutatingData() {
-        AIConversationEntity personal = conversationService.create(new AIConversationCreateRequest("personal"));
+        AIConversationEntity personal = conversationService.create(new AIConversationCreateRequest("personal", null));
         UUID id = personal.getConversationId();
         persistenceService.prepare(id, "existing message");
         long messageCount = messages.count();
@@ -110,7 +110,7 @@ class AIWorkspaceIsolationTest {
     @Test
     void allowsMessageSendAndHistoryInSelectedWorkspace() {
         selectWorkspace(sharedId.toString());
-        AIConversationEntity conversation = conversationService.create(new AIConversationCreateRequest("shared"));
+        AIConversationEntity conversation = conversationService.create(new AIConversationCreateRequest("shared", null));
         var prepared = persistenceService.prepare(conversation.getConversationId(), "hello");
         assertThat(queryService.list(conversation.getConversationId(), null, 20).getContent())
                 .containsExactly(prepared.assistantMessage(), prepared.userMessage());
@@ -134,7 +134,7 @@ class AIWorkspaceIsolationTest {
     @Test
     void rejectsOwnConversationAfterWorkspaceMembershipIsRemoved() {
         selectWorkspace(sharedId.toString());
-        AIConversationEntity conversation = conversationService.create(new AIConversationCreateRequest("shared"));
+        AIConversationEntity conversation = conversationService.create(new AIConversationCreateRequest("shared", null));
         members.delete(members.findByWorkspaceIdAndUserId(sharedId, user.getUserId()).orElseThrow());
         members.flush();
 
@@ -148,7 +148,7 @@ class AIWorkspaceIsolationTest {
         UUID inaccessible = workspaces.save(WorkspaceEntity.shared("private team")).getWorkspaceId();
         selectWorkspace(inaccessible.toString());
         assertNotFound(() -> conversationService.list(PageRequest.of(0, 20)));
-        assertNotFound(() -> conversationService.create(new AIConversationCreateRequest("forbidden")));
+        assertNotFound(() -> conversationService.create(new AIConversationCreateRequest("forbidden", null)));
         selectWorkspace("invalid-uuid");
         assertThatThrownBy(() -> conversationService.list(PageRequest.of(0, 20)))
                 .isInstanceOfSatisfying(BusinessException.class,
