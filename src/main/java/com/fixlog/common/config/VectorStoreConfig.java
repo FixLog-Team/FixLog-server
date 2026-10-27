@@ -73,13 +73,17 @@ public class VectorStoreConfig {
     @Value("${fixlog.vectorstore.initialize-schema:true}")
     private boolean initializeVectorSchema;
 
+    /** 연관 문서 조회가 같은 테이블을 직접 질의한다. 이름이 두 곳에서 갈라지지 않도록 설정으로 뺀다. */
+    @Value("${fixlog.vectorstore.table-name:document_embeddings}")
+    private String vectorTableName;
+
     @Bean
     public VectorStore vectorStore(
             @Qualifier("pgVectorJdbcTemplate") JdbcTemplate jdbcTemplate,
             @Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel,
             @Value("${fixlog.vectorstore.initialize-schema:true}") boolean initializeSchema) {
         return PgVectorStore.builder(jdbcTemplate, embeddingModel)
-                .vectorTableName("document_embeddings")
+                .vectorTableName(vectorTableName)
                 .dimensions(1536)
                 .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
                 .initializeSchema(initializeVectorSchema)

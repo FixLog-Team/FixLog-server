@@ -91,12 +91,15 @@ class VectorSearchFilterIT {
                 env.getProperty("DB_USERNAME"), env.getProperty("DB_PASSWORD"));
         dataSource.setDriverClassName("org.postgresql.Driver");
 
-        jdbcTemplate = new JdbcTemplate(dataSource);
+        // 접속을 확인한 뒤에야 필드에 넣는다. 먼저 넣으면 건너뛸 때도 tearDown 이 DROP 을 시도해
+        // 테스트가 '건너뜀'이 아니라 '실패'로 집계된다.
+        JdbcTemplate candidate = new JdbcTemplate(dataSource);
         try {
-            jdbcTemplate.execute("select 1");
+            candidate.execute("select 1");
         } catch (Exception e) {
             assumeTrue(false, "로컬 Postgres에 접속할 수 없어 건너뛴다: " + e.getMessage());
         }
+        jdbcTemplate = candidate;
 
         jdbcTemplate.execute("DROP TABLE IF EXISTS " + TABLE);
         vectorStore = PgVectorStore.builder(jdbcTemplate, FIXED_EMBEDDING)
