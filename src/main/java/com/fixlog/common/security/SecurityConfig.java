@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -46,7 +45,11 @@ public class SecurityConfig {
 				.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
 			)
 			.authorizeHttpRequests(auth -> auth
-				.requestMatchers(HttpMethod.GET, "/api/images/**").permitAll()
+				// 이미지 조회(/api/images/**)를 열지 말 것. 이미지는 그것이 붙은 문서의 조회 권한을 따르고,
+				// 서버가 바이트를 직접 내려주므로 이 앞단이 유일한 인증 지점이다. 여기를 열면 id만 알면
+				// 비로그인으로 모든 워크스페이스의 이미지가 보인다.
+				// `<img src>`로는 Authorization 헤더가 실리지 않아 원래 불러올 수 없다.
+				// 클라이언트는 blob으로 받아 object URL로 바꿔 쓴다(FRONTEND_API_GUIDE 이미지 표시 항목).
 				.requestMatchers("/oauth2/**", "/login/**", "/auth/token/refresh", "/auth/exchange",
 					"/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
 					"/api/workspaces/invitations/*/decline",
