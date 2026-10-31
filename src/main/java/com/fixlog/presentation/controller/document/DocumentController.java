@@ -2,6 +2,7 @@ package com.fixlog.presentation.controller.document;
 
 import com.fixlog.application.service.DocumentHistoryService;
 import com.fixlog.application.service.DocumentService;
+import com.fixlog.application.service.RelatedDocumentService;
 import com.fixlog.common.response.DataResponse;
 import com.fixlog.common.response.Response;
 import com.fixlog.presentation.dto.request.DocumentCreateRequest;
@@ -38,11 +39,14 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final DocumentHistoryService documentHistoryService;
+    private final RelatedDocumentService relatedDocumentService;
 
     public DocumentController(DocumentService documentService,
-                              DocumentHistoryService documentHistoryService) {
+                              DocumentHistoryService documentHistoryService,
+                              RelatedDocumentService relatedDocumentService) {
         this.documentService = documentService;
         this.documentHistoryService = documentHistoryService;
+        this.relatedDocumentService = relatedDocumentService;
     }
 
     @GetMapping("/{documentId}/history")
@@ -90,6 +94,17 @@ public class DocumentController {
     @Operation(operationId = "getDocument")
     public Response getDocument(@PathVariable String documentId) {
         return DataResponse.success(documentService.getDocumentDto(documentId));
+    }
+
+    /**
+     * 연관 문서. 문서 상세 응답에 넣지 않고 따로 둔다.
+     * 화면 하단이라 스크롤 전에는 보이지 않는데, 문서 여는 속도를 늦출 이유가 없다.
+     */
+    @GetMapping("/{documentId}/related")
+    @Operation(operationId = "listRelatedDocuments")
+    public Response listRelated(@PathVariable String documentId,
+                                @RequestParam(defaultValue = "5") int limit) {
+        return DataResponse.success(relatedDocumentService.findRelated(documentId, limit));
     }
 
     @PutMapping("/{documentId}")
