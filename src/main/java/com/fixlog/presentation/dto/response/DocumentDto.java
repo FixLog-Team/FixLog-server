@@ -18,7 +18,9 @@ public record DocumentDto(
         String createUserPictureUrl,
         Instant createTime,
         String updateUser,
-        Instant updateTime
+        Instant updateTime,
+        boolean orphaned,
+        String originalFolderId
 ) {
     public static DocumentDto from(DocumentEntity entity) {
         return from(entity, null);
@@ -38,7 +40,30 @@ public record DocumentDto(
                 author != null ? author.getPictureUrl() : null,
                 entity.getCreateTime(),
                 entity.getUpdateUser(),
-                entity.getUpdateTime()
+                entity.getUpdateTime(),
+                false,
+                null
+        );
+    }
+
+    /** 실제 폴더에 접근할 수 없어 상위로 떠오른 항목. */
+    public static DocumentDto orphaned(DocumentEntity entity) {
+        return new DocumentDto(
+                entity.getDocumentId(),
+                entity.getFolderId(),
+                entity.getTitle(),
+                entity.getBlocks(),
+                entity.getPlainText(),
+                entity.getContentHash(),
+                entity.getOrdinal(),
+                entity.getCreateUser(),
+                null,
+                null,
+                entity.getCreateTime(),
+                entity.getUpdateUser(),
+                entity.getUpdateTime(),
+                true,
+                entity.getFolderId()
         );
     }
 }

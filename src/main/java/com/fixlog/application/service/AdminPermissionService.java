@@ -16,6 +16,8 @@ import com.fixlog.domain.model.PrincipalType;
 import com.fixlog.domain.model.ResourceType;
 import com.fixlog.domain.model.UserEntity;
 import com.fixlog.domain.model.WorkspaceMemberEntity;
+
+import java.util.Optional;
 import com.fixlog.presentation.dto.response.AdminPermissionDto;
 import com.fixlog.presentation.dto.response.ResourcePermissionsDto;
 import org.springframework.stereotype.Service;
@@ -70,27 +72,27 @@ public class AdminPermissionService {
         if (resourceType == ResourceType.FOLDER) {
             FolderEntity folder = folderRepository.findById(resourceId)
                     .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
-            return new ResourcePermissionsDto(dtos, folder.isInheritFromParent(), folder.getBaseAccess());
+            return new ResourcePermissionsDto(dtos, folder.isInheritFromParent());
         }
-        return new ResourcePermissionsDto(dtos, null, null);
+        return new ResourcePermissionsDto(dtos, null);
     }
 
-    /** 폴더 상속·기본 접근 설정 변경. */
+    /** 폴더 상속 설정 변경. 상위 폴더가 상속 중이면 변경 불가. */
     @Transactional
-    public void updateFolderSettings(UUID workspaceId, String folderId,
-                                     boolean inheritFromParent, PermissionType baseAccess) {
+    public void updateFolderSettings(UUID workspaceId, String folderId, boolean inheritFromParent) {
         WorkspaceMemberEntity admin = workspaceService.requireAdmin(workspaceId);
         FolderEntity folder = folderRepository.findById(folderId)
                 .filter(f -> f.getWorkspaceId().equals(workspaceId))
                 .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "폴더를 찾을 수 없습니다."));
-        String before = "inherit=" + folder.isInheritFromParent() + ", base=" + folder.getBaseAccess();
-        folder.configureInheritance(inheritFromParent, baseAccess);
+        requireNotInheritanceLocked(ResourceType.FOLDER, folderId);
+        String before = "inherit=" + folder.isInheritFromParent();
+        folder.configureInheritance(inheritFromParent);
         folderRepository.save(folder);
 
         auditService.recordChange(workspaceId, admin.getUserId(),
                 AuditAction.ACCESS_POLICY_CHANGE, ResourceType.FOLDER, folderId,
                 null, null,
-                before + " → inherit=" + inheritFromParent + ", base=" + baseAccess);
+                before + " → inherit=" + inheritFromParent);
     }
 
     /** Admin이 직접 권한을 부여한다. 주체·대상이 같은 워크스페이스인지 확인한다. */
@@ -100,6 +102,7 @@ public class AdminPermissionService {
                                     PermissionType permissionType, boolean canDownload) {
         WorkspaceMemberEntity admin = workspaceService.requireAdmin(workspaceId);
         requireResourceInWorkspace(workspaceId, resourceType, resourceId);
+        requireNotInheritanceLocked(resourceType, resourceId);
 
         UUID granter = admin.getUserId();
 
@@ -160,6 +163,26 @@ public class AdminPermissionService {
                 permission.getResourceType(), permission.getResourceId(),
                 permission.getPrincipalType(), permission.getPrincipalId(),
                 "회수됨 (" + permission.getPermissionType() + ")");
+    }
+
+    /**
+     * 직접 상위 폴더가 상속 중이면 권한 변경 불가.
+     * 상위가 inheritFromParent=true인 경우 해당 폴더는 상속 체인에 잠겨 있다.
+     */
+    private void requireNotInheritanceLocked(ResourceType resourceType, String resourceId) {
+        Optional<String> parentFolderId = switch (resourceType) {
+            case FOLDER -> folderRepository.findById(resourceId).map(FolderEntity::getParentId);
+            case DOCUMENT -> documentRepository.findById(resourceId).map(DocumentEntity::getFolderId);
+        };
+        if (parentFolderId.isEmpty() || parentFolderId.get() == null) return;
+
+        boolean parentInherits = folderRepository.findById(parentFolderId.get())
+                .map(FolderEntity::isInheritFromParent)
+                .orElse(false);
+        if (parentInherits) {
+            throw new BusinessException(Code.FORBIDDEN,
+                    "상위 폴더가 권한 상속 중입니다. 상위 폴더 상속을 해제한 후 설정하세요.");
+        }
     }
 
     private void requireResourceInWorkspace(UUID workspaceId, ResourceType resourceType, String resourceId) {

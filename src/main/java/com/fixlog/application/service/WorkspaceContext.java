@@ -60,18 +60,9 @@ public class WorkspaceContext {
         return workspaceId;
     }
 
-    /**
-     * 워크스페이스의 기본 접근 정책. 상속 체인이 루트까지 올라갔을 때 적용된다.
-     *
-     * <p>워크스페이스를 찾지 못하면 DENY다. 판정에서 불확실은 곧 누출이므로 닫는 방향으로 확정한다.
-     */
+    /** 상속 체인이 루트까지 올라갔을 때 적용된다. 기본은 ALLOW — 관리자가 명시적 DENY로만 차단한다. */
     public PermissionType baseAccessOf(UUID workspaceId) {
-        if (workspaceId == null) {
-            return PermissionType.DENY;
-        }
-        return workspaceRepository.findById(workspaceId)
-                .map(WorkspaceEntity::getBaseAccess)
-                .orElse(PermissionType.DENY);
+        return PermissionType.ALLOW;
     }
 
     public WorkspaceEntity personalWorkspace(UUID userId) {
