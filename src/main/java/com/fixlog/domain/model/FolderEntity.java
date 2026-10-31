@@ -47,11 +47,6 @@ public class FolderEntity {
     @Column(name = "inherit_from_parent", nullable = false)
     private boolean inheritFromParent = true;
 
-    /** 상속 체인이 끝났을 때 적용하는 기본 접근 값. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "base_access", length = 10, nullable = false)
-    private PermissionType baseAccess = PermissionType.ALLOW;
-
     @Column(name = "create_user", length = 100)
     private String createUser;
 
@@ -141,17 +136,12 @@ public class FolderEntity {
         return Integer.valueOf(0).equals(usable);
     }
 
-    public void configureInheritance(boolean inheritFromParent, PermissionType baseAccess) {
+    public void configureInheritance(boolean inheritFromParent) {
         this.inheritFromParent = inheritFromParent;
-        this.baseAccess = baseAccess;
     }
 
     public boolean isInheritFromParent() {
         return inheritFromParent;
-    }
-
-    public PermissionType getBaseAccess() {
-        return baseAccess;
     }
 
     public String getFolderId() {

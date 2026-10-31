@@ -202,8 +202,7 @@ public class PermissionEvaluator {
                     groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
             List<FolderEntity> ancestorFolders = loadAncestorFolders(target.ancestorFolderIds());
             return resolveWithDeny(permissions, resourceType, resourceId,
-                    target.ancestorFolderIds(), ancestorFolders,
-                    workspaceContext.baseAccessOf(target.workspaceId()));
+                    target.ancestorFolderIds(), ancestorFolders);
         }
 
         // 개인 워크스페이스: 리소스 자신 또는 조상 폴더에 직접 ALLOW 권한이 있으면 접근 허용
@@ -249,7 +248,7 @@ public class PermissionEvaluator {
                     targetUserId,
                     groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
             List<FolderEntity> ancestorFolders = loadAncestorFolders(target.ancestorFolderIds());
-            return resolveWithSource(workspaceContext.baseAccessOf(target.workspaceId()), permissions,
+            return resolveWithSource(permissions,
                     resourceType, resourceId, target.ancestorFolderIds(), ancestorFolders);
         }
 
@@ -278,25 +277,30 @@ public class PermissionEvaluator {
         return buildScope(workspaceId, true);
     }
 
+    /** 명시적으로 부여된 권한만 인식한다 (sharedWithMe 등 명시적 공유 목록용). */
     @Transactional(readOnly = true)
     public Scope explicitScopeFor(UUID workspaceId) {
-        return buildScope(workspaceId, false);
+        return buildScope(workspaceId, false, false);
     }
 
     private Scope buildScope(UUID workspaceId, boolean honorAdmin) {
+        return buildScope(workspaceId, honorAdmin, true);
+    }
+
+    private Scope buildScope(UUID workspaceId, boolean honorAdmin, boolean defaultAllow) {
         UUID userId = workspaceContext.requireCurrentUserId();
         Optional<WorkspaceMemberEntity> membership = workspaceMemberRepository
                 .findByWorkspaceIdAndUserId(workspaceId, userId);
 
         if (membership.isPresent()) {
             if (honorAdmin && membership.get().isAdminOrOwner()) {
-                return new Scope(true, List.of(), Map.of(), PermissionType.ALLOW);
+                return new Scope(true, List.of(), Map.of());
             }
             List<UUID> groupIds = groupIdsOf(userId, workspaceId);
             List<PermissionEntity> permissions = permissionRepository.findForPrincipals(
                     workspaceId, userId, groupIds.isEmpty() ? List.of(NO_GROUP) : groupIds);
             Map<String, FolderAccessInfo> folderInfo = buildFolderInfo(workspaceId);
-            return new Scope(false, permissions, folderInfo, workspaceContext.baseAccessOf(workspaceId));
+            return new Scope(false, permissions, folderInfo, defaultAllow);
         }
 
         // 비구성원: 개인 워크스페이스에서 직접 공유받은 경우에 한해 제한적 Scope 반환
@@ -305,8 +309,8 @@ public class PermissionEvaluator {
             List<PermissionEntity> permissions = permissionRepository
                     .findDirectAllowsByWorkspaceAndUser(workspaceId, userId);
             if (!permissions.isEmpty()) {
-                // 기본 접근을 DENY로 고정해 명시적 공유 범위 밖의 리소스는 차단한다.
-                return new Scope(false, permissions, buildFolderInfo(workspaceId), PermissionType.DENY);
+                // 명시적 공유 범위 밖은 차단한다 (defaultAllow=false).
+                return new Scope(false, permissions, buildFolderInfo(workspaceId), false);
             }
         }
 
@@ -317,11 +321,11 @@ public class PermissionEvaluator {
         return folderRepository.findByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1)).stream()
                 .collect(Collectors.toMap(
                         FolderEntity::getFolderId,
-                        f -> new FolderAccessInfo(f.getPath(), f.isInheritFromParent(), f.getBaseAccess())));
+                        f -> new FolderAccessInfo(f.getPath(), f.isInheritFromParent())));
     }
 
-    /** 폴더의 경로·상속·기본접근 정보를 경량으로 담는다. */
-    public record FolderAccessInfo(String path, boolean inheritFromParent, PermissionType baseAccess) {
+    /** 폴더의 경로·상속 정보를 경량으로 담는다. */
+    public record FolderAccessInfo(String path, boolean inheritFromParent) {
     }
 
     public final class Scope {
@@ -329,17 +333,23 @@ public class PermissionEvaluator {
         private final boolean workspaceAdmin;
         private final List<PermissionEntity> permissions;
         private final Map<String, FolderAccessInfo> folderInfo;
-        /** 상속 체인이 루트까지 올라갔을 때 적용할 기본 접근. */
-        private final PermissionType workspaceBaseAccess;
+        /** 개인 워크스페이스 비구성원 공유: 명시적 ALLOW만 허용 (false = DENY 폴백). */
+        private final boolean defaultAllow;
+
+        private Scope(boolean workspaceAdmin,
+                      List<PermissionEntity> permissions,
+                      Map<String, FolderAccessInfo> folderInfo) {
+            this(workspaceAdmin, permissions, folderInfo, true);
+        }
 
         private Scope(boolean workspaceAdmin,
                       List<PermissionEntity> permissions,
                       Map<String, FolderAccessInfo> folderInfo,
-                      PermissionType workspaceBaseAccess) {
+                      boolean defaultAllow) {
             this.workspaceAdmin = workspaceAdmin;
             this.permissions = permissions;
             this.folderInfo = folderInfo;
-            this.workspaceBaseAccess = workspaceBaseAccess;
+            this.defaultAllow = defaultAllow;
         }
 
         public Optional<Decision> decisionForDocument(String documentId, String folderId) {
@@ -439,25 +449,8 @@ public class PermissionEvaluator {
                 }
             }
 
-            // Base Access 및 워크스페이스 기본 처리
-            String closestFolderWithBaseAccess = nearestFirst.stream()
-                    .filter(id -> {
-                        FolderAccessInfo info = folderInfo.get(id);
-                        return info != null && !info.inheritFromParent();
-                    })
-                    .findFirst()
-                    .orElse(null);
-
-            if (closestFolderWithBaseAccess != null) {
-                FolderAccessInfo info = folderInfo.get(closestFolderWithBaseAccess);
-                if (info != null && info.baseAccess() == PermissionType.DENY) return Optional.empty();
-                return Optional.of(new Decision(true, true, false, false));
-            }
-
-            // 상속 체인이 루트까지 올라갔다. 워크스페이스 기본 정책으로 확정한다.
-            if (workspaceBaseAccess == PermissionType.DENY) {
-                return Optional.empty();
-            }
+            // 명시적 권한이 없을 때: 워크스페이스 구성원은 ALLOW, 비구성원 개인공유는 DENY.
+            if (!defaultAllow) return Optional.empty();
             return Optional.of(new Decision(true, true, false, false));
         }
     }
@@ -471,15 +464,10 @@ public class PermissionEvaluator {
         return new Decision(true, true, false, true);
     }
 
-    /**
-     * 새 판정 로직: Direct DENY→FORBIDDEN, Direct ALLOW→허용,
-     * Inherit 순회(inheritFromParent 끊기 처리), Base Access, 마지막으로 워크스페이스 기본 정책.
-     */
     private Decision resolveWithDeny(List<PermissionEntity> candidates,
                                      ResourceType resourceType, String resourceId,
                                      List<String> ancestorFolderIds,
-                                     List<FolderEntity> ancestorFolders,
-                                     PermissionType workspaceBaseAccess) {
+                                     List<FolderEntity> ancestorFolders) {
         List<String> lookupOrder = new ArrayList<>();
         lookupOrder.add(key(resourceType, resourceId));
 
@@ -519,25 +507,12 @@ public class PermissionEvaluator {
             }
         }
 
-        // 상속이 끊긴 폴더가 있으면 그 폴더의 기본 접근으로 확정한다.
-        if (baseAccessFolderId != null) {
-            FolderEntity folder = folderById.get(baseAccessFolderId);
-            if (folder != null && folder.getBaseAccess() == PermissionType.DENY) {
-                throw new BusinessException(Code.FORBIDDEN, "이 폴더에 대한 기본 접근이 차단되어 있습니다.");
-            }
-            return new Decision(true, true, false, false);
-        }
-
-        // 루트까지 올라왔다. 워크스페이스 기본 정책이 마지막 판단이다.
-        if (workspaceBaseAccess == PermissionType.DENY) {
-            throw new BusinessException(Code.FORBIDDEN, "이 워크스페이스는 기본 접근이 차단되어 있습니다.");
-        }
+        // 명시적 권한이 없으면 기본 ALLOW.
         return new Decision(true, true, false, false);
     }
 
     /** 출처 추적 포함 판정. */
-    private DecisionWithSource resolveWithSource(PermissionType workspaceBaseAccess,
-                                                 List<PermissionEntity> candidates,
+    private DecisionWithSource resolveWithSource(List<PermissionEntity> candidates,
                                                  ResourceType resourceType, String resourceId,
                                                  List<String> ancestorFolderIds,
                                                  List<FolderEntity> ancestorFolders) {
@@ -594,22 +569,9 @@ public class PermissionEvaluator {
             }
         }
 
-        if (baseAccessFolderId != null) {
-            FolderEntity folder = folderById.get(baseAccessFolderId);
-            if (folder != null && folder.getBaseAccess() == PermissionType.DENY) {
-                return new DecisionWithSource(new Decision(false, false, false, false),
-                        PermissionSource.INHERITED, "폴더 기본 접근 차단");
-            }
-            return new DecisionWithSource(new Decision(true, true, false, false),
-                    PermissionSource.INHERITED, "폴더 기본 접근 허용");
-        }
-
-        if (workspaceBaseAccess == PermissionType.DENY) {
-            return new DecisionWithSource(new Decision(false, false, false, false),
-                    PermissionSource.WORKSPACE_DEFAULT, "워크스페이스 기본 차단");
-        }
+        // 명시적 권한이 없으면 기본 ALLOW.
         return new DecisionWithSource(new Decision(true, true, false, false),
-                PermissionSource.WORKSPACE_DEFAULT, "워크스페이스 기본 허용");
+                PermissionSource.WORKSPACE_DEFAULT, "기본 허용");
     }
 
     private Decision toDecision(PermissionEntity permission) {

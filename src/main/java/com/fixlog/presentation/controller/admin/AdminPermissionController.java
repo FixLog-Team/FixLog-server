@@ -51,8 +51,7 @@ public class AdminPermissionController {
                                          @PathVariable String folderId,
                                          @RequestBody FolderSettingsRequest request) {
         adminPermissionService.updateFolderSettings(
-                workspaceId, folderId,
-                request.resolvedInheritFromParent(), request.resolvedBaseAccess());
+                workspaceId, folderId, request.resolvedInheritFromParent());
         return Response.success("폴더 설정을 변경했습니다.");
     }
 

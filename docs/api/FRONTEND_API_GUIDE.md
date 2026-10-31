@@ -1,6 +1,6 @@
 # FixLog API 가이드 (프론트엔드용)
 
-> 최종 업데이트: 2026-10-19 (폴더·문서 통합 제목 검색 API 추가, folderId 서브트리 범위 지원)
+> 최종 업데이트: 2026-10-31 (baseAccess 제거, 상속 lock 검증, 고아 항목 float 처리)
 > Base URL (개발): `https://fixlog.art/fixlog`
 
 ---
@@ -370,7 +370,9 @@ Google OAuth 로그인 시작 (페이지 이동)
     "createUserPictureUrl": "https://lh3.googleusercontent.com/...",
     "createTime": "2026-05-19T07:00:00Z",
     "updateUser": "user-uuid",
-    "updateTime": "2026-05-19T07:00:00Z"
+    "updateTime": "2026-05-19T07:00:00Z",
+    "orphaned": false,
+    "originalFolderId": null
   }
 }
 ```
@@ -378,6 +380,10 @@ Google OAuth 로그인 시작 (페이지 이동)
 > `createUserName` / `createUserPictureUrl`은 작성자 표시에 사용합니다.
 > 작성자가 아직 Google 로그인을 하지 않은 경우 `createUserPictureUrl`은 `null`일 수 있습니다.
 > 목록(`GET /api/documents`) 및 저장·제목 변경 응답에는 포함되지 않습니다.
+>
+> `orphaned`가 `true`이면 부모 폴더(`folderId`)에 대한 접근 권한이 없어 가장 가까운 접근 가능 조상 레벨로 떠오른 항목입니다.
+> `originalFolderId`는 원래 속한 폴더 ID입니다 (`orphaned=false`이면 `null`).
+> 이런 항목은 "접근 불가 폴더에 있음" 표시를 권장합니다.
 
 ---
 
@@ -552,7 +558,9 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
         "createUser": "user-uuid",
         "createTime": "2026-05-19T07:00:00Z",
         "updateUser": "user-uuid",
-        "updateTime": "2026-05-19T07:00:00Z"
+        "updateTime": "2026-05-19T07:00:00Z",
+        "orphaned": false,
+        "originalParentId": null
       }
     ],
     "documents": []
@@ -578,6 +586,11 @@ Content-Disposition: attachment; filename*=UTF-8''문서제목.pdf
 > **공유받은 폴더 탐색**: 개인 워크스페이스 교차 공유로 받은 폴더도 이 엔드포인트로 탐색합니다.
 > `X-Workspace-Id`를 공유한 쪽의 워크스페이스 ID로 설정하면, 해당 폴더 안의 하위 폴더·문서 중
 > 권한 범위 안의 것만 반환합니다.
+
+> **고아 항목 (orphaned items)**: 부모 폴더에 대한 접근 권한이 없지만 해당 항목에는 직접 권한이 있는 경우,
+> 가장 가까운 접근 가능 조상 레벨의 목록에 `orphaned: true`로 포함됩니다.
+> `FolderDto`의 `originalParentId`, `DocumentDto`의 `originalFolderId`에 원래 위치가 담깁니다.
+> UI에서는 "접근 불가 폴더에 있음" 등의 표시를 권장합니다.
 
 ---
 
@@ -1176,7 +1189,9 @@ AI 대화방 삭제 (소프트 삭제)
         "createUser": "user-uuid",
         "createTime": "2026-05-19T07:00:00Z",
         "updateUser": "user-uuid",
-        "updateTime": "2026-05-19T07:00:00Z"
+        "updateTime": "2026-05-19T07:00:00Z",
+        "orphaned": false,
+        "originalParentId": null
       }
     ],
     "documents": [
@@ -1255,14 +1270,14 @@ AI 대화방 삭제 (소프트 삭제)
 {
   "code": "SUCCESS",
   "result": [
-    { "workspaceId": "...", "workspaceName": "홍길동의 워크스페이스", "personal": true, "role": "OWNER", "baseAccess": "ALLOW", "createAt": "..." },
-    { "workspaceId": "...", "workspaceName": "OS 스터디", "personal": false, "role": "MEMBER", "baseAccess": "DENY", "createAt": "..." }
+    { "workspaceId": "...", "workspaceName": "홍길동의 워크스페이스", "personal": true, "role": "OWNER", "createAt": "..." },
+    { "workspaceId": "...", "workspaceName": "OS 스터디", "personal": false, "role": "MEMBER", "createAt": "..." }
   ]
 }
 ```
 
 가입하면 개인 워크스페이스가 자동으로 생깁니다. 역할은 워크스페이스마다 다릅니다.
-`baseAccess`는 명시적 권한이 없는 구성원에게 적용되는 기본 접근(`ALLOW`/`DENY`). 개인 워크스페이스는 항상 `ALLOW`, 새로 만든 협업 워크스페이스는 기본 `DENY`입니다.
+모든 워크스페이스의 기본 접근은 **ALLOW**입니다. Admin이 폴더·문서에 DENY 권한을 부여해 선택적으로 제한합니다.
 
 ---
 
@@ -1293,7 +1308,6 @@ AI 대화방 삭제 (소프트 삭제)
     "workspaceName": "OS 스터디",
     "personal": false,
     "role": "MEMBER",
-    "baseAccess": "DENY",
     "createAt": "2026-09-09T00:00:00Z"
   }
 }
@@ -1309,24 +1323,6 @@ AI 대화방 삭제 (소프트 삭제)
 ```json
 { "name": "새 워크스페이스 이름" }
 ```
-
-**Response**: `WorkspaceDto`
-
----
-
-### PATCH /api/workspaces/{workspaceId}/base-access
-> [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Workspace/changeWorkspaceBaseAccess)
-
-워크스페이스 기본 접근 정책 변경. **Admin/Owner만.**
-
-```json
-{ "baseAccess": "DENY" }
-```
-
-| 값 | 의미 |
-|---|---|
-| `ALLOW` | 명시적 권한이 없어도 구성원이 접근 가능 |
-| `DENY` | 명시적 권한이 있는 구성원만 접근 가능 (기본값) |
 
 **Response**: `WorkspaceDto`
 
@@ -1832,7 +1828,9 @@ Swagger:
         "createUserPictureUrl": "https://lh3.googleusercontent.com/...",
         "createTime": "2026-09-01T00:00:00Z",
         "updateUser": "작성자-uuid",
-        "updateTime": "2026-09-01T00:00:00Z"
+        "updateTime": "2026-09-01T00:00:00Z",
+        "orphaned": false,
+        "originalFolderId": null
       }
     ]
   }
@@ -2298,7 +2296,7 @@ GET /api/workspaces/{id}/admin/audit-logs?actorUserId=...&targetUserId=...&actio
 | | `MEMBER_INVITE` | 워크스페이스 초대 |
 | | `MEMBER_REMOVE` | 워크스페이스에서 내보내기·나가기 |
 | | `GROUP_MEMBER_CHANGE` | 그룹 구성원 변경 |
-| | `ACCESS_POLICY_CHANGE` | 상속·기본 접근 정책 변경 (폴더 inherit/base_access, 워크스페이스 base_access) |
+| | `ACCESS_POLICY_CHANGE` | 상속 정책 변경 (폴더 `inheritFromParent` 설정 변경) |
 
 **거부된 접근도 남습니다.** `viaAdmin`이 `true`면 관리자 특권으로 접근한 것입니다.
 
@@ -2365,6 +2363,9 @@ Admin은 공유 설정 없이도 직접 권한을 조작할 수 있습니다.
 }
 ```
 
+> ⚠️ 대상 리소스의 직접 상위 폴더가 `inheritFromParent=true`이면 `FORBIDDEN`으로 거부됩니다.
+> 상위 폴더 상속을 해제한 뒤 부여하세요.
+
 **PUT** `/api/workspaces/{id}/admin/permissions/{permissionId}` — [Swagger →](https://fixlog.art/fixlog/swagger-ui.html#/Admin/adminUpdatePermission)
 ```json
 { "permissionType": "DENY", "canDownload": false }
@@ -2384,15 +2385,36 @@ PATCH /api/workspaces/{id}/admin/permissions/resources/folders/{folderId}/settin
 
 ```json
 {
-  "inheritFromParent": true,
-  "baseAccess": "ALLOW"
+  "inheritFromParent": true
 }
 ```
 
 | 필드 | 설명 |
 |---|---|
-| `inheritFromParent` | `true`면 부모 폴더의 권한을 상속합니다 (기본값 `true`) |
-| `baseAccess` | 직접 부여된 권한이 없는 워크스페이스 구성원에게 적용되는 기본 접근. `ALLOW` 또는 `DENY` (기본값 `ALLOW`) |
+| `inheritFromParent` | `true`면 부모 폴더의 권한을 상속합니다 (기본값 `true`). 생략 시 `true`로 처리됩니다 |
+
+> ⚠️ **상속 lock**: 직접 상위 폴더의 `inheritFromParent`가 `true`인 상태에서 이 설정을 변경하거나
+> 권한을 부여하면 `FORBIDDEN`이 반환됩니다. 상위 폴더의 상속을 먼저 해제해야 합니다.
+
+**리소스별 권한 목록 응답 (`ResourcePermissionsDto`)**
+
+```json
+{
+  "permissions": [ ... ],
+  "inheritFromParent": true
+}
+```
+
+`inheritFromParent`가 `true`이면 이 폴더는 상위를 상속 중입니다. 프론트엔드는 이 값을 보고
+권한 편집 UI 및 상속 토글을 비활성화해야 합니다 (상위 폴더 상속 중이면 하위에서 변경 불가).
+
+**UI 가이드 — 상속 lock**
+
+| 상황 | 권장 UI |
+|---|---|
+| 이 폴더의 `inheritFromParent=true` | 하위 항목의 권한 편집 비활성화. 상속 토글 숨기기 |
+| 이 폴더의 `inheritFromParent=false` | 하위 항목이 독립적으로 토글 가능 |
+| 상위 폴더의 `inheritFromParent=true` | "상위 폴더가 상속 중입니다" 안내 후 편집 불가 처리 |
 
 ---
 

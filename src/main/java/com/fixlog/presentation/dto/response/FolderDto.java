@@ -12,7 +12,9 @@ public record FolderDto(
         String createUser,
         Instant createTime,
         String updateUser,
-        Instant updateTime
+        Instant updateTime,
+        boolean orphaned,
+        String originalParentId
 ) {
     public static FolderDto from(FolderEntity entity) {
         return new FolderDto(
@@ -23,7 +25,25 @@ public record FolderDto(
                 entity.getCreateUser(),
                 entity.getCreateTime(),
                 entity.getUpdateUser(),
-                entity.getUpdateTime()
+                entity.getUpdateTime(),
+                false,
+                null
+        );
+    }
+
+    /** 실제 부모 폴더에 접근할 수 없어 상위로 떠오른 항목. */
+    public static FolderDto orphaned(FolderEntity entity) {
+        return new FolderDto(
+                entity.getFolderId(),
+                entity.getParentId(),
+                entity.getFolderName(),
+                entity.getOrdinal(),
+                entity.getCreateUser(),
+                entity.getCreateTime(),
+                entity.getUpdateUser(),
+                entity.getUpdateTime(),
+                true,
+                entity.getParentId()
         );
     }
 }
