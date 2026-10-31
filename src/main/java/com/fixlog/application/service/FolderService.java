@@ -24,10 +24,12 @@ import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 폴더 서비스.
@@ -356,7 +358,13 @@ public class FolderService {
                 .filter(d -> scope.canViewDocument(d.getDocumentId(), d.getFolderId()))
                 .map(DocumentDto::from).toList();
 
-        return new FolderContentsDto(folders, documents);
+        Map<String, FolderEntity> allFolders = allFolderMap(workspaceId);
+        List<FolderDto> orphanedFolders = orphanedFoldersFor(null, workspaceId, scope, allFolders);
+        List<DocumentDto> orphanedDocs = orphanedDocumentsFor(null, workspaceId, scope, allFolders);
+
+        return new FolderContentsDto(
+                Stream.concat(folders.stream(), orphanedFolders.stream()).toList(),
+                Stream.concat(documents.stream(), orphanedDocs.stream()).toList());
     }
 
     @Transactional(readOnly = true)
@@ -376,7 +384,69 @@ public class FolderService {
                 .filter(d -> scope.canViewDocument(d.getDocumentId(), d.getFolderId()))
                 .map(DocumentDto::from).toList();
 
-        return new FolderContentsDto(folders, documents);
+        Map<String, FolderEntity> allFolders = allFolderMap(workspaceId);
+        List<FolderDto> orphanedFolders = orphanedFoldersFor(folderId, workspaceId, scope, allFolders);
+        List<DocumentDto> orphanedDocs = orphanedDocumentsFor(folderId, workspaceId, scope, allFolders);
+
+        return new FolderContentsDto(
+                Stream.concat(folders.stream(), orphanedFolders.stream()).toList(),
+                Stream.concat(documents.stream(), orphanedDocs.stream()).toList());
+    }
+
+    private Map<String, FolderEntity> allFolderMap(UUID workspaceId) {
+        return folderRepository.findByWorkspaceIdAndUsable(workspaceId, Integer.valueOf(1))
+                .stream().collect(Collectors.toMap(FolderEntity::getFolderId, f -> f));
+    }
+
+    /**
+     * 부모 폴더가 비공개지만 직접 권한이 있어 접근 가능한 "고아 폴더"들.
+     * {@code floatTarget}이 {@code targetParentId}(null이면 루트)와 일치하는 것만 반환한다.
+     */
+    private List<FolderDto> orphanedFoldersFor(String targetParentId, UUID workspaceId,
+                                               PermissionEvaluator.Scope scope,
+                                               Map<String, FolderEntity> allFolders) {
+        return allFolders.values().stream()
+                .filter(f -> f.getParentId() != null)
+                .filter(f -> scope.canViewFolder(f.getFolderId()))
+                .filter(f -> !scope.canViewFolder(f.getParentId()))
+                .filter(f -> Objects.equals(floatTarget(f.getParentId(), scope, allFolders), targetParentId))
+                .map(FolderDto::orphaned)
+                .toList();
+    }
+
+    /**
+     * 소속 폴더가 비공개지만 직접 권한이 있어 접근 가능한 "고아 문서"들.
+     */
+    private List<DocumentDto> orphanedDocumentsFor(String targetParentId, UUID workspaceId,
+                                                   PermissionEvaluator.Scope scope,
+                                                   Map<String, FolderEntity> allFolders) {
+        return documentRepository.findByWorkspaceIdAndUsableOrderByOrdinalAscCreateTimeAsc(
+                        workspaceId, Integer.valueOf(1)).stream()
+                .filter(d -> d.getFolderId() != null)
+                .filter(d -> scope.canViewDocument(d.getDocumentId(), d.getFolderId()))
+                .filter(d -> !scope.canViewFolder(d.getFolderId()))
+                .filter(d -> Objects.equals(floatTarget(d.getFolderId(), scope, allFolders), targetParentId))
+                .map(DocumentDto::orphaned)
+                .toList();
+    }
+
+    /**
+     * 비공개 경로에 묻힌 항목이 표시될 "떠오름 위치".
+     * directParentId부터 올라가며 접근 가능한 첫 번째 조상 ID를 반환한다.
+     * 루트까지 올라갔으면 null.
+     */
+    private String floatTarget(String directParentId, PermissionEvaluator.Scope scope,
+                               Map<String, FolderEntity> allFolders) {
+        String current = directParentId;
+        while (current != null) {
+            FolderEntity f = allFolders.get(current);
+            String parent = f != null ? f.getParentId() : null;
+            if (parent == null || scope.canViewFolder(parent)) {
+                return parent; // null이면 루트
+            }
+            current = parent;
+        }
+        return null;
     }
 
     FolderEntity loadPermitted(String folderId, PermissionAction action) {

@@ -274,28 +274,6 @@ public class WorkspaceService {
     }
 
     /**
-     * 기본 접근 정책 변경. 상속 체인이 루트까지 올라갔을 때 적용되는 값이다.
-     *
-     * <p>DENY로 두면 명시적으로 부여한 권한만 열리고, ALLOW로 두면 구성원 전원이
-     * 별도 설정 없이 접근한다. 워크스페이스 전체의 노출 범위를 한 번에 바꾸는 설정이라
-     * 관리자만 변경할 수 있다.
-     */
-    @Transactional
-    public WorkspaceDto changeBaseAccess(UUID workspaceId, PermissionType baseAccess) {
-        WorkspaceMemberEntity me = requireAdmin(workspaceId);
-        WorkspaceEntity workspace = workspaceRepository.findById(workspaceId)
-                .orElseThrow(() -> new BusinessException(Code.NOT_FOUND, "워크스페이스를 찾을 수 없습니다."));
-        PermissionType previous = workspace.getBaseAccess();
-        workspace.changeBaseAccess(baseAccess);
-        workspaceRepository.save(workspace);
-
-        auditService.recordChange(workspaceId, me.getUserId(),
-                AuditAction.ACCESS_POLICY_CHANGE, null, null, null, null,
-                "워크스페이스 기본 접근 " + previous + " → " + baseAccess);
-        return WorkspaceDto.of(workspace, me.getRole());
-    }
-
-    /**
      * 워크스페이스 삭제 (Owner 전용, 개인 워크스페이스 불가).
      * 내부 폴더·문서 soft-delete, 구성원·초대·권한 hard-delete.
      */
